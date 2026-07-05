@@ -70,6 +70,7 @@ export class Overworld {
     this.applyLockTints();
 
     this.token = makeKidMesh(0.75);
+    this.token.rotation.y = -Math.PI / 2; // camera-facing when idle
     this.scene.add(this.token);
     this.tokenNav = 0; // index into navList
     this.walk = null; // { points, t, dur, target }
@@ -838,6 +839,7 @@ export class Overworld {
     if (idx >= 0) this.tokenNav = idx;
     const e = this.navList[this.tokenNav];
     if (e) this.token.position.set(e.x, TOKEN_Y, e.z);
+    this.token.rotation.y = -Math.PI / 2; // camera-facing when idle
   }
 
   // ---------- input ----------
@@ -1158,7 +1160,8 @@ export class Overworld {
       const ti = Math.min(w.points.length - 1, Math.floor(w.t * w.points.length));
       const pt = w.points[ti];
       const prev = this.token.position;
-      this.token.rotation.y = Math.atan2(pt.x - prev.x, pt.z - prev.z);
+      // Point the kid's forward axis (+x local) along the walk direction.
+      this.token.rotation.y = Math.atan2(prev.z - pt.z, pt.x - prev.x);
       const h = this.heightAt(pt.x, pt.z); // step up onto terraces/bridges
       this.token.position.set(pt.x, TOKEN_Y + h + Math.abs(Math.sin(w.t * 22)) * 0.18, pt.z);
       const parts = this.token.userData.parts;
@@ -1171,7 +1174,7 @@ export class Overworld {
         this.tokenNav = w.target;
         const e = this.navList[w.target];
         this.token.position.set(e.x, TOKEN_Y, e.z);
-        this.token.rotation.y = 0; // camera-facing when idle
+        this.token.rotation.y = -Math.PI / 2; // camera-facing when idle
         parts.legL.rotation.z = parts.legR.rotation.z = 0;
         parts.armL.rotation.z = parts.armR.rotation.z = 0;
         this.walk = null;
