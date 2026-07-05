@@ -1042,9 +1042,9 @@ export class Overworld {
     if (hits.length) {
       hits.sort((a, b) => a.dist - b.dist);
       this.walkTo(hits[0].idx);
-    } else {
-      this.cb.onDismiss();
     }
+    // Tapping empty ground keeps the current banner — it's never dismissed,
+    // only replaced when the token reaches a different node.
   }
 
   walkTo(navIdx) {

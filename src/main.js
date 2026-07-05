@@ -366,7 +366,10 @@ function bonusMicUp() {
 // ---------- wire up UI ----------
 
 ui.init({
-  onPlay: () => showMap(),
+  onPlay: () => {
+    showMap();
+    map.walkTo(map.tokenNav); // pop the current level's banner right away
+  },
   onCharacter: () => showCharacter(),
   onCharacterDone: () => closeCharacter(),
   onToggleSound: () => {
