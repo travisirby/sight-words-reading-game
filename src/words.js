@@ -40,8 +40,10 @@ export const DOLCH = {
   ],
 };
 
-// Split a list into levels of ~10 words, as evenly as possible.
-export function chunkIntoLevels(list, target = 10) {
+// Split a list into levels of ~5 words, as evenly as possible.
+// Short levels (~60-90s) fit a young kid's attention span and make
+// map-progress payoffs come faster.
+export function chunkIntoLevels(list, target = 5) {
   const n = Math.max(1, Math.round(list.length / target));
   const levels = [];
   let start = 0;

@@ -72,8 +72,8 @@ export function generateLevel({ seed, wordCount, theme, secret = false, hasKey =
     }
   };
 
-  flat(12);
-  coinRun(5, g + 0.8, 3);
+  flat(8);
+  coinRun(4, g + 0.8, 3);
 
   const keyAt = hasKey ? wordCount >> 1 : -1;
   const caveAt = secret ? wordCount >> 1 : -1;
@@ -81,7 +81,7 @@ export function generateLevel({ seed, wordCount, theme, secret = false, hasKey =
 
   for (let i = 0; i < wordCount; i++) {
     // ---- platforming filler ----
-    const fillerLen = 22 + ((rand() * 8) | 0) + (secret ? 4 : 0);
+    const fillerLen = 14 + ((rand() * 5) | 0) + (secret ? 4 : 0);
     const fillerStart = x();
     let done = 0;
     while (done < fillerLen) {
@@ -96,7 +96,7 @@ export function generateLevel({ seed, wordCount, theme, secret = false, hasKey =
     }
 
     // Floating platform with a coin arc.
-    if (rand() < (secret ? 0.95 : 0.75) && fillerLen > 12) {
+    if (rand() < (secret ? 0.95 : 0.75) && fillerLen > 11) {
       const w = 3 + ((rand() * 2) | 0);
       const px = fillerStart + 3 + ((rand() * (fillerLen - w - 6)) | 0);
       const py = groundY[Math.min(px, x() - 1)] + (secret && rand() < 0.4 ? 4 : 3);
