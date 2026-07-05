@@ -8,4 +8,5 @@ const useHttps = !!process.env.HTTPS;
 export default {
   base: './',
   plugins: useHttps ? [basicSsl()] : [],
+  server: process.env.PORT ? { port: Number(process.env.PORT), strictPort: true } : {},
 };

@@ -370,16 +370,24 @@ export class Game {
         }
         continue;
       }
-      const speed = c.state === 'flee' ? 2.6 : 1.1;
-      c.x += c.dir * speed * dt;
-      if (c.state === 'pace') {
-        if (c.x < c.x0) { c.x = c.x0; c.dir = 1; }
-        if (c.x > c.x1) { c.x = c.x1; c.dir = -1; }
-      } else if (Math.abs(c.x - (c.x0 + c.x1) / 2) > 14) {
-        c.state = 'off';
-        c.g.visible = false;
+      if (c.state === 'bonked') {
+        // Knocked aside: tumble away from the player, shrink, and vanish.
+        c.squashT -= dt;
+        c.x += c.dir * 6 * dt;
+        const t = Math.max(0, c.squashT / 0.5);
+        const gy0 = this.level.groundTopAt(c.x);
+        c.g.position.set(c.x, gy0 + (1 - t) * 1.2 * Math.sin(t * Math.PI), 0);
+        c.g.rotation.z += c.dir * -10 * dt;
+        c.g.scale.setScalar(Math.max(0.05, t));
+        if (c.squashT <= 0) {
+          c.state = 'off';
+          c.g.visible = false;
+        }
         continue;
       }
+      c.x += c.dir * 1.1 * dt;
+      if (c.x < c.x0) { c.x = c.x0; c.dir = 1; }
+      if (c.x > c.x1) { c.x = c.x1; c.dir = -1; }
       const gy = this.level.groundTopAt(c.x);
       c.g.position.set(c.x, gy + Math.abs(Math.sin(this.elapsed * 8 + c.x)) * 0.08, 0);
       c.g.rotation.y = c.dir > 0 ? 0.25 : -0.25;
@@ -400,13 +408,15 @@ export class Game {
         this.addCoins(2);
         p.bounce(7.5);
       } else if (p.y < cy + 0.8 && p.grounded) {
-        // Walked into it: stumble, critter waddles away shyly.
+        // Walked into it: stumble, critter is knocked aside and despawns.
         sfxWrong();
         p.stumble();
         this.stumbleMul = 0.4;
         this.addCoins(-1);
-        c.state = 'flee';
+        c.state = 'bonked';
+        c.squashT = 0.5;
         c.dir = p.x < c.x ? 1 : -1;
+        this.effects.sparkle(c.g.position.clone());
       }
     }
   }
