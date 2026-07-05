@@ -95,11 +95,12 @@ export function generateLevel({ seed, wordCount, theme, secret = false, hasKey =
       if (rand() < (secret ? 0.6 : 0.35)) coinRun(x() - stretch + 1, g + 0.8, Math.min(4, stretch - 1));
     }
 
-    // Floating platform with a coin arc.
+    // Floating platform with a coin arc. Every jump reaches a fixed ~3.5
+    // apex, so platforms sit at +2 or +3 — always one full jump away.
     if (rand() < (secret ? 0.95 : 0.75) && fillerLen > 11) {
       const w = 3 + ((rand() * 2) | 0);
       const px = fillerStart + 3 + ((rand() * (fillerLen - w - 6)) | 0);
-      const py = groundY[Math.min(px, x() - 1)] + (secret && rand() < 0.4 ? 4 : 3);
+      const py = groundY[Math.min(px, x() - 1)] + (rand() < 0.35 ? 2 : 3);
       platforms.push({ x0: px, x1: px + w - 1, y: py });
       coinArc(px - 0.5, w, py + 1.1);
     }

@@ -116,12 +116,11 @@ export class Game {
     this.scene.add(this.keyMesh);
 
     this.input = createInput(renderer.domElement, {
-      onJumpStart: () => {
+      onJump: () => {
         if (!this.running || this.paused) return;
         if (this.phase === 'bossIntro') this.endIntro(); // tap skips the intro
-        else this.player.jumpStart();
+        else this.player.jump();
       },
-      onJumpEnd: () => this.player.jumpEnd(),
     });
 
     this.bossFight = null;
