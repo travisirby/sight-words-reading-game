@@ -20,7 +20,6 @@ import {
 import * as store from './store.js';
 
 const WALK_SPEED = 4.5;
-const EVENT_SPEED = 2.7; // eased to inside word-event zones
 const STARS_SPEED = 2.5;
 const CHOICE_SPEED = 3.4; // manual left/right steering while time is frozen
 const CRITTER_COLORS = [0xff7f50, 0xba68c8, 0x4dd0e1, 0x9fa8da, 0xffb74d];
@@ -546,11 +545,8 @@ export class Game {
       this.setChoice(true);
     }
 
-    // Target speed: slows near/inside word events, stops for flag & bounces.
+    // Target speed: stops for flag & bounces.
     let target = WALK_SPEED;
-    if (this.activeEv && !this.activeEv.done && p.x > this.activeEv.x - 10) {
-      target = EVENT_SPEED;
-    }
     if (this.phase === 'stars') target = STARS_SPEED;
     if (this.phase === 'flag' || this.phase === 'done' || this.choice) target = 0;
     if (this.phase === 'bossIntro' || this.phase === 'bossDefeat') target = 0;
