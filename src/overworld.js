@@ -9,6 +9,7 @@ import { buildMapData, secretSegment } from './mapdata.js';
 import { PALETTES, mulberry32 } from './level.js';
 import { makeKidMesh } from './player.js';
 import { makeKeyMesh } from './game.js';
+import { BOSSES } from './boss.js';
 import { Effects } from './effects.js';
 import { sfxPlink, sfxBoing, speak } from './audio.js';
 import { WORLDS } from './words.js';
@@ -26,8 +27,10 @@ const ROW_Z = 9;
 const FLOWER_COLORS = [0xff6b81, 0xffd93d, 0xff9ff3, 0x74b9ff];
 const TOKEN_Y = 0.56; // token feet on top of a node pad
 
-function nodeName(world, level, secret) {
-  return secret ? `${WORLDS[world].name} Secret` : `${WORLDS[world].name} ${level + 1}`;
+function nodeName(world, level, secret, boss) {
+  if (secret) return `${WORLDS[world].name} Secret`;
+  if (boss) return `${WORLDS[world].name} Castle`;
+  return `${WORLDS[world].name} ${level + 1}`;
 }
 
 export class Overworld {
@@ -586,7 +589,10 @@ export class Overworld {
         g.add(crystals);
       }
 
-      if (!secret && nd.isWorldFinal) { // mini castle: keep, 4 towers, flag
+      let castleFlag = null;
+      let crown = null;
+      let bossHead = null;
+      if (!secret && nd.isWorldFinal) { // castle = the world's boss gate
         const c = new THREE.Group();
         const wallMat = new THREE.MeshLambertMaterial({ color: 0xc9b8a2 });
         const roofMat = new THREE.MeshLambertMaterial({ color: 0xd45757 });
@@ -606,13 +612,48 @@ export class Overworld {
           roof.position.set(sx, 2.05, sz);
           c.add(tower, roof);
         }
+        // Flag + crown appear once the boss is beaten...
         const pole = new THREE.Mesh(boxGeo, new THREE.MeshLambertMaterial({ color: 0xe0e0e0 }));
         pole.scale.set(0.06, 0.9, 0.06);
         pole.position.set(0, 2.3, 0);
-        const flag = new THREE.Mesh(boxGeo, new THREE.MeshLambertMaterial({ color: 0xffd54a }));
-        flag.scale.set(0.5, 0.3, 0.05);
-        flag.position.set(0.28, 2.55, 0);
-        c.add(pole, flag);
+        castleFlag = new THREE.Mesh(boxGeo, new THREE.MeshLambertMaterial({ color: 0xffd54a }));
+        castleFlag.scale.set(0.5, 0.3, 0.05);
+        castleFlag.position.set(0.28, 2.55, 0);
+        const gold = new THREE.MeshLambertMaterial({ color: 0xffd54a, emissive: 0x664d00 });
+        crown = new THREE.Group();
+        const cb = new THREE.Mesh(boxGeo, gold);
+        cb.scale.set(0.6, 0.22, 0.6);
+        crown.add(cb);
+        for (const sx of [-0.2, 0, 0.2]) {
+          const spike = new THREE.Mesh(boxGeo, gold);
+          spike.scale.set(0.13, 0.24, 0.13);
+          spike.position.set(sx, 0.22, 0);
+          crown.add(spike);
+        }
+        crown.position.set(0, 2.0, 0);
+        // ...while the boss's face floats over the keep until then.
+        bossHead = new THREE.Group();
+        const bm = new THREE.MeshLambertMaterial({ color: BOSSES[nd.world].color });
+        const head = new THREE.Mesh(boxGeo, bm);
+        head.scale.set(0.95, 0.8, 0.85);
+        bossHead.add(head);
+        const white = new THREE.MeshLambertMaterial({ color: 0xffffff });
+        const dark = new THREE.MeshLambertMaterial({ color: 0x222222 });
+        for (const sx of [-0.22, 0.22]) {
+          const eye = new THREE.Mesh(boxGeo, white);
+          eye.scale.setScalar(0.22);
+          eye.position.set(sx, 0.08, 0.44);
+          const pupil = new THREE.Mesh(boxGeo, dark);
+          pupil.scale.setScalar(0.1);
+          pupil.position.set(sx, 0.06, 0.55);
+          bossHead.add(eye, pupil);
+        }
+        const smile = new THREE.Mesh(boxGeo, dark);
+        smile.scale.set(0.32, 0.08, 0.06);
+        smile.position.set(0, -0.22, 0.44);
+        bossHead.add(smile);
+        bossHead.position.set(0, 3.3, 0);
+        c.add(pole, castleFlag, crown, bossHead);
         c.position.set(0, 0, -1.7);
         g.add(c);
       }
@@ -624,7 +665,10 @@ export class Overworld {
       g.add(hit);
 
       this.scene.add(g);
-      return { group: g, dot, dotMat, ring, stars, crystals, hit, baseY: 0 };
+      return {
+        group: g, dot, dotMat, ring, stars, crystals, hit,
+        castleFlag, crown, bossHead, baseY: 0,
+      };
     };
 
     this.nodeViews = this.data.nodes.map((nd) => mkNode(nd, false));
@@ -699,6 +743,13 @@ export class Overworld {
       v.ring.visible = isCurrent;
       v.isCurrent = isCurrent;
       v.stars.children.forEach((s, si) => { s.visible = si < stars; });
+      // Castle: boss face until beaten, then flag + crown.
+      if (nd.boss && v.bossHead) {
+        const beaten = store.isBossBeaten(nd.world);
+        v.bossHead.visible = !beaten;
+        v.castleFlag.visible = beaten;
+        v.crown.visible = beaten;
+      }
       // Tiny golden key beside nodes where the key was found.
       if (store.hasKey(nd.world, nd.level) && !v.keyIcon) {
         v.keyIcon = makeKeyMesh();
@@ -713,7 +764,10 @@ export class Overworld {
         for (let k = 0; k < seg.count; k++) this.tiles[seg.start + k].shown = show;
       }
       if (unlocked) {
-        this.navList.push({ world: nd.world, level: nd.level, secret: false, x: nd.x, z: nd.z, i });
+        this.navList.push({
+          world: nd.world, level: nd.level, secret: false, boss: !!nd.boss,
+          x: nd.x, z: nd.z, i,
+        });
       }
       // Insert the secret node after its world's last unlocked regular node.
       if (unlocked && nd.isWorldFinal && store.isSecretUnlocked(nd.world)) {
@@ -767,7 +821,8 @@ export class Overworld {
       world: e.world,
       level: e.level,
       secret: e.secret,
-      name: nodeName(e.world, e.level, e.secret),
+      boss: !!e.boss,
+      name: nodeName(e.world, e.level, e.secret, e.boss),
       stars: e.secret ? store.getSecretStars(e.world) : store.getStars(e.world, e.level),
       completed: (e.secret ? store.getSecretStars(e.world) : store.getStars(e.world, e.level)) > 0,
     };
@@ -1073,6 +1128,10 @@ export class Overworld {
       if (v.keyIcon) {
         v.keyIcon.rotation.y = t * 1.4;
         v.keyIcon.position.y = 1.0 + Math.sin(t * 2 + i) * 0.08;
+      }
+      if (v.bossHead && v.bossHead.visible) {
+        v.bossHead.rotation.y = Math.sin(t * 1.3 + i) * 0.5;
+        v.bossHead.position.y = 3.3 + Math.sin(t * 2.1 + i) * 0.12;
       }
     });
     this.secretViews.forEach((v, wi) => {
