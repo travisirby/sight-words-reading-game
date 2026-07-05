@@ -10,7 +10,12 @@ import * as speech from './speech.js';
 import { unlockAudio, setMuted, speak, sfxCorrect, sfxCoin } from './audio.js';
 import { WORLDS, shuffle, PRAISE } from './words.js';
 
+// Testing cheats via URL: ?unlock opens every level/castle/secret,
+// ?reset wipes the save first (combine as ?reset&unlock).
+const cheats = new URLSearchParams(location.search);
+if (cheats.has('reset')) store.reset();
 store.load();
+if (cheats.has('unlock')) store.devUnlockAll(WORLDS.length);
 setMuted(!store.get().sound);
 
 const LEVEL_COUNTS = WORLDS.map((w) => w.levels.length);
@@ -95,10 +100,11 @@ function showMap() {
 }
 
 function startLevel(worldIdx, levelIdx, secret = false) {
-  current = { world: worldIdx, level: levelIdx, secret };
+  const boss = !secret && levelIdx === LEVEL_COUNTS[worldIdx]; // castle slot
+  current = { world: worldIdx, level: levelIdx, secret, boss };
   map.exit();
   mode = 'game';
-  game.startRun(worldIdx, levelIdx, { secret });
+  game.startRun(worldIdx, levelIdx, { secret, boss });
   ui.showScreen(null);
   ui.showHUD(true);
 }
@@ -112,7 +118,8 @@ function playSelected() {
 }
 
 function nextLevelOf(w, l) {
-  if (l + 1 < LEVEL_COUNTS[w]) return { world: w, level: l + 1 };
+  // l === LEVEL_COUNTS[w] is the castle (boss) slot after the last level.
+  if (l + 1 <= LEVEL_COUNTS[w]) return { world: w, level: l + 1 };
   if (w + 1 < WORLDS.length) return { world: w + 1, level: 0 };
   return null;
 }
@@ -138,6 +145,7 @@ function onRunComplete(res) {
     const firstTime = store.getStars(current.world, current.level) === 0;
     store.setStars(current.world, current.level, stars);
     store.completeLevel(current.world, current.level, LEVEL_COUNTS);
+    if (current.boss) store.beatBoss(current.world);
 
     // Queue map payoff animations for when we return.
     if (firstTime) {
@@ -312,7 +320,7 @@ ui.init({
   onMicDown: bonusMicDown,
   onMicUp: bonusMicUp,
   onDevUnlock: () => {
-    store.devUnlockAll();
+    store.devUnlockAll(WORLDS.length);
     speak('All levels unlocked!', { rate: 1.0 });
     map.refresh();
   },

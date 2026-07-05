@@ -56,7 +56,7 @@ function setSign(mesh, word, style) {
   mesh.userData.tex.needsUpdate = true;
 }
 
-function disposeGroup(group) {
+export function disposeGroup(group) {
   group.traverse((o) => {
     if (o.geometry && o.geometry !== boxGeo) o.geometry.dispose();
     if (o.material && !Array.isArray(o.material)) {
@@ -188,6 +188,7 @@ export class BlocksEvent {
     b.cube.material.color.setHex(0x8a8a8a);
     setSign(b.sign, b.word, 'gray');
     sfxBonk();
+    if (api.onWrong) api.onWrong(); // boss levels: silly taunt
     speak(`Almost! The word is: ${this.word}. Try again!`, { rate: 0.9 });
   }
 
