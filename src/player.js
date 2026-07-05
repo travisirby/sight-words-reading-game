@@ -45,11 +45,22 @@ function makeFaceTexture(skinHex, hairHex, fringe) {
 }
 
 // Hair style indices (see character.js STYLES): 0 short, 1 spiky, 2 long, 3 buzz.
+// The head sides are always skin; hair is a slightly-oversized cap box that
+// covers the top 2/3 of the head, so it reads as hair from every angle while
+// the character rotates. Buzz gets no cap — just the painted head top.
 function buildHairExtras(style, hairMat) {
   const g = new THREE.Group();
+  if (style === 3) return g;
   const box = new THREE.BoxGeometry(1, 1, 1);
+  // Cap: head is 0.5 wide with its top at y=1.6; hair reaches down to ~1.27.
+  // The kid faces +x, so its front stops just behind the face (+x) so the
+  // eyes stay visible and the texture's fringe reads as the hair's front.
+  const cap = new THREE.Mesh(box, hairMat);
+  cap.scale.set(0.53, 0.34, 0.56);
+  cap.position.set(-0.025, 1.44, 0);
+  g.add(cap);
   if (style === 1) {
-    // Spiky: three little tufts on top.
+    // Spiky: three little tufts standing on the cap.
     for (let i = -1; i <= 1; i++) {
       const s = new THREE.Mesh(box, hairMat);
       s.scale.set(0.12, 0.16, 0.12);
@@ -57,10 +68,11 @@ function buildHairExtras(style, hairMat) {
       g.add(s);
     }
   } else if (style === 2) {
-    // Long: a panel down the back of the head (-z).
+    // Long: a panel down the back (-x), tucked up under the cap so no skin
+    // shows along its top edge.
     const m = new THREE.Mesh(box, hairMat);
-    m.scale.set(0.44, 0.55, 0.12);
-    m.position.set(0, 1.28, -0.24);
+    m.scale.set(0.14, 0.6, 0.48);
+    m.position.set(-0.26, 1.3, 0);
     g.add(m);
   }
   return g;
@@ -83,10 +95,6 @@ export function applyLook(group, look) {
   if (p.face.map) p.face.map.dispose();
   p.face.map = makeFaceTexture(look.skin, look.hair, look.style !== 3);
   p.face.needsUpdate = true;
-  // Buzz cut: hair only on top of the head, no fringe.
-  p.head.material = look.style === 3
-    ? [skin, skin, hair, skin, p.face, skin]
-    : [skin, hair, hair, skin, p.face, hair];
   group.remove(p.hairExtra);
   p.hairExtra = buildHairExtras(look.style, hair);
   group.add(p.hairExtra);
@@ -108,7 +116,8 @@ export function makeKidMesh(scale = 1, look = null) {
   // The body is built facing +x (arms at the z-sides, legs swinging in the
   // x-y plane), so the face goes on +x too — head and chest always agree.
   // Whoever owns the group yaws it to show the face to the camera.
-  const head = new THREE.Mesh(box, [skin, hair, hair, skin, face, hair]);
+  // Sides are skin; the hair cap in buildHairExtras carries the hair color.
+  const head = new THREE.Mesh(box, [skin, skin, hair, skin, face, skin]);
   head.rotation.y = Math.PI / 2; // move the +z face texture onto +x
   head.scale.set(0.5, 0.5, 0.5);
   head.position.y = 1.35;
@@ -143,8 +152,6 @@ export function makeKidMesh(scale = 1, look = null) {
     head, body, armL, armR, legL, legR, face, hairExtra,
     mats: [skin, hair, shirt, pants],
   };
-  // Buzz cut needs the style-specific head materials.
-  if (look.style === 3) group.userData.parts.head.material = [skin, skin, hair, skin, face, skin];
   return group;
 }
 

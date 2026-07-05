@@ -71,7 +71,7 @@ const charScene = new CharScene();
 
 // Debug handle for automated testing (headless tabs freeze rAF, so tests
 // step the sim manually via game.updateRun(dt) and game.debugResolve()).
-window.__wr = { game, store, map };
+window.__wr = { game, store, map, charScene };
 
 const clock = new THREE.Clock();
 renderer.setAnimationLoop(() => {
