@@ -44,13 +44,17 @@ function makeFaceTexture(skinHex, hairHex, fringe) {
   return tex;
 }
 
-// Hair style indices (see character.js STYLES): 0 short, 1 spiky, 2 long, 3 buzz.
+// Hair style indices (see character.js STYLES):
+// 0 short, 1 spiky, 2 long, 3 buzz, 4 bald.
 // The head sides are always skin; hair is a slightly-oversized cap box that
 // covers the top 2/3 of the head, so it reads as hair from every angle while
-// the character rotates. Buzz gets no cap — just the painted head top.
+// the character rotates. Buzz gets no cap — just the painted head top — and
+// bald gets nothing at all.
+const hasFringe = (style) => style <= 2;
+
 function buildHairExtras(style, hairMat) {
   const g = new THREE.Group();
-  if (style === 3) return g;
+  if (style >= 3) return g;
   const box = new THREE.BoxGeometry(1, 1, 1);
   // Cap: head is 0.5 wide with its top at y=1.6; hair reaches down to ~1.27.
   // The kid faces +x, so its front stops just behind the face (+x) so the
@@ -78,6 +82,35 @@ function buildHairExtras(style, hairMat) {
   return g;
 }
 
+// Outfit indices (see character.js OUTFITS): 0 shirt+pants, 1 dress, 2 overalls.
+// Dress: a flared skirt box over the hips, bare (skin) legs, shirt color as
+// the dress. Overalls: a pants-colored bib over the lower torso with two
+// straps up the chest.
+function buildOutfitExtras(outfit, shirtMat, pantsMat) {
+  const g = new THREE.Group();
+  const box = new THREE.BoxGeometry(1, 1, 1);
+  if (outfit === 1) {
+    const skirt = new THREE.Mesh(box, shirtMat);
+    skirt.scale.set(0.56, 0.32, 0.44);
+    skirt.position.y = 0.42;
+    g.add(skirt);
+  } else if (outfit === 2) {
+    const bib = new THREE.Mesh(box, pantsMat);
+    bib.scale.set(0.54, 0.36, 0.34);
+    bib.position.y = 0.66;
+    g.add(bib);
+    for (const zx of [-0.26, 0.26]) {
+      for (const z of [-0.1, 0.1]) {
+        const strap = new THREE.Mesh(box, pantsMat);
+        strap.scale.set(0.05, 0.3, 0.08);
+        strap.position.set(zx, 0.97, z);
+        g.add(strap);
+      }
+    }
+  }
+  return g;
+}
+
 // The current saved look (store must be loaded before meshes are built).
 export function currentLook() {
   return lookFrom(store.get().character);
@@ -93,11 +126,20 @@ export function applyLook(group, look) {
   shirt.color.setHex(look.shirt);
   pants.color.setHex(look.pants);
   if (p.face.map) p.face.map.dispose();
-  p.face.map = makeFaceTexture(look.skin, look.hair, look.style !== 3);
+  p.face.map = makeFaceTexture(look.skin, look.hair, hasFringe(look.style));
   p.face.needsUpdate = true;
+  // Bald: skin instead of hair on top of the head.
+  p.head.material = [skin, skin, look.style === 4 ? skin : hair, skin, p.face, skin];
   group.remove(p.hairExtra);
   p.hairExtra = buildHairExtras(look.style, hair);
   group.add(p.hairExtra);
+  // Dress means bare legs; the limb meshes sit one level under their pivots.
+  const legMat = look.outfit === 1 ? skin : pants;
+  p.legL.children[0].material = legMat;
+  p.legR.children[0].material = legMat;
+  group.remove(p.outfitExtra);
+  p.outfitExtra = buildOutfitExtras(look.outfit, shirt, pants);
+  group.add(p.outfitExtra);
 }
 
 // Shared kid builder — the overworld token reuses it at a smaller scale.
@@ -110,14 +152,14 @@ export function makeKidMesh(scale = 1, look = null) {
   const shirt = new THREE.MeshLambertMaterial({ color: look.shirt });
   const pants = new THREE.MeshLambertMaterial({ color: look.pants });
   const face = new THREE.MeshLambertMaterial({
-    map: makeFaceTexture(look.skin, look.hair, look.style !== 3),
+    map: makeFaceTexture(look.skin, look.hair, hasFringe(look.style)),
   });
 
   // The body is built facing +x (arms at the z-sides, legs swinging in the
   // x-y plane), so the face goes on +x too — head and chest always agree.
   // Whoever owns the group yaws it to show the face to the camera.
   // Sides are skin; the hair cap in buildHairExtras carries the hair color.
-  const head = new THREE.Mesh(box, [skin, skin, hair, skin, face, skin]);
+  const head = new THREE.Mesh(box, [skin, skin, look.style === 4 ? skin : hair, skin, face, skin]);
   head.rotation.y = Math.PI / 2; // move the +z face texture onto +x
   head.scale.set(0.5, 0.5, 0.5);
   head.position.y = 1.35;
@@ -139,17 +181,19 @@ export function makeKidMesh(scale = 1, look = null) {
   armL.position.set(0, 1.08, -0.34);
   const armR = mkLimb(shirt, 0.16, 0.5);
   armR.position.set(0, 1.08, 0.34);
-  const legL = mkLimb(pants, 0.18, 0.5);
+  const legMat = look.outfit === 1 ? skin : pants; // dress = bare legs
+  const legL = mkLimb(legMat, 0.18, 0.5);
   legL.position.set(0, 0.5, -0.14);
-  const legR = mkLimb(pants, 0.18, 0.5);
+  const legR = mkLimb(legMat, 0.18, 0.5);
   legR.position.set(0, 0.5, 0.14);
 
   const hairExtra = buildHairExtras(look.style, hair);
+  const outfitExtra = buildOutfitExtras(look.outfit, shirt, pants);
 
-  group.add(head, body, armL, armR, legL, legR, hairExtra);
+  group.add(head, body, armL, armR, legL, legR, hairExtra, outfitExtra);
   group.scale.setScalar(scale);
   group.userData.parts = {
-    head, body, armL, armR, legL, legR, face, hairExtra,
+    head, body, armL, armR, legL, legR, face, hairExtra, outfitExtra,
     mats: [skin, hair, shirt, pants],
   };
   return group;

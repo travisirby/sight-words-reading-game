@@ -26,11 +26,18 @@ export const PALETTES = {
 
 export const STYLES = {
   label: 'Hair style',
-  names: ['Short', 'Spiky', 'Long', 'Buzz'],
-  icons: ['🙂', '🦔', '👧', '🧢'],
+  names: ['Short', 'Spiky', 'Long', 'Buzz', 'Bald'],
+  icons: ['🙂', '🦔', '👧', '🧢', '🥚'],
 };
 
-// store character indices -> concrete look { skin, hair, shirt, pants, style }
+export const OUTFITS = {
+  label: 'Outfit',
+  names: ['Shirt and pants', 'Dress', 'Overalls'],
+  icons: ['👕', '👗', '👖'],
+};
+
+// store character indices -> concrete look
+// { skin, hair, shirt, pants, style, outfit }
 export function lookFrom(char) {
   const pick = (part) => {
     const p = PALETTES[part];
@@ -42,5 +49,6 @@ export function lookFrom(char) {
     shirt: pick('shirt'),
     pants: pick('pants'),
     style: STYLES.names[char.style] ? char.style : 0,
+    outfit: OUTFITS.names[char.outfit] ? char.outfit : 0,
   };
 }

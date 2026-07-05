@@ -71,6 +71,10 @@ const map = new Overworld(renderer, {
     speak('My house!', { rate: 1.0 });
     showHouse('map');
   },
+  onTokenTapped: () => {
+    speak('Make your character!', { rate: 1.0 });
+    showCharacter('map');
+  },
 });
 
 const charScene = new CharScene();
@@ -119,9 +123,12 @@ function showMap() {
 
 // ---------- character creator ----------
 
-function showCharacter() {
+let charReturn = 'title'; // screen to go back to when leaving the editor
+
+function showCharacter(from = 'title') {
+  charReturn = from;
+  if (mode === 'map') map.exit();
   mode = 'char';
-  map.exit();
   charScene.setLook(currentLook());
   ui.buildCharacterUI((part, idx) => {
     store.setCharacterPart(part, idx);
@@ -135,6 +142,10 @@ function closeCharacter() {
   const look = currentLook();
   applyLook(game.player.group, look);
   applyLook(map.token, look);
+  if (charReturn === 'map') {
+    showMap(); // token stays wherever it was
+    return;
+  }
   mode = 'map'; // map scene renders behind the title again
   ui.showScreen('title');
 }
