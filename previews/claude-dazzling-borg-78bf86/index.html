@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <title>Word Runner</title>
+  <script type="module" crossorigin src="./assets/index-DVf3woyM.js"></script>
+  <link rel="stylesheet" crossorigin href="./assets/index-rijXzJ3R.css">
+</head>
+<body>
+  <!-- 3D canvas mounts here -->
+  <div id="game-container"></div>
+
+  <!-- ============ TITLE SCREEN ============ -->
+  <div id="screen-title" class="screen">
+    <h1 class="game-title">
+      <span>W</span><span>O</span><span>R</span><span>D</span>
+      <br />
+      <span>R</span><span>U</span><span>N</span><span>N</span><span>E</span><span>R</span>
+    </h1>
+    <button id="btn-play" class="btn btn-huge">▶️ PLAY</button>
+    <button id="btn-character" class="btn btn-wide">🧒 MY CHARACTER</button>
+    <button id="btn-title-house" class="btn btn-wide">🏠 MY HOUSE</button>
+    <button id="btn-settings" class="btn btn-round">⚙️</button>
+    <div id="settings-panel" class="panel hidden">
+      <button id="btn-toggle-sound" class="btn btn-wide">🔊 Sound: ON</button>
+      <button id="btn-toggle-mic" class="btn btn-wide">🎤 Mic Round: ON</button>
+      <button id="btn-settings-close" class="btn btn-wide">✖️ Close</button>
+    </div>
+    <div id="version-tag">v2.0</div>
+  </div>
+
+  <!-- ============ OVERWORLD MAP (3D; DOM chrome only) ============ -->
+  <div id="screen-map" class="screen map-screen hidden">
+    <button id="btn-map-back" class="btn btn-round corner-top-left">⬅️</button>
+    <div id="level-banner" class="hidden">
+      <div id="banner-name">Grass Plains 1</div>
+      <div id="banner-stars">· · ·</div>
+      <button id="btn-banner-play" class="btn btn-huge">▶️ PLAY</button>
+    </div>
+  </div>
+
+  <!-- ============ CHARACTER CREATOR (3D preview; DOM chrome only) ============ -->
+  <div id="screen-char" class="screen char-screen hidden">
+    <button id="btn-char-back" class="btn btn-round corner-top-left">⬅️</button>
+    <h2 class="char-heading">🧒 My Character</h2>
+    <div id="char-panel">
+      <div id="char-rows"></div>
+      <button id="btn-char-done" class="btn btn-huge btn-char-done">✅ DONE</button>
+    </div>
+  </div>
+
+  <!-- ============ HUD (during run) ============ -->
+  <div id="hud" class="hidden">
+    <div id="hud-coins">🪙 <span id="coin-count">0</span></div>
+    <div id="hud-key" class="hidden">🔑</div>
+    <button id="btn-pause" class="btn btn-round btn-pause">⏸️</button>
+    <button id="btn-repeat-word" class="btn btn-repeat">🔊</button>
+    <div id="progress-dots"></div>
+    <!-- Time-freeze steering controls (choice mode only) -->
+    <div id="move-controls" class="hidden">
+      <button id="btn-move-left" class="btn btn-move btn-move-left">⬅️</button>
+      <button id="btn-move-right" class="btn btn-move btn-move-right">➡️</button>
+      <button id="btn-move-jump" class="btn btn-move btn-move-jump">⬆️</button>
+    </div>
+  </div>
+
+  <!-- ============ PAUSE ============ -->
+  <div id="screen-pause" class="screen overlay hidden">
+    <div class="panel">
+      <h2>⏸️ Paused</h2>
+      <button id="btn-resume" class="btn btn-wide">▶️ Resume</button>
+      <button id="btn-pause-map" class="btn btn-wide">🗺️ Map</button>
+    </div>
+  </div>
+
+  <!-- ============ LEVEL COMPLETE ============ -->
+  <div id="screen-complete" class="screen overlay hidden">
+    <div class="panel">
+      <h2>🎉 Level Complete!</h2>
+      <div id="star-row"><span class="star">⭐</span><span class="star">⭐</span><span class="star">⭐</span></div>
+      <div id="complete-totals">🪙 <span id="complete-coins">0</span> &nbsp; 💎 <span id="complete-gems">0</span></div>
+      <button id="btn-play-again" class="btn btn-wide">🔁 Play again</button>
+      <button id="btn-next-level" class="btn btn-wide">➡️ Next level</button>
+      <button id="btn-complete-map" class="btn btn-wide">🗺️ Map</button>
+      <button id="btn-complete-house" class="btn btn-wide">🏠 My House</button>
+    </div>
+  </div>
+
+  <!-- ============ MY HOUSE (3D; DOM chrome only) ============ -->
+  <div id="screen-house" class="screen map-screen hidden">
+    <button id="btn-house-back" class="btn btn-round corner-top-left">⬅️</button>
+    <div id="house-wallet">🪙 <span id="house-coins">0</span> &nbsp; 💎 <span id="house-gems">0</span></div>
+    <button id="btn-house-shop" class="btn btn-huge btn-shop">🛒 SHOP</button>
+    <div id="shop-panel" class="hidden">
+      <div id="shop-header">
+        <span>🛒 Build your house!</span>
+        <button id="btn-shop-close" class="btn btn-round">✖️</button>
+      </div>
+      <div id="shop-list"></div>
+    </div>
+    <div id="house-toast" class="hidden"></div>
+  </div>
+
+  <!-- ============ CUTSCENE (3D; letterbox + captions) ============ -->
+  <div id="screen-cutscene" class="screen cutscene-screen hidden">
+    <div class="cs-bar cs-bar-top"></div>
+    <div class="cs-bar cs-bar-bottom"></div>
+    <div id="cs-word" class="hidden"></div>
+    <div id="cs-caption" class="hidden"></div>
+    <button id="btn-cutscene-skip" class="btn">⏭️ SKIP</button>
+  </div>
+
+  <!-- ============ READ-ALOUD BONUS ROUND ============ -->
+  <div id="screen-bonus" class="screen overlay hidden">
+    <h2 class="bonus-heading">📖 Read it out loud!</h2>
+    <div id="bonus-word">the</div>
+    <div id="bonus-feedback"></div>
+    <button id="btn-mic" class="btn btn-mic">🎤</button>
+    <div class="bonus-hint">Hold the mic and say the word</div>
+    <button id="btn-bonus-skip" class="btn btn-wide">⏭️ Skip</button>
+  </div>
+
+</body>
+</html>
