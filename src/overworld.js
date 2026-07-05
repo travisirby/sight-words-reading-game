@@ -1043,21 +1043,23 @@ export class Overworld {
     this.cb.onDismiss();
     const dir = navIdx > this.tokenNav ? 1 : -1;
     const points = [];
-    for (let i = this.tokenNav; i !== navIdx; i += dir) {
+    for (let i = this.tokenNav; ; i += dir) {
       const a = this.navList[i];
-      const b = this.navList[i + dir];
-      const steps = 8;
-      for (let k = 1; k <= steps; k++) {
-        const t = k / steps;
-        points.push({ x: a.x + (b.x - a.x) * t, z: a.z + (b.z - a.z) * t });
-      }
+      points.push({ x: a.x, z: a.z });
+      if (i === navIdx) break;
     }
-    let dist = 0;
+    // Cumulative arc length so the token glides at constant speed.
+    const cum = [0];
     for (let i = 1; i < points.length; i++) {
-      dist += Math.hypot(points[i].x - points[i - 1].x, points[i].z - points[i - 1].z);
+      cum.push(cum[i - 1] + Math.hypot(points[i].x - points[i - 1].x, points[i].z - points[i - 1].z));
     }
+    const dist = cum[cum.length - 1];
     this.walk = {
       points,
+      cum,
+      dist,
+      seg: 0,
+      h: this.heightAt(points[0].x, points[0].z),
       t: 0,
       dur: Math.min(2, 0.3 + dist * 0.09),
       target: navIdx,
@@ -1275,13 +1277,24 @@ export class Overworld {
     if (this.walk) {
       const w = this.walk;
       w.t += dt / w.dur;
-      const ti = Math.min(w.points.length - 1, Math.floor(w.t * w.points.length));
-      const pt = w.points[ti];
-      const prev = this.token.position;
-      // Point the kid's forward axis (+x local) along the walk direction.
-      this.token.rotation.y = Math.atan2(prev.z - pt.z, pt.x - prev.x);
-      const h = this.heightAt(pt.x, pt.z); // step up onto terraces/bridges
-      this.token.position.set(pt.x, TOKEN_Y + h + Math.abs(Math.sin(w.t * 22)) * 0.18, pt.z);
+      // Constant-speed glide along the path (interpolated, not waypoint-snapped).
+      const s = Math.min(1, w.t) * w.dist;
+      while (w.seg < w.points.length - 2 && w.cum[w.seg + 1] < s) w.seg++;
+      const a = w.points[w.seg];
+      const b2 = w.points[w.seg + 1];
+      const segLen = w.cum[w.seg + 1] - w.cum[w.seg];
+      const f = segLen > 0 ? (s - w.cum[w.seg]) / segLen : 1;
+      const px = a.x + (b2.x - a.x) * f;
+      const pz = a.z + (b2.z - a.z) * f;
+      // Point the kid's forward axis (+x local) along the walk direction,
+      // easing turns instead of snapping.
+      const want = Math.atan2(a.z - b2.z, b2.x - a.x);
+      let dr = want - this.token.rotation.y;
+      dr = Math.atan2(Math.sin(dr), Math.cos(dr));
+      this.token.rotation.y += dr * (1 - Math.exp(-dt * 12));
+      // Ease onto terraces/bridges rather than popping a full step at once.
+      w.h += (this.heightAt(px, pz) - w.h) * (1 - Math.exp(-dt * 10));
+      this.token.position.set(px, TOKEN_Y + w.h + Math.abs(Math.sin(w.t * 22)) * 0.18, pz);
       const parts = this.token.userData.parts;
       const swing = Math.sin(w.t * 30);
       parts.legL.rotation.z = -swing * 0.8;
@@ -1292,7 +1305,6 @@ export class Overworld {
         this.tokenNav = w.target;
         const e = this.navList[w.target];
         this.token.position.set(e.x, TOKEN_Y, e.z);
-        this.token.rotation.y = -Math.PI / 2; // camera-facing when idle
         parts.legL.rotation.z = parts.legR.rotation.z = 0;
         parts.armL.rotation.z = parts.armR.rotation.z = 0;
         this.walk = null;
@@ -1300,6 +1312,10 @@ export class Overworld {
       }
     } else if (!this.reveal) {
       this.token.position.y = TOKEN_Y + Math.abs(Math.sin(t * 2)) * 0.05;
+      // Ease back to camera-facing after a walk instead of snapping.
+      let dr = -Math.PI / 2 - this.token.rotation.y;
+      dr = Math.atan2(Math.sin(dr), Math.cos(dr));
+      this.token.rotation.y += dr * (1 - Math.exp(-dt * 8));
     }
 
     // Camera: follow token, or user pan with snap-back after 4s idle.
