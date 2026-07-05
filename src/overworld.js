@@ -123,7 +123,10 @@ export class Overworld {
     // Guaranteed flat yard under the player's house (plus a lane back to the
     // first node so the ground between them never terraces).
     mark(this.keepCells, HOUSE_POS.x, HOUSE_POS.z, 2.6);
-    markLine(this.keepCells, HOUSE_POS, nodes[0], 1.4);
+    markLine(this.keepCells, HOUSE_POS, nodes[0], 2.6);
+    // Camera looks from +z, so tall props on the near side of the road would
+    // occlude it — keep the foreground strip clear as well.
+    mark(this.keepCells, HOUSE_POS.x + 2.3, HOUSE_POS.z + 3.7, 2.2);
     for (const key of this.keepCells) this.flatCells.add(key);
     // Secret branches: flatten (but don't land-fill) every line the token or
     // the purple tiles can take — anchors are levels that can hold a key.
@@ -720,6 +723,48 @@ export class Overworld {
     win.position.set(0.65, 1.0, 1.11);
     g.add(base, slabL, slabR, cap, chimney, door, knob, win);
 
+    // Road from world 0's first node, same look as the journey tiles
+    // (always shown — the house is never locked). World coords, not group.
+    const n0 = this.data.nodes[0];
+    const tileMat = new THREE.MeshLambertMaterial({ color: 0xf7e9b0 });
+    const dx = HOUSE_POS.x - n0.x;
+    const dz = HOUSE_POS.z - n0.z;
+    const len = Math.hypot(dx, dz);
+    const steps = Math.round(len);
+    for (let k = 1; k < steps; k++) {
+      const t = k / steps;
+      const wob = Math.sin(t * Math.PI * 2) * 0.35; // gentle S like the trail
+      const tile = new THREE.Mesh(boxGeo, tileMat);
+      tile.scale.set(0.72, 0.16, 0.72);
+      tile.position.set(
+        n0.x + dx * t - (dz / len) * wob,
+        0.08,
+        n0.z + dz * t + (dx / len) * wob
+      );
+      this.scene.add(tile);
+    }
+
+    // Floating gold house marker so the building reads as a place to visit
+    // (bobs and spins in tick(), like the key icons over levels).
+    const gold = new THREE.MeshLambertMaterial({ color: 0xffd54a, emissive: 0x664d00 });
+    this.houseIcon = new THREE.Group();
+    const ibase = new THREE.Mesh(boxGeo, gold);
+    ibase.scale.set(0.62, 0.42, 0.62);
+    const iroofL = new THREE.Mesh(boxGeo, gold);
+    iroofL.scale.set(0.52, 0.12, 0.7);
+    iroofL.rotation.z = 0.78;
+    iroofL.position.set(-0.18, 0.36, 0);
+    const iroofR = iroofL.clone();
+    iroofR.rotation.z = -0.78;
+    iroofR.position.x = 0.18;
+    const idoor = new THREE.Mesh(boxGeo, new THREE.MeshLambertMaterial({ color: 0x8a5a3b }));
+    idoor.scale.set(0.2, 0.26, 0.08);
+    idoor.position.set(0, -0.08, 0.3);
+    this.houseIcon.add(ibase, iroofL, iroofR, idoor);
+    this.houseIcon.scale.setScalar(1.35);
+    this.houseIcon.position.set(0, 4.3, 0);
+    g.add(this.houseIcon);
+
     // Fat invisible touch target, same trick as the level nodes.
     this.houseHit = new THREE.Mesh(boxGeo, new THREE.MeshBasicMaterial({ visible: false }));
     this.houseHit.scale.set(4, 4, 4);
@@ -1164,6 +1209,10 @@ export class Overworld {
       }
     });
     if (lockAnim) this.applyLockTints();
+
+    // Floating house marker: slow spin + bob, like the key icons.
+    this.houseIcon.rotation.y = t * 1.2;
+    this.houseIcon.position.y = 4.3 + Math.sin(t * 2) * 0.15;
 
     // Lazy chimney smoke: a soft puff every couple of seconds.
     this.houseSmokeT -= dt;
