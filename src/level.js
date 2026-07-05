@@ -140,8 +140,10 @@ export function generateLevel({ seed, wordCount, theme, secret = false, hasKey =
     } else {
       const s = x();
       events.push({ type, x: s, wallX: s + 12, groundY: g });
-      platforms.push({ x0: s + 6, x1: s + 11, y: g + 2 }); // tier +2 ledge
-      platforms.push({ x0: s + 9, x1: s + 11, y: g + 4 }); // tier +4 ledge
+      // Door step ledges are thin so they don't hang down over the face of
+      // a player standing at the tier below (head tops out +1.6 above feet).
+      platforms.push({ x0: s + 6, x1: s + 11, y: g + 2, thin: true }); // tier +2 ledge
+      platforms.push({ x0: s + 9, x1: s + 11, y: g + 4, thin: true }); // tier +4 ledge
       flat(19);
     }
   }
@@ -405,11 +407,13 @@ export class LevelScene {
       }
     }
 
-    // Floating platforms (2 deep in z).
+    // Floating platforms (2 deep in z). Thin ones keep the same walking
+    // surface (top at plat.y) with a shallower slab.
     for (const plat of data.platforms) {
+      const th = plat.thin ? 0.35 : 1;
       for (let cx = plat.x0; cx <= plat.x1; cx++) {
         for (let zi = 0; zi <= 1; zi++) {
-          put(cx, plat.y - 0.5, zi - 0.5, 1, 1, 1, p.plat[(cx + zi) & 1]);
+          put(cx, plat.y - th / 2, zi - 0.5, 1, th, 1, p.plat[(cx + zi) & 1]);
         }
       }
     }
