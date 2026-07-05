@@ -33,8 +33,9 @@ export function init(h) {
 
   bindSpeak($('btn-bonus-skip'), 'Skip', () => h.onBonusSkip());
 
+  // On the map the house is a real building in the world (overworld.js
+  // raycasts it) — only title/complete need chrome buttons.
   bindSpeak($('btn-title-house'), 'My house!', () => h.onHouse('title'));
-  bindSpeak($('btn-map-house'), 'My house!', () => h.onHouse('map'));
   bindSpeak($('btn-complete-house'), 'My house!', () => h.onHouse('complete'));
   bindSpeak($('btn-house-back'), 'Back', () => h.onHouseBack());
   bindSpeak($('btn-house-shop'), 'Shop!', () => toggleShop(true));

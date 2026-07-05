@@ -65,6 +65,10 @@ const map = new Overworld(renderer, {
     if (selected && ui.isLevelBannerVisible()) playSelected();
     else map.walkTo(map.tokenNav); // select the node under the token
   },
+  onHouseTapped: () => {
+    speak('My house!', { rate: 1.0 });
+    showHouse('map');
+  },
 });
 
 const house = new House(renderer);
