@@ -48,8 +48,11 @@ export function makeKidMesh(scale = 1) {
   const pants = new THREE.MeshLambertMaterial({ color: 0x37474f });
   const face = new THREE.MeshLambertMaterial({ map: makeFaceTexture() });
 
-  // Face on +z so the camera (side view / map view) sees it.
+  // The body is built facing +x (arms at the z-sides, legs swinging in the
+  // x-y plane), so the face goes on +x too — head and chest always agree.
+  // Whoever owns the group yaws it to show the face to the camera.
   const head = new THREE.Mesh(box, [skin, hair, hair, skin, face, hair]);
+  head.rotation.y = Math.PI / 2; // move the +z face texture onto +x
   head.scale.set(0.5, 0.5, 0.5);
   head.position.y = 1.35;
 
@@ -113,9 +116,9 @@ export class Player {
     this.stumbleT = 0;
     this.squashT = 0;
     this.walkPhase = 0;
-    this.faceYaw = 0;
+    this.faceYaw = -Math.PI / 2; // forward (+x local) turned to the camera
     this.group.position.set(x, y, 0);
-    this.group.rotation.set(0, 0, 0);
+    this.group.rotation.set(0, this.faceYaw, 0);
     this.group.scale.setScalar(1);
     for (const m of this.parts.mats) m.emissive.setHex(0x000000);
   }
@@ -202,20 +205,33 @@ export class Player {
       p.armR.rotation.z = 2.4;
       p.legL.rotation.z = -0.5;
       p.legR.rotation.z = 0.3;
+      p.legL.position.y = 0.5;
+      p.legR.position.y = 0.5;
     } else {
-      this.walkPhase += dt * Math.max(Math.abs(speed), 0.001) * 2.4;
+      // Stride rate compensates for the ~35° yaw foreshortening: feet must
+      // sweep backward as fast as the ground scrolls or the gait reads as a
+      // moonwalk (feet sliding forward). abs(): choice mode walks left too.
+      this.walkPhase += dt * Math.max(Math.abs(speed), 0.001) * 2.7;
       const swing = Math.abs(speed) > 0.2 ? Math.sin(this.walkPhase) : 0;
+      const stride = Math.abs(speed) > 0.2 ? Math.cos(this.walkPhase) : 0;
       p.armL.rotation.z = swing * 0.9;
       p.armR.rotation.z = -swing * 0.9;
       p.legL.rotation.z = -swing * 0.9;
       p.legR.rotation.z = swing * 0.9;
+      // Lift whichever leg is swinging forward so the planted leg carries
+      // the motion — the other foot never scuffs forward along the ground.
+      p.legL.position.y = 0.5 + Math.max(0, -stride) * 0.12;
+      p.legR.position.y = 0.5 + Math.max(0, stride) * 0.12;
     }
     const bob = this.grounded && Math.abs(speed) > 0.2 ? Math.abs(Math.cos(this.walkPhase)) * 0.06 : 0;
 
-    // Three-quarter view while moving: turn ~55° toward the direction of
-    // travel so the run reads as forward motion but the face (on +z)
-    // stays visible; ease back to camera-facing when idle.
-    const targetYaw = Math.abs(speed) > 0.2 ? Math.sign(speed) * 0.96 : 0;
+    // Three-quarter view while moving: chest and face point ~35° off the
+    // direction of travel (±x, mirrored when steering left in choice mode)
+    // toward the camera, so the run reads forward and the face stays
+    // visible; ease back to camera-facing when idle.
+    const targetYaw = Math.abs(speed) > 0.2
+      ? -Math.PI / 2 + Math.sign(speed) * (Math.PI / 2 - 0.61)
+      : -Math.PI / 2;
     this.faceYaw += (targetYaw - this.faceYaw) * Math.min(1, dt * 5);
     this.group.rotation.y = this.faceYaw;
 

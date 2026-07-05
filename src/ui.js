@@ -90,8 +90,8 @@ export function updateSettingsLabels() {
 
 // ---------- level banner (overworld node tapped) ----------
 
-export function showLevelBanner({ name, stars, completed, secret }) {
-  $('banner-name').textContent = secret ? `✨ ${name} ✨` : name;
+export function showLevelBanner({ name, stars, completed, secret, boss }) {
+  $('banner-name').textContent = secret ? `✨ ${name} ✨` : boss ? `👑 ${name} 👑` : name;
   $('banner-stars').textContent = stars > 0 ? '⭐'.repeat(stars) : '· · ·';
   $('btn-banner-play').textContent = completed ? '🔁 PLAY' : '▶️ PLAY';
   $('level-banner').classList.remove('hidden');
