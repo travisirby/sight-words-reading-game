@@ -470,7 +470,8 @@ export class Game {
         c.squashT -= dt;
         c.x += c.dir * 6 * dt;
         const t = Math.max(0, c.squashT / 0.5);
-        const gy0 = this.level.groundTopAt(c.x);
+        const gy0 = Math.max(this.level.groundTopAt(c.x - 0.45),
+                             this.level.groundTopAt(c.x + 0.45));
         c.g.position.set(c.x, gy0 + (1 - t) * 1.2 * Math.sin(t * Math.PI), 0);
         c.g.rotation.z += c.dir * -10 * dt;
         c.g.scale.setScalar(Math.max(0.05, t));
@@ -483,7 +484,11 @@ export class Game {
       c.x += c.dir * 1.1 * dt;
       if (c.x < c.x0) { c.x = c.x0; c.dir = 1; }
       if (c.x > c.x1) { c.x = c.x1; c.dir = -1; }
-      const gy = this.level.groundTopAt(c.x);
+      // Stand on the higher of the two body-edge columns so a critter
+      // near a ground step rides over the raised blocks instead of
+      // clipping through them.
+      const gy = Math.max(this.level.groundTopAt(c.x - 0.45),
+                          this.level.groundTopAt(c.x + 0.45));
       c.g.position.set(c.x, gy + Math.abs(Math.sin(this.elapsed * 8 + c.x)) * 0.08, 0);
       c.g.rotation.y = c.dir > 0 ? 0.25 : -0.25;
       c.g.rotation.z = Math.sin(this.elapsed * 8 + c.x) * 0.08;
