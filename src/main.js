@@ -10,7 +10,12 @@ import * as speech from './speech.js';
 import { unlockAudio, setMuted, speak, sfxCorrect, sfxCoin } from './audio.js';
 import { WORLDS, shuffle, PRAISE } from './words.js';
 
+// Testing cheats via URL: ?unlock opens every level/castle/secret,
+// ?reset wipes the save first (combine as ?reset&unlock).
+const cheats = new URLSearchParams(location.search);
+if (cheats.has('reset')) store.reset();
 store.load();
+if (cheats.has('unlock')) store.devUnlockAll(WORLDS.length);
 setMuted(!store.get().sound);
 
 const LEVEL_COUNTS = WORLDS.map((w) => w.levels.length);

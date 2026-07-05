@@ -185,6 +185,15 @@ export function isWorldUnlocked(worldIdx) {
   return state.devUnlocked || worldIdx <= state.unlocked.world;
 }
 
+// Wipe the save completely (testing; old-version keys too, so migration
+// doesn't resurrect them).
+export function reset() {
+  try {
+    for (const k of [KEY, ...OLD_KEYS]) localStorage.removeItem(k);
+  } catch (e) { /* ignore */ }
+  state = defaults();
+}
+
 export function devUnlockAll(worldCount = 5) {
   state.devUnlocked = true; // also unlocks secrets via isSecretUnlocked
   for (let w = 0; w < worldCount; w++) state.bossBeaten[w] = true;
