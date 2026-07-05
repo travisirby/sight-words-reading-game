@@ -26,6 +26,9 @@ const LOCK_TINT = 0.45; // color multiplier on locked regions
 const ROW_Z = 9;
 const FLOWER_COLORS = [0xff6b81, 0xffd93d, 0xff9ff3, 0x74b9ff];
 const TOKEN_Y = 0.56; // token feet on top of a node pad
+// The player's house lives on the map: back-left corner of the starting row,
+// just past world 0's first node so it's on-screen from the first visit.
+const HOUSE_POS = { x: -17.5, z: -2.5 };
 
 function nodeName(world, level, secret, boss) {
   if (secret) return `${WORLDS[world].name} Secret`;
@@ -62,6 +65,7 @@ export class Overworld {
     this.buildSkyClouds();
     this.buildTiles();
     this.buildNodes();
+    this.buildHouse();
 
     // Locked-region tint state (t = colorize progress, 1 = fully lit).
     this.lockState = WORLDS.map((w, wi) => ({
@@ -116,6 +120,13 @@ export class Overworld {
     for (let i = 1; i < segments.length; i++) {
       for (const pt of segments[i]) mark(this.keepCells, pt.x, pt.z, 1.7);
     }
+    // Guaranteed flat yard under the player's house (plus a lane back to the
+    // first node so the ground between them never terraces).
+    mark(this.keepCells, HOUSE_POS.x, HOUSE_POS.z, 2.6);
+    markLine(this.keepCells, HOUSE_POS, nodes[0], 2.6);
+    // Camera looks from +z, so tall props on the near side of the road would
+    // occlude it — keep the foreground strip clear as well.
+    mark(this.keepCells, HOUSE_POS.x + 2.3, HOUSE_POS.z + 3.7, 2.2);
     for (const key of this.keepCells) this.flatCells.add(key);
     // Secret branches: flatten (but don't land-fill) every line the token or
     // the purple tiles can take — anchors are levels that can hold a key.
@@ -675,6 +686,97 @@ export class Overworld {
     this.secretViews = this.data.secretNodes.map((nd) => mkNode(nd, true));
   }
 
+  // The player's house: a mini version of the house-scene building standing
+  // in its own yard on the starting row. Tapping it opens the house screen.
+  buildHouse() {
+    const g = new THREE.Group();
+    g.position.set(HOUSE_POS.x, 0, HOUSE_POS.z);
+
+    const wallMat = new THREE.MeshLambertMaterial({ color: 0xf3e2c0 });
+    const roofMat = new THREE.MeshLambertMaterial({ color: 0xd45757 });
+    const base = new THREE.Mesh(boxGeo, wallMat);
+    base.scale.set(2.6, 1.5, 2.2);
+    base.position.y = 0.75;
+    // Gable roof from two leaning slabs + ridge cap.
+    const slabL = new THREE.Mesh(boxGeo, roofMat);
+    slabL.scale.set(1.7, 0.18, 2.6);
+    slabL.rotation.z = 0.62;
+    slabL.position.set(-0.68, 1.95, 0);
+    const slabR = slabL.clone();
+    slabR.rotation.z = -0.62;
+    slabR.position.x = 0.68;
+    const cap = new THREE.Mesh(boxGeo, roofMat);
+    cap.scale.set(0.35, 0.3, 2.65);
+    cap.position.y = 2.42;
+    const chimney = new THREE.Mesh(boxGeo, new THREE.MeshLambertMaterial({ color: 0x9c6b4f }));
+    chimney.scale.set(0.4, 0.9, 0.4);
+    chimney.position.set(0.8, 2.35, -0.55);
+    // Door + window on the camera-facing (+z) side.
+    const door = new THREE.Mesh(boxGeo, new THREE.MeshLambertMaterial({ color: 0x8a5a3b }));
+    door.scale.set(0.6, 0.95, 0.1);
+    door.position.set(-0.55, 0.48, 1.11);
+    const knob = new THREE.Mesh(boxGeo, new THREE.MeshLambertMaterial({ color: 0xffd54a }));
+    knob.scale.setScalar(0.1);
+    knob.position.set(-0.35, 0.5, 1.18);
+    const win = new THREE.Mesh(boxGeo, new THREE.MeshLambertMaterial({ color: 0xaee3ff, emissive: 0x1a3a4a }));
+    win.scale.set(0.7, 0.6, 0.1);
+    win.position.set(0.65, 1.0, 1.11);
+    g.add(base, slabL, slabR, cap, chimney, door, knob, win);
+
+    // Road from world 0's first node, same look as the journey tiles
+    // (always shown — the house is never locked). World coords, not group.
+    const n0 = this.data.nodes[0];
+    const tileMat = new THREE.MeshLambertMaterial({ color: 0xf7e9b0 });
+    const dx = HOUSE_POS.x - n0.x;
+    const dz = HOUSE_POS.z - n0.z;
+    const len = Math.hypot(dx, dz);
+    const steps = Math.round(len);
+    for (let k = 1; k < steps; k++) {
+      const t = k / steps;
+      const wob = Math.sin(t * Math.PI * 2) * 0.35; // gentle S like the trail
+      const tile = new THREE.Mesh(boxGeo, tileMat);
+      tile.scale.set(0.72, 0.16, 0.72);
+      tile.position.set(
+        n0.x + dx * t - (dz / len) * wob,
+        0.08,
+        n0.z + dz * t + (dx / len) * wob
+      );
+      this.scene.add(tile);
+    }
+
+    // Floating gold house marker so the building reads as a place to visit
+    // (bobs and spins in tick(), like the key icons over levels).
+    const gold = new THREE.MeshLambertMaterial({ color: 0xffd54a, emissive: 0x664d00 });
+    this.houseIcon = new THREE.Group();
+    const ibase = new THREE.Mesh(boxGeo, gold);
+    ibase.scale.set(0.62, 0.42, 0.62);
+    const iroofL = new THREE.Mesh(boxGeo, gold);
+    iroofL.scale.set(0.52, 0.12, 0.7);
+    iroofL.rotation.z = 0.78;
+    iroofL.position.set(-0.18, 0.36, 0);
+    const iroofR = iroofL.clone();
+    iroofR.rotation.z = -0.78;
+    iroofR.position.x = 0.18;
+    const idoor = new THREE.Mesh(boxGeo, new THREE.MeshLambertMaterial({ color: 0x8a5a3b }));
+    idoor.scale.set(0.2, 0.26, 0.08);
+    idoor.position.set(0, -0.08, 0.3);
+    this.houseIcon.add(ibase, iroofL, iroofR, idoor);
+    this.houseIcon.scale.setScalar(1.35);
+    this.houseIcon.position.set(0, 4.3, 0);
+    g.add(this.houseIcon);
+
+    // Fat invisible touch target, same trick as the level nodes.
+    this.houseHit = new THREE.Mesh(boxGeo, new THREE.MeshBasicMaterial({ visible: false }));
+    this.houseHit.scale.set(4, 4, 4);
+    this.houseHit.position.y = 1.5;
+    g.add(this.houseHit);
+
+    this.houseSmokeT = 0; // chimney puff timer (tick)
+    this.houseChimney = chimney;
+    this.houseGroup = g;
+    this.scene.add(g);
+  }
+
   // ---------- locked-region tint ----------
 
   refreshLocks() {
@@ -915,6 +1017,10 @@ export class Overworld {
       -(cy / window.innerHeight) * 2 + 1
     );
     this.raycaster.setFromCamera(ndc, this.camera);
+    if (this.raycaster.intersectObject(this.houseHit, false).length) {
+      this.cb.onHouseTapped();
+      return;
+    }
     const hits = [];
     this.navList.forEach((e, idx) => {
       const view = e.secret ? this.secretViews[e.world] : this.nodeViews[e.i];
@@ -1103,6 +1209,18 @@ export class Overworld {
       }
     });
     if (lockAnim) this.applyLockTints();
+
+    // Floating house marker: slow spin + bob, like the key icons.
+    this.houseIcon.rotation.y = t * 1.2;
+    this.houseIcon.position.y = 4.3 + Math.sin(t * 2) * 0.15;
+
+    // Lazy chimney smoke: a soft puff every couple of seconds.
+    this.houseSmokeT -= dt;
+    if (this.houseSmokeT <= 0) {
+      this.houseSmokeT = 2.2 + Math.random();
+      const p = this.houseGroup.position;
+      this.effects.sparkle(new THREE.Vector3(p.x + 0.8, 3.1, p.z - 0.55));
+    }
 
     // Drifting clouds above the map.
     const b = this.data.bounds;

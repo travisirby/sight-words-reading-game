@@ -6,6 +6,7 @@ import { Game } from './game.js';
 import { Overworld } from './overworld.js';
 import { CharScene } from './charscene.js';
 import { applyLook, currentLook } from './player.js';
+import { House } from './house.js';
 import * as ui from './ui.js';
 import * as store from './store.js';
 import * as speech from './speech.js';
@@ -26,7 +27,8 @@ let current = { world: 0, level: 0, secret: false };
 let selected = null; // node info from the map banner
 let lastRun = null; // { results, coins, gems, stars, keyFound }
 let bonus = null; // active bonus round state
-let mode = 'map'; // which scene renders: 'map' | 'game' | 'char'
+let mode = 'map'; // which scene renders: 'map' | 'game' | 'char' | 'house'
+let houseReturn = 'title'; // screen to go back to when leaving the house
 
 // ---------- iOS audio unlock on first gesture ----------
 const unlock = () => unlockAudio();
@@ -65,13 +67,18 @@ const map = new Overworld(renderer, {
     if (selected && ui.isLevelBannerVisible()) playSelected();
     else map.walkTo(map.tokenNav); // select the node under the token
   },
+  onHouseTapped: () => {
+    speak('My house!', { rate: 1.0 });
+    showHouse('map');
+  },
 });
 
 const charScene = new CharScene();
+const house = new House(renderer);
 
 // Debug handle for automated testing (headless tabs freeze rAF, so tests
 // step the sim manually via game.updateRun(dt) and game.debugResolve()).
-window.__wr = { game, store, map, charScene };
+window.__wr = { game, store, map, charScene, house };
 
 const clock = new THREE.Clock();
 renderer.setAnimationLoop(() => {
@@ -82,6 +89,9 @@ renderer.setAnimationLoop(() => {
   } else if (mode === 'char') {
     charScene.tick(dt);
     renderer.render(charScene.scene, charScene.camera);
+  } else if (mode === 'house') {
+    house.tick(dt);
+    renderer.render(house.scene, house.camera);
   } else {
     map.tick(dt);
     renderer.render(map.scene, map.camera);
@@ -89,7 +99,7 @@ renderer.setAnimationLoop(() => {
 });
 
 function onResize() {
-  for (const cam of [game.camera, map.camera, charScene.camera]) {
+  for (const cam of [game.camera, map.camera, charScene.camera, house.camera]) {
     cam.aspect = window.innerWidth / window.innerHeight;
     cam.updateProjectionMatrix();
   }
@@ -127,6 +137,48 @@ function closeCharacter() {
   applyLook(map.token, look);
   mode = 'map'; // map scene renders behind the title again
   ui.showScreen('title');
+}
+
+// ---------- my house ----------
+
+function showHouse(from) {
+  houseReturn = from;
+  if (mode === 'map') map.exit();
+  mode = 'house';
+  house.enter();
+  ui.showHUD(false);
+  ui.showHouse();
+}
+
+function leaveHouse() {
+  house.exit();
+  if (houseReturn === 'complete') {
+    backToMap(); // summary is stale by now — land on the map at that level
+  } else if (houseReturn === 'map') {
+    showMap(); // token stays wherever it was
+  } else {
+    mode = 'map'; // title screen shows over the idle map scene
+    ui.showScreen('title');
+  }
+}
+
+function buyItem(item) {
+  if (store.ownsHouseItem(item.id)) {
+    speak(`You already have the ${item.name}!`, { rate: 1.0 });
+    return;
+  }
+  if (!store.buyHouseItem(item.id, item.cost, item.currency)) {
+    const need = item.currency === 'gems' ? 'gems — try the bonus round' : 'coins';
+    ui.houseToast('🪙 Keep playing!');
+    speak(`You need more ${need}! Play levels to earn more.`, { rate: 1.0 });
+    return;
+  }
+  house.refresh();
+  house.celebrate(item.id);
+  sfxCorrect();
+  ui.refreshShop();
+  ui.houseToast(`${item.emoji} ${item.name}!`);
+  speak(`You got the ${item.name}! ${PRAISE[(Math.random() * PRAISE.length) | 0]}`, { rate: 1.0 });
 }
 
 function startLevel(worldIdx, levelIdx, secret = false) {
@@ -351,6 +403,9 @@ ui.init({
   },
   onMicDown: bonusMicDown,
   onMicUp: bonusMicUp,
+  onHouse: (from) => showHouse(from),
+  onHouseBack: () => leaveHouse(),
+  onBuyItem: (item) => buyItem(item),
   onMoveDown: (dir) => game.setMove('btn', dir, true),
   onMoveUp: (dir) => game.setMove('btn', dir, false),
   onJumpDown: () => game.running && !game.paused && game.player.jump(),

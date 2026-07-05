@@ -21,6 +21,7 @@
     </h1>
     <button id="btn-play" class="btn btn-huge">▶️ PLAY</button>
     <button id="btn-character" class="btn btn-wide">🧒 MY CHARACTER</button>
+    <button id="btn-title-house" class="btn btn-wide">🏠 MY HOUSE</button>
     <button id="btn-settings" class="btn btn-round">⚙️</button>
     <div id="settings-panel" class="panel hidden">
       <button id="btn-toggle-sound" class="btn btn-wide">🔊 Sound: ON</button>
@@ -83,7 +84,23 @@
       <button id="btn-play-again" class="btn btn-wide">🔁 Play again</button>
       <button id="btn-next-level" class="btn btn-wide">➡️ Next level</button>
       <button id="btn-complete-map" class="btn btn-wide">🗺️ Map</button>
+      <button id="btn-complete-house" class="btn btn-wide">🏠 My House</button>
     </div>
+  </div>
+
+  <!-- ============ MY HOUSE (3D; DOM chrome only) ============ -->
+  <div id="screen-house" class="screen map-screen hidden">
+    <button id="btn-house-back" class="btn btn-round corner-top-left">⬅️</button>
+    <div id="house-wallet">🪙 <span id="house-coins">0</span> &nbsp; 💎 <span id="house-gems">0</span></div>
+    <button id="btn-house-shop" class="btn btn-huge btn-shop">🛒 SHOP</button>
+    <div id="shop-panel" class="hidden">
+      <div id="shop-header">
+        <span>🛒 Build your house!</span>
+        <button id="btn-shop-close" class="btn btn-round">✖️</button>
+      </div>
+      <div id="shop-list"></div>
+    </div>
+    <div id="house-toast" class="hidden"></div>
   </div>
 
   <!-- ============ READ-ALOUD BONUS ROUND ============ -->
