@@ -6,8 +6,8 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <title>Word Runner</title>
-  <script type="module" crossorigin src="./assets/index-5d-eD-Tq.js"></script>
-  <link rel="stylesheet" crossorigin href="./assets/index-B9vNDCLm.css">
+  <script type="module" crossorigin src="./assets/index-CvMO4CoR.js"></script>
+  <link rel="stylesheet" crossorigin href="./assets/index-iMKuwhOP.css">
 </head>
 <body>
   <!-- 3D canvas mounts here -->
@@ -21,6 +21,7 @@
       <span>R</span><span>U</span><span>N</span><span>N</span><span>E</span><span>R</span>
     </h1>
     <button id="btn-play" class="btn btn-huge">▶️ PLAY</button>
+    <button id="btn-character" class="btn btn-wide">🧒 MY CHARACTER</button>
     <button id="btn-title-house" class="btn btn-wide">🏠 MY HOUSE</button>
     <button id="btn-settings" class="btn btn-round">⚙️</button>
     <div id="settings-panel" class="panel hidden">
@@ -38,6 +39,16 @@
       <div id="banner-name">Grass Plains 1</div>
       <div id="banner-stars">· · ·</div>
       <button id="btn-banner-play" class="btn btn-huge">▶️ PLAY</button>
+    </div>
+  </div>
+
+  <!-- ============ CHARACTER CREATOR (3D preview; DOM chrome only) ============ -->
+  <div id="screen-char" class="screen char-screen hidden">
+    <button id="btn-char-back" class="btn btn-round corner-top-left">⬅️</button>
+    <h2 class="char-heading">🧒 My Character</h2>
+    <div id="char-panel">
+      <div id="char-rows"></div>
+      <button id="btn-char-done" class="btn btn-huge btn-char-done">✅ DONE</button>
     </div>
   </div>
 
