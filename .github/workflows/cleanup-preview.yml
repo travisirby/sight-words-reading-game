@@ -1,0 +1,34 @@
+name: Clean up branch preview
+
+on: delete
+
+permissions:
+  contents: write
+
+concurrency:
+  group: gh-pages-deploy
+  cancel-in-progress: false
+
+jobs:
+  cleanup:
+    # Only branch deletions (not tags), and never the pages branch itself.
+    if: github.event.ref_type == 'branch' && github.event.ref != 'gh-pages'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: gh-pages
+
+      - name: Remove the deleted branch's preview folder
+        run: |
+          SAFE_NAME=$(echo "${{ github.event.ref }}" | tr '/' '-')
+          if [ -d "previews/$SAFE_NAME" ]; then
+            git rm -r "previews/$SAFE_NAME"
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git commit -m "Remove preview for deleted branch ${{ github.event.ref }}"
+            git push
+            echo "Removed previews/$SAFE_NAME" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "No preview folder for ${{ github.event.ref }}, nothing to do." >> "$GITHUB_STEP_SUMMARY"
+          fi

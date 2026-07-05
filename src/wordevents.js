@@ -7,7 +7,7 @@ import * as THREE from 'three';
 import { KID_H } from './player.js';
 import { shuffle } from './words.js';
 import {
-  sfxCorrect, sfxWrong, sfxBonk, sfxDoorOpen, sfxStarGrab, speak,
+  sfxCorrect, sfxWrong, sfxBonk, sfxDoorOpen, sfxStarGrab, sfxPop, speak,
 } from './audio.js';
 
 const boxGeo = new THREE.BoxGeometry(1, 1, 1);
@@ -56,7 +56,7 @@ function setSign(mesh, word, style) {
   mesh.userData.tex.needsUpdate = true;
 }
 
-function disposeGroup(group) {
+export function disposeGroup(group) {
   group.traverse((o) => {
     if (o.geometry && o.geometry !== boxGeo) o.geometry.dispose();
     if (o.material && !Array.isArray(o.material)) {
@@ -82,6 +82,7 @@ export class BlocksEvent {
     this.attempts = 0;
     this.respawns = 0;
     this.level = level;
+    this.explodeT = -1; // countdown from correct answer to the box burst
 
     this.group = new THREE.Group();
     scene.add(this.group);
@@ -133,6 +134,10 @@ export class BlocksEvent {
       }
       b.g.position.y = y;
     }
+    if (this.explodeT > 0) {
+      this.explodeT -= dt;
+      if (this.explodeT <= 0) this.explode(api);
+    }
     if (this.done) return;
 
     // Bonk from below.
@@ -179,6 +184,16 @@ export class BlocksEvent {
     api.addCoins(3);
     api.praise();
     api.onCorrect(this.attempts === 0);
+    this.explodeT = 2.2; // let the ✓ sit a moment, then burst all boxes
+  }
+
+  explode(api) {
+    sfxPop();
+    for (const b of this.blocks) {
+      if (!b.g.visible) continue;
+      api.effects.confetti(b.g.position.clone());
+      b.g.visible = false;
+    }
   }
 
   resolveWrong(b, api) {
@@ -188,6 +203,7 @@ export class BlocksEvent {
     b.cube.material.color.setHex(0x8a8a8a);
     setSign(b.sign, b.word, 'gray');
     sfxBonk();
+    if (api.onWrong) api.onWrong(); // boss levels: silly taunt
     speak(`Almost! The word is: ${this.word}. Try again!`, { rate: 0.9 });
   }
 
@@ -203,6 +219,8 @@ export class BlocksEvent {
   }
 
   passedX() {
+    // Keep the event alive until the pending box burst has fired.
+    if (this.explodeT > 0) return Infinity;
     return this.lastX + 4;
   }
 

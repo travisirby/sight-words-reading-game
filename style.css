@@ -174,6 +174,97 @@ html, body {
   color: #2c3e75;
 }
 
+/* ---------- character creator ---------- */
+/* Transparent chrome over the 3D preview, like the map screen; the kid
+   spins in the upper half, swatches dock along the bottom. */
+.char-screen {
+  background: none;
+  pointer-events: none;
+  justify-content: flex-start;
+  gap: 0;
+}
+.char-screen .btn { pointer-events: auto; }
+.char-heading {
+  margin-top: calc(18px + env(safe-area-inset-top));
+  color: #fff;
+  font-size: 40px;
+  text-shadow: 3px 3px 0 #2c3e75;
+}
+#char-panel {
+  position: absolute;
+  right: calc(16px + env(safe-area-inset-right));
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  background: rgba(255, 251, 232, 0.92);
+  border: 6px solid #2c3e75;
+  border-radius: 30px;
+  padding: 14px 22px;
+  pointer-events: auto;
+  max-width: min(94vw, 620px);
+}
+/* Portrait (or very narrow): dock the panel along the bottom instead. */
+@media (orientation: portrait) {
+  #char-panel {
+    right: auto;
+    top: auto;
+    left: 50%;
+    bottom: calc(14px + env(safe-area-inset-bottom));
+    transform: translateX(-50%);
+  }
+}
+#char-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.char-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.char-label {
+  width: 110px;
+  text-align: right;
+  font-size: 22px;
+  font-weight: bold;
+  color: #2c3e75;
+}
+.char-options {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.swatch {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  border: 4px solid #2c3e75;
+  cursor: pointer;
+  box-shadow: 0 3px 0 rgba(0,0,0,0.25);
+  transition: transform 0.08s;
+}
+.swatch:active { transform: scale(0.92); }
+.swatch.selected {
+  outline: 5px solid #ffd93d;
+  outline-offset: 2px;
+  transform: scale(1.08);
+}
+.style-swatch {
+  background: #fff;
+  font-size: 26px;
+  line-height: 1;
+  padding: 0;
+}
+.btn-char-done {
+  font-size: 32px;
+  min-height: 74px;
+  padding: 8px 44px;
+}
+
 /* ---------- HUD ---------- */
 #hud {
   position: absolute;
@@ -244,6 +335,40 @@ html, body {
 .dot.green { background: #4cd964; }
 .dot.yellow { background: #ffd93d; }
 
+/* ---------- choice-mode steering controls ---------- */
+#move-controls {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.btn-move {
+  position: absolute;
+  pointer-events: auto;
+  bottom: calc(26px + env(safe-area-inset-bottom));
+  width: 118px;
+  min-height: 118px;
+  border-radius: 50%;
+  padding: 0;
+  font-size: 52px;
+  background: #74b9ff;
+  box-shadow: 0 6px 0 #3f7fc4, 0 10px 14px rgba(0,0,0,0.25);
+  animation: pop-in 0.25s cubic-bezier(0.34, 1.6, 0.5, 1);
+  touch-action: none;
+}
+.btn-move:active { box-shadow: 0 1px 0 #3f7fc4; }
+.btn-move-left { left: calc(22px + env(safe-area-inset-left)); }
+.btn-move-right { left: calc(162px + env(safe-area-inset-left)); }
+.btn-move-jump {
+  right: calc(22px + env(safe-area-inset-right));
+  background: #6ddf6d;
+  box-shadow: 0 6px 0 #3c9e3c, 0 10px 14px rgba(0,0,0,0.25);
+}
+.btn-move-jump:active { box-shadow: 0 1px 0 #3c9e3c; }
+@keyframes pop-in {
+  from { transform: scale(0.3); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+
 /* ---------- level complete ---------- */
 #star-row { font-size: 66px; }
 #star-row .star {
@@ -302,4 +427,111 @@ html, body {
 @keyframes pulse {
   from { transform: scale(1); }
   to { transform: scale(1.09); }
+}
+
+/* ---------- my house ---------- */
+.corner-top-right {
+  position: absolute;
+  top: calc(12px + env(safe-area-inset-top));
+  right: calc(12px + env(safe-area-inset-right));
+}
+#house-wallet {
+  position: absolute;
+  top: calc(24px + env(safe-area-inset-top));
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 34px;
+  color: #fff;
+  text-shadow: 2px 2px 0 #2c3e75;
+  background: rgba(44, 62, 117, 0.55);
+  border-radius: 24px;
+  padding: 8px 26px;
+}
+.btn-shop {
+  position: absolute;
+  bottom: calc(24px + env(safe-area-inset-bottom));
+  left: 50%;
+  transform: translateX(-50%);
+}
+.btn-shop:active { transform: translateX(-50%) translateY(5px); }
+#shop-panel {
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(680px, 96vw);
+  max-height: 72vh;
+  display: flex;
+  flex-direction: column;
+  background: #fffbe8;
+  border: 6px solid #2c3e75;
+  border-bottom: none;
+  border-radius: 30px 30px 0 0;
+  pointer-events: auto;
+  animation: banner-up 0.28s cubic-bezier(0.34, 1.5, 0.5, 1);
+  z-index: 20;
+}
+#shop-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 20px;
+  font-size: 30px;
+  font-weight: bold;
+  color: #2c3e75;
+  border-bottom: 4px solid #e8dfb8;
+}
+#shop-header .btn-round { width: 64px; min-height: 64px; font-size: 26px; }
+#shop-list {
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 14px 18px calc(18px + env(safe-area-inset-bottom));
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.shop-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border: 4px solid #2c3e75;
+  border-radius: 20px;
+  background: #fff;
+  padding: 10px 14px;
+  font-family: inherit;
+  font-size: 24px;
+  font-weight: bold;
+  color: #2c3e75;
+  cursor: pointer;
+  text-align: left;
+}
+.shop-item .shop-emoji { font-size: 40px; }
+.shop-item .shop-info { display: flex; flex-direction: column; gap: 2px; }
+.shop-item .shop-cost { font-size: 20px; font-weight: normal; }
+.shop-item.owned {
+  background: #e2f7e2;
+  border-color: #3c9e3c;
+  cursor: default;
+}
+.shop-item.cant-afford { opacity: 0.55; }
+.shop-item:active:not(.owned) { transform: scale(0.97); }
+#house-toast {
+  position: absolute;
+  top: 30%;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 44px;
+  font-weight: bold;
+  color: #fff;
+  text-shadow: 3px 3px 0 #2c3e75;
+  background: rgba(44, 62, 117, 0.7);
+  border-radius: 28px;
+  padding: 16px 40px;
+  pointer-events: none;
+  animation: toast-pop 0.35s cubic-bezier(0.34, 1.5, 0.5, 1);
+  z-index: 30;
+}
+@keyframes toast-pop {
+  from { transform: translateX(-50%) scale(0.4); opacity: 0; }
+  to { transform: translateX(-50%) scale(1); opacity: 1; }
 }

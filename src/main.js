@@ -4,13 +4,21 @@
 import * as THREE from 'three';
 import { Game } from './game.js';
 import { Overworld } from './overworld.js';
+import { CharScene } from './charscene.js';
+import { applyLook, currentLook } from './player.js';
+import { House } from './house.js';
 import * as ui from './ui.js';
 import * as store from './store.js';
 import * as speech from './speech.js';
 import { unlockAudio, setMuted, speak, sfxCorrect, sfxCoin } from './audio.js';
 import { WORLDS, shuffle, PRAISE } from './words.js';
 
+// Testing cheats via URL: ?unlock opens every level/castle/secret,
+// ?reset wipes the save first (combine as ?reset&unlock).
+const cheats = new URLSearchParams(location.search);
+if (cheats.has('reset')) store.reset();
 store.load();
+if (cheats.has('unlock')) store.devUnlockAll(WORLDS.length);
 setMuted(!store.get().sound);
 
 const LEVEL_COUNTS = WORLDS.map((w) => w.levels.length);
@@ -19,7 +27,8 @@ let current = { world: 0, level: 0, secret: false };
 let selected = null; // node info from the map banner
 let lastRun = null; // { results, coins, gems, stars, keyFound }
 let bonus = null; // active bonus round state
-let mode = 'map'; // which scene renders: 'map' | 'game'
+let mode = 'map'; // which scene renders: 'map' | 'game' | 'char' | 'house'
+let houseReturn = 'title'; // screen to go back to when leaving the house
 
 // ---------- iOS audio unlock on first gesture ----------
 const unlock = () => unlockAudio();
@@ -40,6 +49,7 @@ const game = new Game(renderer, {
   onDotsInit: (n) => ui.initDots(n),
   onDot: (i, cls) => ui.setDot(i, cls),
   onKey: (found) => ui.setKeyFound(found),
+  onChoice: (on) => ui.showMoveControls(on),
   onRunComplete: (res) => onRunComplete(res),
 });
 
@@ -57,11 +67,22 @@ const map = new Overworld(renderer, {
     if (selected && ui.isLevelBannerVisible()) playSelected();
     else map.walkTo(map.tokenNav); // select the node under the token
   },
+  onHouseTapped: () => {
+    speak('My house!', { rate: 1.0 });
+    showHouse('map');
+  },
+  onTokenTapped: () => {
+    speak('Make your character!', { rate: 1.0 });
+    showCharacter('map');
+  },
 });
+
+const charScene = new CharScene();
+const house = new House(renderer);
 
 // Debug handle for automated testing (headless tabs freeze rAF, so tests
 // step the sim manually via game.updateRun(dt) and game.debugResolve()).
-window.__wr = { game, store, map };
+window.__wr = { game, store, map, charScene, house };
 
 const clock = new THREE.Clock();
 renderer.setAnimationLoop(() => {
@@ -69,6 +90,12 @@ renderer.setAnimationLoop(() => {
   if (mode === 'game') {
     game.tick(dt);
     renderer.render(game.scene, game.camera);
+  } else if (mode === 'char') {
+    charScene.tick(dt);
+    renderer.render(charScene.scene, charScene.camera);
+  } else if (mode === 'house') {
+    house.tick(dt);
+    renderer.render(house.scene, house.camera);
   } else {
     map.tick(dt);
     renderer.render(map.scene, map.camera);
@@ -76,7 +103,7 @@ renderer.setAnimationLoop(() => {
 });
 
 function onResize() {
-  for (const cam of [game.camera, map.camera]) {
+  for (const cam of [game.camera, map.camera, charScene.camera, house.camera]) {
     cam.aspect = window.innerWidth / window.innerHeight;
     cam.updateProjectionMatrix();
   }
@@ -94,11 +121,83 @@ function showMap() {
   ui.showScreen('map');
 }
 
+// ---------- character creator ----------
+
+let charReturn = 'title'; // screen to go back to when leaving the editor
+
+function showCharacter(from = 'title') {
+  charReturn = from;
+  if (mode === 'map') map.exit();
+  mode = 'char';
+  charScene.setLook(currentLook());
+  ui.buildCharacterUI((part, idx) => {
+    store.setCharacterPart(part, idx);
+    charScene.setLook(currentLook());
+  });
+  ui.showScreen('char');
+}
+
+function closeCharacter() {
+  // Push the final look onto the persistent meshes (in-level kid + map token).
+  const look = currentLook();
+  applyLook(game.player.group, look);
+  applyLook(map.token, look);
+  if (charReturn === 'map') {
+    showMap(); // token stays wherever it was
+    return;
+  }
+  mode = 'map'; // map scene renders behind the title again
+  ui.showScreen('title');
+}
+
+// ---------- my house ----------
+
+function showHouse(from) {
+  houseReturn = from;
+  if (mode === 'map') map.exit();
+  mode = 'house';
+  house.enter();
+  ui.showHUD(false);
+  ui.showHouse();
+}
+
+function leaveHouse() {
+  house.exit();
+  if (houseReturn === 'complete') {
+    backToMap(); // summary is stale by now — land on the map at that level
+  } else if (houseReturn === 'map') {
+    showMap(); // token stays wherever it was
+  } else {
+    mode = 'map'; // title screen shows over the idle map scene
+    ui.showScreen('title');
+  }
+}
+
+function buyItem(item) {
+  if (store.ownsHouseItem(item.id)) {
+    speak(`You already have the ${item.name}!`, { rate: 1.0 });
+    return;
+  }
+  if (!store.buyHouseItem(item.id, item.cost, item.currency)) {
+    const need = item.currency === 'gems' ? 'gems — try the bonus round' : 'coins';
+    ui.houseToast('🪙 Keep playing!');
+    speak(`You need more ${need}! Play levels to earn more.`, { rate: 1.0 });
+    return;
+  }
+  house.refresh();
+  house.celebrate(item.id);
+  sfxCorrect();
+  ui.refreshShop();
+  ui.houseToast(`${item.emoji} ${item.name}!`);
+  speak(`You got the ${item.name}! ${PRAISE[(Math.random() * PRAISE.length) | 0]}`, { rate: 1.0 });
+}
+
 function startLevel(worldIdx, levelIdx, secret = false) {
-  current = { world: worldIdx, level: levelIdx, secret };
+  const boss = !secret && levelIdx === LEVEL_COUNTS[worldIdx]; // castle slot
+  current = { world: worldIdx, level: levelIdx, secret, boss };
   map.exit();
   mode = 'game';
-  game.startRun(worldIdx, levelIdx, { secret });
+  game.startRun(worldIdx, levelIdx, { secret, boss });
   ui.showScreen(null);
   ui.showHUD(true);
 }
@@ -112,7 +211,8 @@ function playSelected() {
 }
 
 function nextLevelOf(w, l) {
-  if (l + 1 < LEVEL_COUNTS[w]) return { world: w, level: l + 1 };
+  // l === LEVEL_COUNTS[w] is the castle (boss) slot after the last level.
+  if (l + 1 <= LEVEL_COUNTS[w]) return { world: w, level: l + 1 };
   if (w + 1 < WORLDS.length) return { world: w + 1, level: 0 };
   return null;
 }
@@ -138,6 +238,7 @@ function onRunComplete(res) {
     const firstTime = store.getStars(current.world, current.level) === 0;
     store.setStars(current.world, current.level, stars);
     store.completeLevel(current.world, current.level, LEVEL_COUNTS);
+    if (current.boss) store.beatBoss(current.world);
 
     // Queue map payoff animations for when we return.
     if (firstTime) {
@@ -266,6 +367,8 @@ function bonusMicUp() {
 
 ui.init({
   onPlay: () => showMap(),
+  onCharacter: () => showCharacter(),
+  onCharacterDone: () => closeCharacter(),
   onToggleSound: () => {
     const on = !store.get().sound;
     store.setSound(on);
@@ -311,8 +414,15 @@ ui.init({
   },
   onMicDown: bonusMicDown,
   onMicUp: bonusMicUp,
+  onHouse: (from) => showHouse(from),
+  onHouseBack: () => leaveHouse(),
+  onBuyItem: (item) => buyItem(item),
+  onMoveDown: (dir) => game.setMove('btn', dir, true),
+  onMoveUp: (dir) => game.setMove('btn', dir, false),
+  onJumpDown: () => game.running && !game.paused && game.player.jump(),
+  onJumpUp: () => {}, // every jump is full power; release does nothing
   onDevUnlock: () => {
-    store.devUnlockAll();
+    store.devUnlockAll(WORLDS.length);
     speak('All levels unlocked!', { rate: 1.0 });
     map.refresh();
   },

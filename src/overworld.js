@@ -9,6 +9,7 @@ import { buildMapData, secretSegment } from './mapdata.js';
 import { PALETTES, mulberry32 } from './level.js';
 import { makeKidMesh } from './player.js';
 import { makeKeyMesh } from './game.js';
+import { BOSSES } from './boss.js';
 import { Effects } from './effects.js';
 import { sfxPlink, sfxBoing, speak } from './audio.js';
 import { WORLDS } from './words.js';
@@ -25,9 +26,14 @@ const LOCK_TINT = 0.45; // color multiplier on locked regions
 const ROW_Z = 9;
 const FLOWER_COLORS = [0xff6b81, 0xffd93d, 0xff9ff3, 0x74b9ff];
 const TOKEN_Y = 0.56; // token feet on top of a node pad
+// The player's house lives on the map: back-left corner of the starting row,
+// just past world 0's first node so it's on-screen from the first visit.
+const HOUSE_POS = { x: -17.5, z: -2.5 };
 
-function nodeName(world, level, secret) {
-  return secret ? `${WORLDS[world].name} Secret` : `${WORLDS[world].name} ${level + 1}`;
+function nodeName(world, level, secret, boss) {
+  if (secret) return `${WORLDS[world].name} Secret`;
+  if (boss) return `${WORLDS[world].name} Castle`;
+  return `${WORLDS[world].name} ${level + 1}`;
 }
 
 export class Overworld {
@@ -59,6 +65,7 @@ export class Overworld {
     this.buildSkyClouds();
     this.buildTiles();
     this.buildNodes();
+    this.buildHouse();
 
     // Locked-region tint state (t = colorize progress, 1 = fully lit).
     this.lockState = WORLDS.map((w, wi) => ({
@@ -67,6 +74,15 @@ export class Overworld {
     this.applyLockTints();
 
     this.token = makeKidMesh(0.75);
+    this.token.rotation.y = -Math.PI / 2; // camera-facing when idle
+    // Fat invisible touch target: tapping the kid opens the character editor.
+    this.tokenHit = new THREE.Mesh(
+      new THREE.BoxGeometry(1, 1, 1),
+      new THREE.MeshBasicMaterial({ visible: false })
+    );
+    this.tokenHit.scale.set(2, 2.6, 2);
+    this.tokenHit.position.y = 1;
+    this.token.add(this.tokenHit);
     this.scene.add(this.token);
     this.tokenNav = 0; // index into navList
     this.walk = null; // { points, t, dur, target }
@@ -112,6 +128,13 @@ export class Overworld {
     for (let i = 1; i < segments.length; i++) {
       for (const pt of segments[i]) mark(this.keepCells, pt.x, pt.z, 1.7);
     }
+    // Guaranteed flat yard under the player's house (plus a lane back to the
+    // first node so the ground between them never terraces).
+    mark(this.keepCells, HOUSE_POS.x, HOUSE_POS.z, 2.6);
+    markLine(this.keepCells, HOUSE_POS, nodes[0], 2.6);
+    // Camera looks from +z, so tall props on the near side of the road would
+    // occlude it — keep the foreground strip clear as well.
+    mark(this.keepCells, HOUSE_POS.x + 2.3, HOUSE_POS.z + 3.7, 2.2);
     for (const key of this.keepCells) this.flatCells.add(key);
     // Secret branches: flatten (but don't land-fill) every line the token or
     // the purple tiles can take — anchors are levels that can hold a key.
@@ -585,7 +608,10 @@ export class Overworld {
         g.add(crystals);
       }
 
-      if (!secret && nd.isWorldFinal) { // mini castle: keep, 4 towers, flag
+      let castleFlag = null;
+      let crown = null;
+      let bossHead = null;
+      if (!secret && nd.isWorldFinal) { // castle = the world's boss gate
         const c = new THREE.Group();
         const wallMat = new THREE.MeshLambertMaterial({ color: 0xc9b8a2 });
         const roofMat = new THREE.MeshLambertMaterial({ color: 0xd45757 });
@@ -605,13 +631,48 @@ export class Overworld {
           roof.position.set(sx, 2.05, sz);
           c.add(tower, roof);
         }
+        // Flag + crown appear once the boss is beaten...
         const pole = new THREE.Mesh(boxGeo, new THREE.MeshLambertMaterial({ color: 0xe0e0e0 }));
         pole.scale.set(0.06, 0.9, 0.06);
         pole.position.set(0, 2.3, 0);
-        const flag = new THREE.Mesh(boxGeo, new THREE.MeshLambertMaterial({ color: 0xffd54a }));
-        flag.scale.set(0.5, 0.3, 0.05);
-        flag.position.set(0.28, 2.55, 0);
-        c.add(pole, flag);
+        castleFlag = new THREE.Mesh(boxGeo, new THREE.MeshLambertMaterial({ color: 0xffd54a }));
+        castleFlag.scale.set(0.5, 0.3, 0.05);
+        castleFlag.position.set(0.28, 2.55, 0);
+        const gold = new THREE.MeshLambertMaterial({ color: 0xffd54a, emissive: 0x664d00 });
+        crown = new THREE.Group();
+        const cb = new THREE.Mesh(boxGeo, gold);
+        cb.scale.set(0.6, 0.22, 0.6);
+        crown.add(cb);
+        for (const sx of [-0.2, 0, 0.2]) {
+          const spike = new THREE.Mesh(boxGeo, gold);
+          spike.scale.set(0.13, 0.24, 0.13);
+          spike.position.set(sx, 0.22, 0);
+          crown.add(spike);
+        }
+        crown.position.set(0, 2.0, 0);
+        // ...while the boss's face floats over the keep until then.
+        bossHead = new THREE.Group();
+        const bm = new THREE.MeshLambertMaterial({ color: BOSSES[nd.world].color });
+        const head = new THREE.Mesh(boxGeo, bm);
+        head.scale.set(0.95, 0.8, 0.85);
+        bossHead.add(head);
+        const white = new THREE.MeshLambertMaterial({ color: 0xffffff });
+        const dark = new THREE.MeshLambertMaterial({ color: 0x222222 });
+        for (const sx of [-0.22, 0.22]) {
+          const eye = new THREE.Mesh(boxGeo, white);
+          eye.scale.setScalar(0.22);
+          eye.position.set(sx, 0.08, 0.44);
+          const pupil = new THREE.Mesh(boxGeo, dark);
+          pupil.scale.setScalar(0.1);
+          pupil.position.set(sx, 0.06, 0.55);
+          bossHead.add(eye, pupil);
+        }
+        const smile = new THREE.Mesh(boxGeo, dark);
+        smile.scale.set(0.32, 0.08, 0.06);
+        smile.position.set(0, -0.22, 0.44);
+        bossHead.add(smile);
+        bossHead.position.set(0, 3.3, 0);
+        c.add(pole, castleFlag, crown, bossHead);
         c.position.set(0, 0, -1.7);
         g.add(c);
       }
@@ -623,11 +684,105 @@ export class Overworld {
       g.add(hit);
 
       this.scene.add(g);
-      return { group: g, dot, dotMat, ring, stars, crystals, hit, baseY: 0 };
+      return {
+        group: g, dot, dotMat, ring, stars, crystals, hit,
+        castleFlag, crown, bossHead, baseY: 0,
+      };
     };
 
     this.nodeViews = this.data.nodes.map((nd) => mkNode(nd, false));
     this.secretViews = this.data.secretNodes.map((nd) => mkNode(nd, true));
+  }
+
+  // The player's house: a mini version of the house-scene building standing
+  // in its own yard on the starting row. Tapping it opens the house screen.
+  buildHouse() {
+    const g = new THREE.Group();
+    g.position.set(HOUSE_POS.x, 0, HOUSE_POS.z);
+
+    const wallMat = new THREE.MeshLambertMaterial({ color: 0xf3e2c0 });
+    const roofMat = new THREE.MeshLambertMaterial({ color: 0xd45757 });
+    const base = new THREE.Mesh(boxGeo, wallMat);
+    base.scale.set(2.6, 1.5, 2.2);
+    base.position.y = 0.75;
+    // Gable roof from two leaning slabs + ridge cap.
+    const slabL = new THREE.Mesh(boxGeo, roofMat);
+    slabL.scale.set(1.7, 0.18, 2.6);
+    slabL.rotation.z = 0.62;
+    slabL.position.set(-0.68, 1.95, 0);
+    const slabR = slabL.clone();
+    slabR.rotation.z = -0.62;
+    slabR.position.x = 0.68;
+    const cap = new THREE.Mesh(boxGeo, roofMat);
+    cap.scale.set(0.35, 0.3, 2.65);
+    cap.position.y = 2.42;
+    const chimney = new THREE.Mesh(boxGeo, new THREE.MeshLambertMaterial({ color: 0x9c6b4f }));
+    chimney.scale.set(0.4, 0.9, 0.4);
+    chimney.position.set(0.8, 2.35, -0.55);
+    // Door + window on the camera-facing (+z) side.
+    const door = new THREE.Mesh(boxGeo, new THREE.MeshLambertMaterial({ color: 0x8a5a3b }));
+    door.scale.set(0.6, 0.95, 0.1);
+    door.position.set(-0.55, 0.48, 1.11);
+    const knob = new THREE.Mesh(boxGeo, new THREE.MeshLambertMaterial({ color: 0xffd54a }));
+    knob.scale.setScalar(0.1);
+    knob.position.set(-0.35, 0.5, 1.18);
+    const win = new THREE.Mesh(boxGeo, new THREE.MeshLambertMaterial({ color: 0xaee3ff, emissive: 0x1a3a4a }));
+    win.scale.set(0.7, 0.6, 0.1);
+    win.position.set(0.65, 1.0, 1.11);
+    g.add(base, slabL, slabR, cap, chimney, door, knob, win);
+
+    // Road from world 0's first node, same look as the journey tiles
+    // (always shown — the house is never locked). World coords, not group.
+    const n0 = this.data.nodes[0];
+    const tileMat = new THREE.MeshLambertMaterial({ color: 0xf7e9b0 });
+    const dx = HOUSE_POS.x - n0.x;
+    const dz = HOUSE_POS.z - n0.z;
+    const len = Math.hypot(dx, dz);
+    const steps = Math.round(len);
+    for (let k = 1; k < steps; k++) {
+      const t = k / steps;
+      const wob = Math.sin(t * Math.PI * 2) * 0.35; // gentle S like the trail
+      const tile = new THREE.Mesh(boxGeo, tileMat);
+      tile.scale.set(0.72, 0.16, 0.72);
+      tile.position.set(
+        n0.x + dx * t - (dz / len) * wob,
+        0.08,
+        n0.z + dz * t + (dx / len) * wob
+      );
+      this.scene.add(tile);
+    }
+
+    // Floating gold house marker so the building reads as a place to visit
+    // (bobs and spins in tick(), like the key icons over levels).
+    const gold = new THREE.MeshLambertMaterial({ color: 0xffd54a, emissive: 0x664d00 });
+    this.houseIcon = new THREE.Group();
+    const ibase = new THREE.Mesh(boxGeo, gold);
+    ibase.scale.set(0.62, 0.42, 0.62);
+    const iroofL = new THREE.Mesh(boxGeo, gold);
+    iroofL.scale.set(0.52, 0.12, 0.7);
+    iroofL.rotation.z = 0.78;
+    iroofL.position.set(-0.18, 0.36, 0);
+    const iroofR = iroofL.clone();
+    iroofR.rotation.z = -0.78;
+    iroofR.position.x = 0.18;
+    const idoor = new THREE.Mesh(boxGeo, new THREE.MeshLambertMaterial({ color: 0x8a5a3b }));
+    idoor.scale.set(0.2, 0.26, 0.08);
+    idoor.position.set(0, -0.08, 0.3);
+    this.houseIcon.add(ibase, iroofL, iroofR, idoor);
+    this.houseIcon.scale.setScalar(1.35);
+    this.houseIcon.position.set(0, 4.3, 0);
+    g.add(this.houseIcon);
+
+    // Fat invisible touch target, same trick as the level nodes.
+    this.houseHit = new THREE.Mesh(boxGeo, new THREE.MeshBasicMaterial({ visible: false }));
+    this.houseHit.scale.set(4, 4, 4);
+    this.houseHit.position.y = 1.5;
+    g.add(this.houseHit);
+
+    this.houseSmokeT = 0; // chimney puff timer (tick)
+    this.houseChimney = chimney;
+    this.houseGroup = g;
+    this.scene.add(g);
   }
 
   // ---------- locked-region tint ----------
@@ -698,6 +853,13 @@ export class Overworld {
       v.ring.visible = isCurrent;
       v.isCurrent = isCurrent;
       v.stars.children.forEach((s, si) => { s.visible = si < stars; });
+      // Castle: boss face until beaten, then flag + crown.
+      if (nd.boss && v.bossHead) {
+        const beaten = store.isBossBeaten(nd.world);
+        v.bossHead.visible = !beaten;
+        v.castleFlag.visible = beaten;
+        v.crown.visible = beaten;
+      }
       // Tiny golden key beside nodes where the key was found.
       if (store.hasKey(nd.world, nd.level) && !v.keyIcon) {
         v.keyIcon = makeKeyMesh();
@@ -712,7 +874,10 @@ export class Overworld {
         for (let k = 0; k < seg.count; k++) this.tiles[seg.start + k].shown = show;
       }
       if (unlocked) {
-        this.navList.push({ world: nd.world, level: nd.level, secret: false, x: nd.x, z: nd.z, i });
+        this.navList.push({
+          world: nd.world, level: nd.level, secret: false, boss: !!nd.boss,
+          x: nd.x, z: nd.z, i,
+        });
       }
       // Insert the secret node after its world's last unlocked regular node.
       if (unlocked && nd.isWorldFinal && store.isSecretUnlocked(nd.world)) {
@@ -766,7 +931,8 @@ export class Overworld {
       world: e.world,
       level: e.level,
       secret: e.secret,
-      name: nodeName(e.world, e.level, e.secret),
+      boss: !!e.boss,
+      name: nodeName(e.world, e.level, e.secret, e.boss),
       stars: e.secret ? store.getSecretStars(e.world) : store.getStars(e.world, e.level),
       completed: (e.secret ? store.getSecretStars(e.world) : store.getStars(e.world, e.level)) > 0,
     };
@@ -783,6 +949,7 @@ export class Overworld {
     if (idx >= 0) this.tokenNav = idx;
     const e = this.navList[this.tokenNav];
     if (e) this.token.position.set(e.x, TOKEN_Y, e.z);
+    this.token.rotation.y = -Math.PI / 2; // camera-facing when idle
   }
 
   // ---------- input ----------
@@ -858,6 +1025,14 @@ export class Overworld {
       -(cy / window.innerHeight) * 2 + 1
     );
     this.raycaster.setFromCamera(ndc, this.camera);
+    if (this.raycaster.intersectObject(this.tokenHit, false).length) {
+      this.cb.onTokenTapped();
+      return;
+    }
+    if (this.raycaster.intersectObject(this.houseHit, false).length) {
+      this.cb.onHouseTapped();
+      return;
+    }
     const hits = [];
     this.navList.forEach((e, idx) => {
       const view = e.secret ? this.secretViews[e.world] : this.nodeViews[e.i];
@@ -880,21 +1055,23 @@ export class Overworld {
     this.cb.onDismiss();
     const dir = navIdx > this.tokenNav ? 1 : -1;
     const points = [];
-    for (let i = this.tokenNav; i !== navIdx; i += dir) {
+    for (let i = this.tokenNav; ; i += dir) {
       const a = this.navList[i];
-      const b = this.navList[i + dir];
-      const steps = 8;
-      for (let k = 1; k <= steps; k++) {
-        const t = k / steps;
-        points.push({ x: a.x + (b.x - a.x) * t, z: a.z + (b.z - a.z) * t });
-      }
+      points.push({ x: a.x, z: a.z });
+      if (i === navIdx) break;
     }
-    let dist = 0;
+    // Cumulative arc length so the token glides at constant speed.
+    const cum = [0];
     for (let i = 1; i < points.length; i++) {
-      dist += Math.hypot(points[i].x - points[i - 1].x, points[i].z - points[i - 1].z);
+      cum.push(cum[i - 1] + Math.hypot(points[i].x - points[i - 1].x, points[i].z - points[i - 1].z));
     }
+    const dist = cum[cum.length - 1];
     this.walk = {
       points,
+      cum,
+      dist,
+      seg: 0,
+      h: this.heightAt(points[0].x, points[0].z),
       t: 0,
       dur: Math.min(2, 0.3 + dist * 0.09),
       target: navIdx,
@@ -1047,6 +1224,18 @@ export class Overworld {
     });
     if (lockAnim) this.applyLockTints();
 
+    // Floating house marker: slow spin + bob, like the key icons.
+    this.houseIcon.rotation.y = t * 1.2;
+    this.houseIcon.position.y = 4.3 + Math.sin(t * 2) * 0.15;
+
+    // Lazy chimney smoke: a soft puff every couple of seconds.
+    this.houseSmokeT -= dt;
+    if (this.houseSmokeT <= 0) {
+      this.houseSmokeT = 2.2 + Math.random();
+      const p = this.houseGroup.position;
+      this.effects.sparkle(new THREE.Vector3(p.x + 0.8, 3.1, p.z - 0.55));
+    }
+
     // Drifting clouds above the map.
     const b = this.data.bounds;
     for (const c of this.mapClouds) {
@@ -1072,6 +1261,10 @@ export class Overworld {
         v.keyIcon.rotation.y = t * 1.4;
         v.keyIcon.position.y = 1.0 + Math.sin(t * 2 + i) * 0.08;
       }
+      if (v.bossHead && v.bossHead.visible) {
+        v.bossHead.rotation.y = Math.sin(t * 1.3 + i) * 0.5;
+        v.bossHead.position.y = 3.3 + Math.sin(t * 2.1 + i) * 0.12;
+      }
     });
     this.secretViews.forEach((v, wi) => {
       if (!v.group.visible) return;
@@ -1096,12 +1289,24 @@ export class Overworld {
     if (this.walk) {
       const w = this.walk;
       w.t += dt / w.dur;
-      const ti = Math.min(w.points.length - 1, Math.floor(w.t * w.points.length));
-      const pt = w.points[ti];
-      const prev = this.token.position;
-      this.token.rotation.y = Math.atan2(pt.x - prev.x, pt.z - prev.z);
-      const h = this.heightAt(pt.x, pt.z); // step up onto terraces/bridges
-      this.token.position.set(pt.x, TOKEN_Y + h + Math.abs(Math.sin(w.t * 22)) * 0.18, pt.z);
+      // Constant-speed glide along the path (interpolated, not waypoint-snapped).
+      const s = Math.min(1, w.t) * w.dist;
+      while (w.seg < w.points.length - 2 && w.cum[w.seg + 1] < s) w.seg++;
+      const a = w.points[w.seg];
+      const b2 = w.points[w.seg + 1];
+      const segLen = w.cum[w.seg + 1] - w.cum[w.seg];
+      const f = segLen > 0 ? (s - w.cum[w.seg]) / segLen : 1;
+      const px = a.x + (b2.x - a.x) * f;
+      const pz = a.z + (b2.z - a.z) * f;
+      // Point the kid's forward axis (+x local) along the walk direction,
+      // easing turns instead of snapping.
+      const want = Math.atan2(a.z - b2.z, b2.x - a.x);
+      let dr = want - this.token.rotation.y;
+      dr = Math.atan2(Math.sin(dr), Math.cos(dr));
+      this.token.rotation.y += dr * (1 - Math.exp(-dt * 12));
+      // Ease onto terraces/bridges rather than popping a full step at once.
+      w.h += (this.heightAt(px, pz) - w.h) * (1 - Math.exp(-dt * 10));
+      this.token.position.set(px, TOKEN_Y + w.h + Math.abs(Math.sin(w.t * 22)) * 0.18, pz);
       const parts = this.token.userData.parts;
       const swing = Math.sin(w.t * 30);
       parts.legL.rotation.z = -swing * 0.8;
@@ -1112,7 +1317,6 @@ export class Overworld {
         this.tokenNav = w.target;
         const e = this.navList[w.target];
         this.token.position.set(e.x, TOKEN_Y, e.z);
-        this.token.rotation.y = 0; // camera-facing when idle
         parts.legL.rotation.z = parts.legR.rotation.z = 0;
         parts.armL.rotation.z = parts.armR.rotation.z = 0;
         this.walk = null;
@@ -1120,6 +1324,10 @@ export class Overworld {
       }
     } else if (!this.reveal) {
       this.token.position.y = TOKEN_Y + Math.abs(Math.sin(t * 2)) * 0.05;
+      // Ease back to camera-facing after a walk instead of snapping.
+      let dr = -Math.PI / 2 - this.token.rotation.y;
+      dr = Math.atan2(Math.sin(dr), Math.cos(dr));
+      this.token.rotation.y += dr * (1 - Math.exp(-dt * 8));
     }
 
     // Camera: follow token, or user pan with snap-back after 4s idle.

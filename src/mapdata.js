@@ -9,7 +9,8 @@ const ROW_Z = 9; // distance between region rows
 const ROW_W = 26; // row width in x
 
 // Returns { nodes, secretNodes, segments, bounds }.
-//  nodes: [{ world, level, isWorldFinal, x, z }] in journey order
+//  nodes: [{ world, level, boss, isWorldFinal, x, z }] in journey order
+//         (boss nodes use level === levels.length — the castle slot)
 //  secretNodes: [{ world, x, z }]
 //  segments: segments[i] = points [{x,z}, ...] from node i-1 to node i
 export function buildMapData() {
@@ -18,15 +19,16 @@ export function buildMapData() {
   const secretNodes = [];
 
   WORLDS.forEach((w, wi) => {
-    const n = w.levels.length;
+    const n = w.levels.length; // plus a castle (boss) node at li === n
     const leftToRight = wi % 2 === 0;
-    for (let li = 0; li < n; li++) {
-      const t = n === 1 ? 0.5 : li / (n - 1);
+    for (let li = 0; li <= n; li++) {
+      const t = li / n;
       const tx = leftToRight ? t : 1 - t;
       nodes.push({
         world: wi,
         level: li,
-        isWorldFinal: li === n - 1,
+        boss: li === n,
+        isWorldFinal: li === n,
         x: -ROW_W / 2 + tx * ROW_W,
         z: wi * ROW_Z + Math.sin(t * Math.PI * 2 + wi) * 1.4,
       });

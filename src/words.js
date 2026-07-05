@@ -127,4 +127,10 @@ export function getSecretWords(worldIdx, statsFor) {
   return hard;
 }
 
+// ~5 review words for a world's boss battle: the tier's hardest by lifetime
+// first-try ratio (unseen words fill in at random).
+export function getBossWords(worldIdx, statsFor) {
+  return getSecretWords(worldIdx, statsFor).slice(0, 5);
+}
+
 export const PRAISE = ['Great job!', 'You got it!', 'Awesome!', 'Super reading!'];

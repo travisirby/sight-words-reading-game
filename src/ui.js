@@ -4,13 +4,18 @@
 
 import { speak } from './audio.js';
 import * as store from './store.js';
+import { PALETTES, STYLES, OUTFITS } from './character.js';
+import { HOUSE_ITEMS } from './housedata.js';
 
 const $ = (id) => document.getElementById(id);
 
-const SCREENS = ['title', 'map', 'pause', 'complete', 'bonus'];
+const SCREENS = ['title', 'map', 'pause', 'complete', 'bonus', 'char', 'house'];
 
 export function init(h) {
   bindSpeak($('btn-play'), 'Play!', () => h.onPlay());
+  bindSpeak($('btn-character'), 'Make your character!', () => h.onCharacter());
+  bindSpeak($('btn-char-back'), 'Back', () => h.onCharacterDone());
+  bindSpeak($('btn-char-done'), 'Looking good!', () => h.onCharacterDone());
   bindSpeak($('btn-settings'), 'Settings', () => $('settings-panel').classList.toggle('hidden'));
   bindSpeak($('btn-settings-close'), 'Close', () => $('settings-panel').classList.add('hidden'));
   bindSpeak($('btn-toggle-sound'), 'Sound', () => h.onToggleSound());
@@ -32,16 +37,22 @@ export function init(h) {
 
   bindSpeak($('btn-bonus-skip'), 'Skip', () => h.onBonusSkip());
 
+  // On the map the house is a real building in the world (overworld.js
+  // raycasts it) — only title/complete need chrome buttons.
+  bindSpeak($('btn-title-house'), 'My house!', () => h.onHouse('title'));
+  bindSpeak($('btn-complete-house'), 'My house!', () => h.onHouse('complete'));
+  bindSpeak($('btn-house-back'), 'Back', () => h.onHouseBack());
+  bindSpeak($('btn-house-shop'), 'Shop!', () => toggleShop(true));
+  bindSpeak($('btn-shop-close'), 'Close', () => toggleShop(false));
+  onBuyItem = h.onBuyItem;
+
   // Mic: press-and-hold.
-  const mic = $('btn-mic');
-  const down = (e) => { e.preventDefault(); h.onMicDown(); };
-  const up = (e) => { e.preventDefault(); h.onMicUp(); };
-  mic.addEventListener('touchstart', down, { passive: false });
-  mic.addEventListener('touchend', up, { passive: false });
-  mic.addEventListener('touchcancel', up, { passive: false });
-  mic.addEventListener('mousedown', down);
-  mic.addEventListener('mouseup', up);
-  mic.addEventListener('mouseleave', up);
+  bindHold($('btn-mic'), h.onMicDown, h.onMicUp);
+
+  // Choice-mode steering: press-and-hold arrows + jump.
+  bindHold($('btn-move-left'), () => h.onMoveDown(-1), () => h.onMoveUp(-1));
+  bindHold($('btn-move-right'), () => h.onMoveDown(1), () => h.onMoveUp(1));
+  bindHold($('btn-move-jump'), h.onJumpDown, h.onJumpUp);
 
   // Hidden dev unlock: tap the version number 5 times.
   let taps = 0;
@@ -60,6 +71,18 @@ function bindSpeak(el, label, fn) {
     speak(label, { rate: 1.0 });
     fn();
   });
+}
+
+// Press-and-hold button (mic, steering arrows, jump).
+function bindHold(el, onDown, onUp) {
+  const down = (e) => { e.preventDefault(); onDown(); };
+  const up = (e) => { e.preventDefault(); onUp(); };
+  el.addEventListener('touchstart', down, { passive: false });
+  el.addEventListener('touchend', up, { passive: false });
+  el.addEventListener('touchcancel', up, { passive: false });
+  el.addEventListener('mousedown', down);
+  el.addEventListener('mouseup', up);
+  el.addEventListener('mouseleave', up);
 }
 
 export function showScreen(name) {
@@ -81,8 +104,8 @@ export function updateSettingsLabels() {
 
 // ---------- level banner (overworld node tapped) ----------
 
-export function showLevelBanner({ name, stars, completed, secret }) {
-  $('banner-name').textContent = secret ? `✨ ${name} ✨` : name;
+export function showLevelBanner({ name, stars, completed, secret, boss }) {
+  $('banner-name').textContent = secret ? `✨ ${name} ✨` : boss ? `👑 ${name} 👑` : name;
   $('banner-stars').textContent = stars > 0 ? '⭐'.repeat(stars) : '· · ·';
   $('btn-banner-play').textContent = completed ? '🔁 PLAY' : '▶️ PLAY';
   $('level-banner').classList.remove('hidden');
@@ -96,6 +119,59 @@ export function isLevelBannerVisible() {
   return !$('level-banner').classList.contains('hidden');
 }
 
+// ---------- character creator ----------
+
+// Rebuilt on every open/pick — cheap, and keeps selection rings in sync.
+// onPick(part, idx) updates the store + live preview, then we re-render.
+export function buildCharacterUI(onPick) {
+  const wrap = $('char-rows');
+  wrap.innerHTML = '';
+  const char = store.get().character;
+
+  const addRow = (label, buttons) => {
+    const row = document.createElement('div');
+    row.className = 'char-row';
+    const lab = document.createElement('div');
+    lab.className = 'char-label';
+    lab.textContent = label;
+    row.appendChild(lab);
+    const opts = document.createElement('div');
+    opts.className = 'char-options';
+    for (const b of buttons) opts.appendChild(b);
+    row.appendChild(opts);
+    wrap.appendChild(row);
+  };
+
+  const pick = (part, idx, name) => {
+    speak(name, { rate: 1.0 });
+    onPick(part, idx);
+    buildCharacterUI(onPick);
+  };
+
+  for (const [part, def] of Object.entries(PALETTES)) {
+    addRow(def.label, def.colors.map((color, i) => {
+      const b = document.createElement('button');
+      b.className = 'swatch' + (i === char[part] ? ' selected' : '');
+      b.style.background = `#${color.toString(16).padStart(6, '0')}`;
+      b.addEventListener('click', () => pick(part, i, def.names[i]));
+      return b;
+    }));
+  }
+
+  const addIconRow = (part, def, selectedIdx) =>
+    addRow(def.label, def.names.map((name, i) => {
+      const b = document.createElement('button');
+      b.className = 'swatch style-swatch' + (i === selectedIdx ? ' selected' : '');
+      b.textContent = def.icons[i];
+      b.title = name;
+      b.addEventListener('click', () => pick(part, i, name));
+      return b;
+    }));
+
+  addIconRow('style', STYLES, char.style);
+  addIconRow('outfit', OUTFITS, char.outfit);
+}
+
 // ---------- HUD ----------
 
 export function setCoins(n) {
@@ -104,6 +180,11 @@ export function setCoins(n) {
 
 export function setKeyFound(on) {
   $('hud-key').classList.toggle('hidden', !on);
+}
+
+// Steering controls appear only while time is frozen at a word choice.
+export function showMoveControls(on) {
+  $('move-controls').classList.toggle('hidden', !on);
 }
 
 export function initDots(count) {
@@ -148,4 +229,55 @@ export function setBonusFeedback(text) {
 
 export function setMicListening(on) {
   $('btn-mic').classList.toggle('listening', on);
+}
+
+// ---------- my house / shop ----------
+
+let onBuyItem = null;
+let toastTimer = null;
+
+function toggleShop(open) {
+  $('shop-panel').classList.toggle('hidden', !open);
+  if (open) refreshShop();
+}
+
+export function showHouse() {
+  showScreen('house');
+  toggleShop(false);
+  refreshWallet();
+}
+
+export function refreshWallet() {
+  const s = store.get();
+  $('house-coins').textContent = s.coins;
+  $('house-gems').textContent = s.gems;
+}
+
+// Rebuild the whole list — it's small and this keeps owned/afford states
+// trivially in sync after every purchase.
+export function refreshShop() {
+  refreshWallet();
+  const s = store.get();
+  const list = $('shop-list');
+  list.innerHTML = '';
+  for (const item of HOUSE_ITEMS) {
+    const owned = store.ownsHouseItem(item.id);
+    const wallet = item.currency === 'gems' ? s.gems : s.coins;
+    const btn = document.createElement('button');
+    btn.className = 'shop-item' + (owned ? ' owned' : wallet < item.cost ? ' cant-afford' : '');
+    const coin = item.currency === 'gems' ? '💎' : '🪙';
+    btn.innerHTML = `<span class="shop-emoji">${item.emoji}</span>
+      <span class="shop-info"><span>${item.name}</span>
+      <span class="shop-cost">${owned ? '✅ Got it!' : `${coin} ${item.cost}`}</span></span>`;
+    btn.addEventListener('click', () => onBuyItem && onBuyItem(item));
+    list.appendChild(btn);
+  }
+}
+
+export function houseToast(text) {
+  const el = $('house-toast');
+  el.textContent = text;
+  el.classList.remove('hidden');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.add('hidden'), 1800);
 }

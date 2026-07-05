@@ -1,0 +1,627 @@
+// The player's house: a cutaway diorama (front wall open toward the camera)
+// on a grass island. Purchased catalog items from housedata.js pop into fixed
+// spots inside or in the yard; boss trophies line a shelf on the back wall.
+// No pointer input here — the DOM overlay owns all interaction, so the camera
+// is a fixed 3/4 view with a very slow drift for life.
+
+import * as THREE from 'three';
+import { Effects } from './effects.js';
+import * as store from './store.js';
+
+const boxGeo = new THREE.BoxGeometry(1, 1, 1);
+const cylGeo = new THREE.CylinderGeometry(0.5, 0.5, 1, 10);
+const coneGeo = new THREE.ConeGeometry(0.5, 1, 10);
+const sphereGeo = new THREE.SphereGeometry(0.5, 10, 8);
+
+const FLOOR_Y = 0.3; // top of the house floor slab (interior items stand here)
+const GRASS_Y = 0.0; // top of the lawn (yard items stand here)
+const TROPHY_TINTS = [0xffd54a, 0xffc233, 0xffe082, 0xf5b942, 0xffdb6e];
+
+function lambert(hex, emissive = 0x000000) {
+  return new THREE.MeshLambertMaterial({ color: hex, emissive });
+}
+
+// mesh helper: box with position/scale/rotY in one call
+function box(mat, x, y, z, sx, sy, sz, ry = 0) {
+  const m = new THREE.Mesh(boxGeo, mat);
+  m.position.set(x, y, z);
+  m.scale.set(sx, sy, sz);
+  m.rotation.y = ry;
+  return m;
+}
+
+export class House {
+  constructor(renderer) {
+    this.renderer = renderer;
+    this.active = false;
+
+    this.scene = new THREE.Scene();
+    this.scene.background = new THREE.Color(0x79c4f0);
+    this.camera = new THREE.PerspectiveCamera(
+      45, window.innerWidth / window.innerHeight, 0.1, 200
+    );
+
+    const hemi = new THREE.HemisphereLight(0xffffff, 0x88aa66, 1.1);
+    const sun = new THREE.DirectionalLight(0xfff2d9, 1.3);
+    sun.position.set(8, 14, 10);
+    this.scene.add(hemi, sun);
+
+    this.effects = new Effects(this.scene);
+
+    this.built = {};    // itemId -> THREE.Group (idempotent refresh)
+    this.trophies = {}; // worldIdx -> trophy mesh
+    this.anims = [];    // fn(t, dt) per-frame closures for owned items
+
+    // Fixed home for every catalog item. Interior z < 1, yard z > 1.
+    this.itemPos = {
+      rug: [1.8, FLOOR_Y, -2.2],
+      chair: [4.0, FLOOR_Y, -3.2],
+      table: [2.6, FLOOR_Y, -3.4],
+      bed: [-3.4, FLOOR_Y, -4.6],
+      lamp: [-1.5, FLOOR_Y, -5.2],
+      bookshelf: [3.9, FLOOR_Y, -5.3],
+      toybox: [-4.0, FLOOR_Y, -1.6],
+      aquarium: [4.2, FLOOR_Y, -0.8],
+      telescope: [-4.2, FLOOR_Y, 0.2],
+      robot: [0.6, FLOOR_Y, -0.8],
+      flowers: [-3.0, GRASS_Y, 3.2],
+      mailbox: [2.4, GRASS_Y, 7.2],
+      tree: [7.2, GRASS_Y, 4.0],
+      swing: [-7.2, GRASS_Y, 3.4],
+      trampoline: [6.4, GRASS_Y, 8.0],
+      cat: [1.6, GRASS_Y, 2.2],
+      dog: [-1.6, GRASS_Y, 4.4],
+      rocket: [-7.8, GRASS_Y, 8.2],
+    };
+
+    this.buildIsland();
+    this.buildHouse();
+    this.buildTrophyShelf();
+    this.buildClouds();
+
+    // 3/4 view: house interior on the left, yard front-right.
+    this.camBase = new THREE.Vector3(10.5, 10.5, 16.5);
+    this.camLook = new THREE.Vector3(-0.5, 1.2, 0.5);
+    this.camera.position.copy(this.camBase);
+    this.camera.lookAt(this.camLook);
+  }
+
+  // ---------- static scenery ----------
+
+  buildIsland() {
+    // Lawn slab with dirt sides floating in the sky, plus a sea ring below
+    // so the horizon isn't empty.
+    const grass = box(lambert(0x6cc24a), 0, -0.4, 2, 26, 0.8, 22);
+    const dirt = box(lambert(0x8d6b45), 0, -1.55, 2, 25, 1.5, 21);
+    const dirt2 = box(lambert(0x77552f), 0, -2.7, 2, 22, 0.9, 18);
+    this.scene.add(grass, dirt, dirt2);
+
+    // Checker mow-lines: lighter strips across the lawn.
+    const light = lambert(0x7bd158);
+    for (let i = -2; i <= 2; i++) {
+      this.scene.add(box(light, i * 5.2, 0.01, 2, 2.6, 0.02, 22));
+    }
+
+    // Stone path from the open house front out to the lawn edge.
+    const stone = lambert(0xd9cfb8);
+    for (let i = 0; i < 7; i++) {
+      this.scene.add(box(stone, 0.5 + Math.sin(i * 1.7) * 0.35, 0.02, 1.6 + i * 1.55,
+        1.2, 0.06, 1.0, Math.sin(i) * 0.2));
+    }
+
+    // A few fixed decorations so the yard isn't bare before purchases.
+    const bush = lambert(0x4ea644);
+    this.scene.add(
+      box(bush, -6.5, 0.35, -3.5, 1.4, 0.9, 1.2),
+      box(bush, 7.5, 0.35, -2.5, 1.2, 0.8, 1.3),
+      box(bush, -9.5, 0.3, 5.5, 1.1, 0.7, 1.1),
+    );
+    const rock = lambert(0x9c9c8a);
+    this.scene.add(box(rock, 9.8, 0.22, 1.5, 0.9, 0.55, 0.7, 0.5));
+  }
+
+  buildHouse() {
+    // Footprint: x -5.4..5.4, z -6..1. Front (z = 1) stays open so the
+    // camera sees the rooms. FLOOR_Y is the walkable slab top.
+    const wall = lambert(0xf6e2b8);
+    const wallDark = lambert(0xecd4a4);
+    const g = new THREE.Group();
+
+    g.add(box(lambert(0xdba15f), 0, 0.15, -2.5, 11.2, 0.3, 7.4)); // wood floor
+    g.add(box(wall, 0, 1.8, -5.9, 11.2, 3.0, 0.35));              // back wall
+    g.add(box(wallDark, -5.4, 1.8, -2.5, 0.35, 3.0, 7.2));        // left wall
+    g.add(box(wallDark, 5.4, 1.8, -2.5, 0.35, 3.0, 7.2));         // right wall
+
+    // Stubby front wall returns so the opening reads as a doorway-sized cut.
+    g.add(box(wall, -4.4, 1.8, 0.9, 2.3, 3.0, 0.3));
+    g.add(box(wall, 4.4, 1.8, 0.9, 2.3, 3.0, 0.3));
+    g.add(box(wall, 0, 3.0, 0.9, 11.2, 0.6, 0.3)); // lintel over the opening
+
+    // Window in the back wall (sky-blue pane + white frame).
+    g.add(box(lambert(0xffffff), -2.6, 2.0, -5.72, 1.5, 1.3, 0.1));
+    g.add(box(lambert(0xa8dcf5, 0x1a2a3a), -2.6, 2.0, -5.66, 1.2, 1.0, 0.1));
+
+    // Pitched roof: two slanted slabs + ridge, overhanging the walls.
+    const roofMat = lambert(0xe25b4a);
+    const roofL = box(roofMat, -3.1, 4.35, -2.5, 6.9, 0.35, 8.4);
+    roofL.rotation.z = 0.42;
+    const roofR = box(roofMat, 3.1, 4.35, -2.5, 6.9, 0.35, 8.4);
+    roofR.rotation.z = -0.42;
+    g.add(roofL, roofR);
+    g.add(box(lambert(0xc94a3b), 0, 5.72, -2.5, 0.8, 0.42, 8.5)); // ridge cap
+
+    // Chimney with a white cap, poking through the right roof slope.
+    g.add(box(lambert(0xb0614a), 3.4, 5.4, -4.2, 0.85, 1.7, 0.85));
+    g.add(box(lambert(0xe8e0d2), 3.4, 6.3, -4.2, 1.05, 0.25, 1.05));
+
+    // Implied room split: a low divider wall between bedroom (left) and
+    // play/living side (right), with a rug-width gap as the "door".
+    g.add(box(wallDark, -0.6, 1.0, -4.6, 0.25, 1.4, 2.4));
+
+    this.scene.add(g);
+  }
+
+  buildTrophyShelf() {
+    // Wall shelf high on the back wall; refresh() drops a gold cup per
+    // beaten boss, left to right in world order.
+    const g = new THREE.Group();
+    g.position.set(0.8, 2.55, -5.55);
+    g.add(box(lambert(0x9a6b3f), 0, 0, 0, 4.6, 0.16, 0.7));
+    g.add(box(lambert(0x855a33), -2.0, -0.35, 0.15, 0.14, 0.55, 0.35));
+    g.add(box(lambert(0x855a33), 2.0, -0.35, 0.15, 0.14, 0.55, 0.35));
+    this.scene.add(g);
+    this.shelf = g;
+  }
+
+  buildClouds() {
+    // Same blocky drifting clouds as the overworld, ringed around the island.
+    this.clouds = [];
+    const mat = lambert(0xffffff);
+    const defs = [
+      [-18, 8, -8, 0.5], [14, 10, -12, 0.4], [-12, 12, 14, 0.6],
+      [18, 9, 8, 0.35], [0, 13, -16, 0.45],
+    ];
+    for (const [x, y, z, drift] of defs) {
+      const gp = new THREE.Group();
+      for (let j = 0; j < 3; j++) {
+        const m = new THREE.Mesh(boxGeo, mat);
+        m.scale.set(2.2 + j * 0.8, 0.9, 1.6 + (j % 2));
+        m.position.set(j * 1.6 - 1.6, (j % 2) * 0.4, (j - 1) * 0.7);
+        gp.add(m);
+      }
+      gp.position.set(x, y, z);
+      gp.userData.drift = drift;
+      this.scene.add(gp);
+      this.clouds.push(gp);
+    }
+  }
+
+  // ---------- item builders ----------
+  // Each returns a Group centered at origin, feet at y=0; refresh() places it
+  // at itemPos and may register a tick closure via this.anims.
+
+  makeRug() {
+    const g = new THREE.Group();
+    g.add(box(lambert(0xe25b5b), 0, 0.03, 0, 3.2, 0.06, 2.2));
+    g.add(box(lambert(0xf2d0a0), 0, 0.065, 0, 2.4, 0.02, 1.5));
+    return g;
+  }
+
+  makeChair() {
+    const g = new THREE.Group();
+    const wood = lambert(0x8d5a2b);
+    g.add(box(lambert(0x5b8dd9), 0, 0.5, 0, 0.75, 0.14, 0.75)); // seat
+    g.add(box(lambert(0x5b8dd9), 0, 0.95, -0.32, 0.75, 0.85, 0.12)); // back
+    for (const [x, z] of [[-0.28, -0.28], [0.28, -0.28], [-0.28, 0.28], [0.28, 0.28]]) {
+      g.add(box(wood, x, 0.22, z, 0.1, 0.45, 0.1));
+    }
+    g.rotation.y = -0.7; // faces the table
+    return g;
+  }
+
+  makeTable() {
+    const g = new THREE.Group();
+    const wood = lambert(0xa9713a);
+    g.add(box(wood, 0, 0.78, 0, 1.6, 0.12, 1.1));
+    for (const [x, z] of [[-0.65, -0.4], [0.65, -0.4], [-0.65, 0.4], [0.65, 0.4]]) {
+      g.add(box(lambert(0x8d5a2b), x, 0.36, z, 0.12, 0.72, 0.12));
+    }
+    // a little plate + cup so it feels lived-in
+    g.add(box(lambert(0xffffff), -0.3, 0.87, 0, 0.45, 0.05, 0.45));
+    g.add(box(lambert(0xff8c42), 0.4, 0.94, 0.15, 0.2, 0.24, 0.2));
+    return g;
+  }
+
+  makeBed() {
+    const g = new THREE.Group();
+    g.add(box(lambert(0x8d5a2b), 0, 0.3, 0, 2.5, 0.5, 1.4)); // frame
+    g.add(box(lambert(0x8d5a2b), -1.2, 0.75, 0, 0.14, 1.1, 1.4)); // headboard
+    g.add(box(lambert(0x7ec8e3), 0.25, 0.66, 0, 1.9, 0.24, 1.3)); // blanket
+    g.add(box(lambert(0xffffff), -0.85, 0.68, 0, 0.6, 0.22, 0.9)); // pillow
+    g.add(box(lambert(0xffd54a), 0.5, 0.82, 0.25, 0.4, 0.1, 0.4)); // star patch
+    return g;
+  }
+
+  makeLamp() {
+    const g = new THREE.Group();
+    g.add(box(lambert(0x555566), 0, 0.06, 0, 0.5, 0.12, 0.5));
+    const pole = new THREE.Mesh(cylGeo, lambert(0x555566));
+    pole.scale.set(0.12, 1.5, 0.12);
+    pole.position.y = 0.85;
+    const shade = new THREE.Mesh(coneGeo, lambert(0xffe082, 0x554400));
+    shade.scale.set(0.85, 0.6, 0.85);
+    shade.position.y = 1.8;
+    g.add(pole, shade);
+    return g;
+  }
+
+  makeBookshelf() {
+    const g = new THREE.Group();
+    g.add(box(lambert(0x9a6b3f), 0, 1.0, 0, 1.6, 2.0, 0.5));
+    const bookCols = [0xe25b5b, 0x5b8dd9, 0x69d06a, 0xffd54a, 0xb877d9];
+    for (let row = 0; row < 3; row++) {
+      g.add(box(lambert(0x7a4f2a), 0, 0.45 + row * 0.6, 0.05, 1.44, 0.06, 0.44));
+      for (let k = 0; k < 4; k++) {
+        g.add(box(lambert(bookCols[(row * 2 + k) % 5]),
+          -0.5 + k * 0.34, 0.72 + row * 0.6, 0.1, 0.22, 0.42, 0.3));
+      }
+    }
+    return g;
+  }
+
+  makeToybox() {
+    const g = new THREE.Group();
+    g.add(box(lambert(0x69b0e0), 0, 0.4, 0, 1.4, 0.8, 0.9));
+    g.add(box(lambert(0x4a90c4), 0, 0.86, 0, 1.5, 0.16, 1.0)); // lid, ajar
+    g.children[1].rotation.x = -0.25;
+    // toys spilling out
+    const ball = new THREE.Mesh(sphereGeo, lambert(0xe25b5b));
+    ball.scale.setScalar(0.35);
+    ball.position.set(0.9, 0.18, 0.5);
+    g.add(ball, box(lambert(0xffd54a), -0.15, 0.99, 0, 0.3, 0.3, 0.3, 0.6));
+    return g;
+  }
+
+  makeFlowers() {
+    const g = new THREE.Group();
+    g.add(box(lambert(0x7a5230), 0, 0.09, 0, 2.4, 0.18, 1.3)); // dirt bed
+    const cols = [0xff6b81, 0xffd93d, 0xff9ff3, 0x74b9ff, 0xff8c42];
+    for (let k = 0; k < 5; k++) {
+      const x = -0.9 + k * 0.45;
+      g.add(box(lambert(0x3f9e3a), x, 0.4, 0, 0.07, 0.5, 0.07));
+      const bloom = new THREE.Mesh(sphereGeo, lambert(cols[k]));
+      bloom.scale.setScalar(0.3);
+      bloom.position.set(x, 0.7, 0);
+      g.add(bloom);
+    }
+    return g;
+  }
+
+  makeMailbox() {
+    const g = new THREE.Group();
+    g.add(box(lambert(0x8d5a2b), 0, 0.55, 0, 0.12, 1.1, 0.12));
+    const bodyMat = lambert(0x5b8dd9);
+    g.add(box(bodyMat, 0, 1.2, 0, 0.55, 0.4, 0.85));
+    const top = new THREE.Mesh(cylGeo, bodyMat);
+    top.scale.set(0.55, 0.85, 0.4);
+    top.rotation.x = Math.PI / 2;
+    top.position.y = 1.4;
+    g.add(top);
+    g.add(box(lambert(0xe25b5b), 0.32, 1.5, 0.25, 0.06, 0.34, 0.1)); // flag up
+    g.rotation.y = 0.5;
+    return g;
+  }
+
+  makeTree() {
+    const g = new THREE.Group();
+    const trunk = new THREE.Mesh(cylGeo, lambert(0x7a4f2a));
+    trunk.scale.set(0.55, 1.8, 0.55);
+    trunk.position.y = 0.9;
+    g.add(trunk);
+    g.add(box(lambert(0x3f9e3a), 0, 2.4, 0, 2.6, 1.6, 2.6));
+    g.add(box(lambert(0x4cb545), 0, 3.4, 0, 1.7, 1.0, 1.7));
+    const apple = new THREE.Mesh(sphereGeo, lambert(0xe25b5b));
+    apple.scale.setScalar(0.24);
+    apple.position.set(0.9, 1.9, 0.9);
+    g.add(apple);
+    return g;
+  }
+
+  makeSwing(anims) {
+    const g = new THREE.Group();
+    const wood = lambert(0xc98a4b);
+    const legL1 = box(wood, -1.3, 1.1, -0.5, 0.15, 2.3, 0.15);
+    legL1.rotation.x = 0.28;
+    const legL2 = box(wood, -1.3, 1.1, 0.5, 0.15, 2.3, 0.15);
+    legL2.rotation.x = -0.28;
+    const legR1 = box(wood, 1.3, 1.1, -0.5, 0.15, 2.3, 0.15);
+    legR1.rotation.x = 0.28;
+    const legR2 = box(wood, 1.3, 1.1, 0.5, 0.15, 2.3, 0.15);
+    legR2.rotation.x = -0.28;
+    g.add(legL1, legL2, legR1, legR2);
+    g.add(box(wood, 0, 2.2, 0, 3.0, 0.16, 0.16)); // top bar
+    // swing seat hangs from a pivot group so it can sway in tick
+    const pivot = new THREE.Group();
+    pivot.position.set(0, 2.2, 0);
+    pivot.add(box(lambert(0xbababa), -0.35, -0.65, 0, 0.05, 1.3, 0.05));
+    pivot.add(box(lambert(0xbababa), 0.35, -0.65, 0, 0.05, 1.3, 0.05));
+    pivot.add(box(lambert(0xe25b5b), 0, -1.3, 0, 0.9, 0.1, 0.45));
+    g.add(pivot);
+    anims.push((t) => { pivot.rotation.x = Math.sin(t * 1.4) * 0.28; });
+    g.rotation.y = 0.9;
+    return g;
+  }
+
+  makeTrampoline() {
+    const g = new THREE.Group();
+    const mat = new THREE.Mesh(cylGeo, lambert(0x2d3a55));
+    mat.scale.set(2.4, 0.18, 2.4);
+    mat.position.y = 0.66;
+    g.add(mat);
+    const rim = new THREE.Mesh(cylGeo, lambert(0x69d06a));
+    rim.scale.set(2.7, 0.12, 2.7);
+    rim.position.y = 0.78;
+    g.add(rim);
+    for (let k = 0; k < 4; k++) {
+      const a = k * Math.PI / 2 + Math.PI / 4;
+      g.add(box(lambert(0x888899), Math.cos(a) * 1.1, 0.33, Math.sin(a) * 1.1,
+        0.1, 0.66, 0.1));
+    }
+    return g;
+  }
+
+  makeCat(anims) {
+    const g = new THREE.Group();
+    const fur = lambert(0xf0a04b);
+    g.add(box(fur, 0, 0.32, 0, 0.85, 0.42, 0.45)); // body
+    const head = box(fur, 0.45, 0.62, 0, 0.42, 0.4, 0.4);
+    g.add(head);
+    g.add(box(fur, 0.32, 0.9, -0.12, 0.12, 0.18, 0.08)); // ears
+    g.add(box(fur, 0.32, 0.9, 0.12, 0.12, 0.18, 0.08));
+    const dark = lambert(0x222222);
+    g.add(box(dark, 0.66, 0.66, -0.1, 0.05, 0.07, 0.07)); // eyes
+    g.add(box(dark, 0.66, 0.66, 0.1, 0.05, 0.07, 0.07));
+    const tail = box(fur, -0.48, 0.55, 0, 0.1, 0.55, 0.1);
+    tail.rotation.z = 0.4;
+    g.add(tail);
+    anims.push((t) => {
+      tail.rotation.z = 0.4 + Math.sin(t * 3) * 0.25;      // tail swish
+      head.position.y = 0.62 + Math.sin(t * 1.8) * 0.02;   // idle breathing
+    });
+    g.rotation.y = 2.2; // faces the camera-ish
+    return g;
+  }
+
+  makeDog(anims) {
+    const g = new THREE.Group();
+    const fur = lambert(0xa9713a);
+    const body = box(fur, 0, 0.4, 0, 1.05, 0.5, 0.55);
+    g.add(body);
+    const head = box(fur, 0.6, 0.78, 0, 0.5, 0.45, 0.45);
+    g.add(head);
+    g.add(box(lambert(0x7a4f2a), 0.5, 1.05, -0.2, 0.12, 0.28, 0.1)); // floppy ears
+    g.add(box(lambert(0x7a4f2a), 0.5, 1.05, 0.2, 0.12, 0.28, 0.1));
+    g.add(box(lambert(0x222222), 0.87, 0.72, 0, 0.1, 0.1, 0.14)); // nose
+    for (const [x, z] of [[-0.35, -0.18], [-0.35, 0.18], [0.35, -0.18], [0.35, 0.18]]) {
+      g.add(box(fur, x, 0.12, z, 0.14, 0.25, 0.14));
+    }
+    const tail = box(fur, -0.6, 0.62, 0, 0.09, 0.45, 0.09);
+    tail.rotation.z = -0.6;
+    g.add(tail);
+    anims.push((t) => {
+      tail.rotation.x = Math.sin(t * 9) * 0.5;                    // happy wag
+      g.position.y = GRASS_Y + Math.abs(Math.sin(t * 2.2)) * 0.06; // little bounce
+    });
+    g.rotation.y = -2.0;
+    return g;
+  }
+
+  makeAquarium(anims) {
+    const g = new THREE.Group();
+    g.add(box(lambert(0x8d5a2b), 0, 0.35, 0, 1.3, 0.7, 0.7)); // stand
+    g.add(box(lambert(0x7ec8e3, 0x0a2a3a), 0, 1.05, 0, 1.2, 0.7, 0.6)); // water
+    g.add(box(lambert(0x2d3a55), 0, 1.44, 0, 1.3, 0.08, 0.7)); // lid
+    g.add(box(lambert(0xeed48e), 0, 0.74, 0, 1.1, 0.08, 0.5)); // sand
+    const fish = box(lambert(0xff8c42), 0, 1.05, 0, 0.22, 0.14, 0.08);
+    const tailFin = box(lambert(0xffd54a), -0.15, 1.05, 0, 0.1, 0.12, 0.04);
+    g.add(fish, tailFin);
+    anims.push((t) => { // fish circles the tank
+      const a = t * 1.2;
+      fish.position.set(Math.cos(a) * 0.35, 1.05 + Math.sin(t * 2.6) * 0.08, Math.sin(a) * 0.14);
+      fish.rotation.y = -a + Math.PI / 2;
+      tailFin.position.copy(fish.position);
+      tailFin.rotation.y = fish.rotation.y;
+      tailFin.translateX(-0.16);
+    });
+    return g;
+  }
+
+  makeTelescope() {
+    const g = new THREE.Group();
+    const legMat = lambert(0x555566);
+    for (let k = 0; k < 3; k++) {
+      const leg = box(legMat, 0, 0.55, 0, 0.08, 1.1, 0.08);
+      leg.rotation.z = 0.35;
+      leg.rotation.y = k * (Math.PI * 2 / 3);
+      leg.rotateOnAxis(new THREE.Vector3(0, 0, 1), 0); // keep simple tripod lean
+      leg.position.set(Math.sin(k * 2.1) * 0.3, 0.55, Math.cos(k * 2.1) * 0.3);
+      g.add(leg);
+    }
+    const tube = new THREE.Mesh(cylGeo, lambert(0x5b8dd9));
+    tube.scale.set(0.3, 1.2, 0.3);
+    tube.position.y = 1.25;
+    tube.rotation.z = 0.9; // aimed up at the sky through the open front
+    tube.rotation.y = -0.5;
+    g.add(tube);
+    const lens = new THREE.Mesh(cylGeo, lambert(0xffd54a, 0x554400));
+    lens.scale.set(0.34, 0.1, 0.34);
+    lens.position.set(0.48, 1.62, -0.25);
+    lens.rotation.copy(tube.rotation);
+    g.add(lens);
+    return g;
+  }
+
+  makeRobot(anims) {
+    const g = new THREE.Group();
+    const metal = lambert(0x9fb4c8);
+    g.add(box(metal, 0, 0.5, 0, 0.6, 0.7, 0.45)); // torso
+    g.add(box(lambert(0xe25b5b), 0, 0.55, 0.24, 0.2, 0.2, 0.05)); // chest button
+    const head = new THREE.Group();
+    head.position.y = 1.05;
+    head.add(box(metal, 0, 0, 0, 0.45, 0.4, 0.4));
+    head.add(box(lambert(0x69f0ae, 0x1a4a2a), -0.1, 0.02, 0.21, 0.1, 0.1, 0.04));
+    head.add(box(lambert(0x69f0ae, 0x1a4a2a), 0.1, 0.02, 0.21, 0.1, 0.1, 0.04));
+    head.add(box(lambert(0xffd54a), 0, 0.32, 0, 0.05, 0.24, 0.05)); // antenna
+    g.add(head);
+    g.add(box(metal, -0.42, 0.55, 0, 0.14, 0.5, 0.14)); // arms
+    g.add(box(metal, 0.42, 0.55, 0, 0.14, 0.5, 0.14));
+    g.add(box(lambert(0x6b7a8a), -0.16, 0.08, 0, 0.2, 0.16, 0.3)); // tread feet
+    g.add(box(lambert(0x6b7a8a), 0.16, 0.08, 0, 0.2, 0.16, 0.3));
+    anims.push((t) => { head.rotation.y = t * 0.6; }); // slow head spin
+    g.rotation.y = 0.8;
+    return g;
+  }
+
+  makeRocket(anims) {
+    const g = new THREE.Group();
+    const bodyMat = lambert(0xe8e0d2);
+    const body = new THREE.Mesh(cylGeo, bodyMat);
+    body.scale.set(1.0, 2.2, 1.0);
+    body.position.y = 1.6;
+    const nose = new THREE.Mesh(coneGeo, lambert(0xe25b5b));
+    nose.scale.set(1.0, 0.9, 1.0);
+    nose.position.y = 3.15;
+    g.add(body, nose);
+    g.add(box(lambert(0x7ec8e3, 0x0a2a3a), 0, 2.1, 0.48, 0.4, 0.4, 0.12)); // porthole
+    for (let k = 0; k < 3; k++) { // fins
+      const fin = box(lambert(0xe25b5b), 0, 0.55, 0, 0.14, 1.0, 0.7);
+      const a = k * (Math.PI * 2 / 3);
+      fin.position.set(Math.sin(a) * 0.55, 0.55, Math.cos(a) * 0.55);
+      fin.rotation.y = a;
+      g.add(fin);
+    }
+    const pos = this.itemPos.rocket;
+    anims.push((t, dt) => { // occasional engine sparkle puff
+      if (Math.random() < dt * 0.7) {
+        this.effects.sparkle(new THREE.Vector3(pos[0], 0.4, pos[2]));
+      }
+    });
+    return g;
+  }
+
+  makeTrophy(worldIdx) {
+    // Small gold cup, tinted per world, standing on the shelf.
+    const g = new THREE.Group();
+    const gold = lambert(TROPHY_TINTS[worldIdx % TROPHY_TINTS.length], 0x4a3800);
+    g.add(box(gold, 0, 0.05, 0, 0.3, 0.1, 0.3)); // base
+    const stem = new THREE.Mesh(cylGeo, gold);
+    stem.scale.set(0.09, 0.16, 0.09);
+    stem.position.y = 0.17;
+    const cup = new THREE.Mesh(cylGeo, gold);
+    cup.scale.set(0.3, 0.28, 0.3);
+    cup.position.y = 0.4;
+    g.add(stem, cup);
+    g.add(box(gold, -0.2, 0.42, 0, 0.07, 0.18, 0.07)); // handles
+    g.add(box(gold, 0.2, 0.42, 0, 0.07, 0.18, 0.07));
+    return g;
+  }
+
+  // ---------- state sync ----------
+
+  buildItem(id) {
+    const builders = {
+      rug: () => this.makeRug(),
+      chair: () => this.makeChair(),
+      table: () => this.makeTable(),
+      bed: () => this.makeBed(),
+      lamp: () => this.makeLamp(),
+      bookshelf: () => this.makeBookshelf(),
+      toybox: () => this.makeToybox(),
+      flowers: () => this.makeFlowers(),
+      mailbox: () => this.makeMailbox(),
+      tree: () => this.makeTree(),
+      swing: () => this.makeSwing(this.anims),
+      trampoline: () => this.makeTrampoline(),
+      cat: () => this.makeCat(this.anims),
+      dog: () => this.makeDog(this.anims),
+      aquarium: () => this.makeAquarium(this.anims),
+      telescope: () => this.makeTelescope(),
+      robot: () => this.makeRobot(this.anims),
+      rocket: () => this.makeRocket(this.anims),
+    };
+    const make = builders[id];
+    if (!make) return null;
+    const g = make();
+    const pos = this.itemPos[id];
+    if (pos) {
+      // group-level idle bounces (dog) offset from the item's ground y
+      g.position.x += pos[0];
+      g.position.y += pos[1];
+      g.position.z += pos[2];
+    }
+    return g;
+  }
+
+  // Idempotent: adds newly-owned items and newly-beaten trophies exactly once.
+  refresh() {
+    const owned = (store.get().house || {}).owned || {};
+    for (const id of Object.keys(owned)) {
+      if (!owned[id] || this.built[id]) continue;
+      const g = this.buildItem(id);
+      if (!g) continue;
+      this.built[id] = g;
+      this.scene.add(g);
+    }
+    for (let w = 0; w < 5; w++) {
+      if (!store.isBossBeaten(w) || this.trophies[w]) continue;
+      const t = this.makeTrophy(w);
+      t.position.set(-1.8 + w * 0.9, 0.08, 0); // left to right along the shelf
+      this.shelf.add(t);
+      this.trophies[w] = t;
+    }
+  }
+
+  // Sparkle + confetti where the item just appeared (called post-refresh).
+  celebrate(itemId) {
+    const pos = this.itemPos[itemId];
+    if (!pos) return;
+    const p = new THREE.Vector3(pos[0], pos[1] + 1.2, pos[2]);
+    this.effects.confetti(p);
+    this.effects.sparkle(p);
+  }
+
+  // ---------- lifecycle ----------
+
+  enter() {
+    this.active = true;
+    this.refresh();
+    this.camera.position.copy(this.camBase);
+    this.camera.lookAt(this.camLook);
+  }
+
+  exit() {
+    this.active = false;
+  }
+
+  tick(dt) {
+    if (!this.active) return;
+    const t = performance.now() / 1000;
+
+    for (const c of this.clouds) {
+      c.position.x += c.userData.drift * dt;
+      if (c.position.x > 26) c.position.x = -26;
+    }
+
+    for (const fn of this.anims) fn(t, dt);
+
+    // Very slow camera drift — just enough that the diorama feels alive.
+    this.camera.position.set(
+      this.camBase.x + Math.sin(t * 0.12) * 0.7,
+      this.camBase.y + Math.sin(t * 0.09) * 0.3,
+      this.camBase.z + Math.cos(t * 0.12) * 0.7
+    );
+    this.camera.lookAt(this.camLook);
+
+    this.effects.update(dt);
+  }
+}
