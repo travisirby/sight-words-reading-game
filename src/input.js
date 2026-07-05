@@ -1,42 +1,32 @@
 // Jump-only controls: press anywhere on the canvas (touch/pointer) or
-// Space / ArrowUp / W. Hold = higher jump, so we report start AND end.
-// handlers: { onJumpStart(), onJumpEnd() }
+// Space / ArrowUp / W. Every press is a full-power jump — release doesn't
+// matter, we only track held state to swallow key repeat / multi-touch.
+// handlers: { onJump() }
 
 export function createInput(el, handlers) {
   let pointerHeld = false;
   let keyHeld = false;
 
-  const start = () => {
-    if (!pointerHeld && !keyHeld) handlers.onJumpStart();
-  };
-  const end = () => {
-    if (!pointerHeld && !keyHeld) handlers.onJumpEnd();
-  };
-
   const onPointerDown = (e) => {
     if (e.target && e.target.closest && e.target.closest('button')) return;
     e.preventDefault();
-    start();
+    if (!pointerHeld && !keyHeld) handlers.onJump();
     pointerHeld = true;
   };
   const onPointerUp = () => {
-    if (!pointerHeld) return;
     pointerHeld = false;
-    end();
   };
 
   const onKeyDown = (e) => {
     if (e.code !== 'Space' && e.code !== 'ArrowUp' && e.code !== 'KeyW') return;
     e.preventDefault();
     if (e.repeat || keyHeld) return;
-    start();
+    if (!pointerHeld) handlers.onJump();
     keyHeld = true;
   };
   const onKeyUp = (e) => {
     if (e.code !== 'Space' && e.code !== 'ArrowUp' && e.code !== 'KeyW') return;
-    if (!keyHeld) return;
     keyHeld = false;
-    end();
   };
 
   if (window.PointerEvent) {

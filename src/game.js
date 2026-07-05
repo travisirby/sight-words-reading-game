@@ -115,8 +115,7 @@ export class Game {
     this.scene.add(this.keyMesh);
 
     this.input = createInput(renderer.domElement, {
-      onJumpStart: () => this.running && !this.paused && this.player.jumpStart(),
-      onJumpEnd: () => this.player.jumpEnd(),
+      onJump: () => this.running && !this.paused && this.player.jump(),
     });
 
     this.running = false;
