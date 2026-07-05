@@ -5,6 +5,8 @@
 
 import * as THREE from 'three';
 import { sfxJump } from './audio.js';
+import * as store from './store.js';
+import { lookFrom } from './character.js';
 
 export const KID_H = 1.7; // collision height
 export const KID_W = 0.7; // collision width
@@ -15,15 +17,19 @@ const JUMP_V = 10.2; // fixed apex ~3.5 blocks: +3 platforms with margin
 const COYOTE = 0.12;
 const BUFFER = 0.15;
 
-function makeFaceTexture() {
+const css = (hex) => `#${hex.toString(16).padStart(6, '0')}`;
+
+function makeFaceTexture(skinHex, hairHex, fringe) {
   const c = document.createElement('canvas');
   c.width = 64;
   c.height = 64;
   const g = c.getContext('2d');
-  g.fillStyle = '#ffcf9e'; // skin
+  g.fillStyle = css(skinHex);
   g.fillRect(0, 0, 64, 64);
-  g.fillStyle = '#5a3d1e'; // hair fringe
-  g.fillRect(0, 0, 64, 14);
+  if (fringe) {
+    g.fillStyle = css(hairHex);
+    g.fillRect(0, 0, 64, 14);
+  }
   g.fillStyle = '#222'; // eyes
   g.fillRect(16, 26, 8, 8);
   g.fillRect(40, 26, 8, 8);
@@ -38,15 +44,66 @@ function makeFaceTexture() {
   return tex;
 }
 
+// Hair style indices (see character.js STYLES): 0 short, 1 spiky, 2 long, 3 buzz.
+function buildHairExtras(style, hairMat) {
+  const g = new THREE.Group();
+  const box = new THREE.BoxGeometry(1, 1, 1);
+  if (style === 1) {
+    // Spiky: three little tufts on top.
+    for (let i = -1; i <= 1; i++) {
+      const s = new THREE.Mesh(box, hairMat);
+      s.scale.set(0.12, 0.16, 0.12);
+      s.position.set(i * 0.05, 1.68, i * 0.14);
+      g.add(s);
+    }
+  } else if (style === 2) {
+    // Long: a panel down the back of the head (-z).
+    const m = new THREE.Mesh(box, hairMat);
+    m.scale.set(0.44, 0.55, 0.12);
+    m.position.set(0, 1.28, -0.24);
+    g.add(m);
+  }
+  return g;
+}
+
+// The current saved look (store must be loaded before meshes are built).
+export function currentLook() {
+  return lookFrom(store.get().character);
+}
+
+// Recolor/restyle an existing kid mesh in place. Works on any group built
+// by makeKidMesh (in-level player, overworld token, character preview).
+export function applyLook(group, look) {
+  const p = group.userData.parts;
+  const [skin, hair, shirt, pants] = p.mats;
+  skin.color.setHex(look.skin);
+  hair.color.setHex(look.hair);
+  shirt.color.setHex(look.shirt);
+  pants.color.setHex(look.pants);
+  if (p.face.map) p.face.map.dispose();
+  p.face.map = makeFaceTexture(look.skin, look.hair, look.style !== 3);
+  p.face.needsUpdate = true;
+  // Buzz cut: hair only on top of the head, no fringe.
+  p.head.material = look.style === 3
+    ? [skin, skin, hair, skin, p.face, skin]
+    : [skin, hair, hair, skin, p.face, hair];
+  group.remove(p.hairExtra);
+  p.hairExtra = buildHairExtras(look.style, hair);
+  group.add(p.hairExtra);
+}
+
 // Shared kid builder — the overworld token reuses it at a smaller scale.
-export function makeKidMesh(scale = 1) {
+export function makeKidMesh(scale = 1, look = null) {
+  look = look || currentLook();
   const group = new THREE.Group();
   const box = new THREE.BoxGeometry(1, 1, 1);
-  const skin = new THREE.MeshLambertMaterial({ color: 0xffcf9e });
-  const hair = new THREE.MeshLambertMaterial({ color: 0x5a3d1e });
-  const shirt = new THREE.MeshLambertMaterial({ color: 0x2979ff });
-  const pants = new THREE.MeshLambertMaterial({ color: 0x37474f });
-  const face = new THREE.MeshLambertMaterial({ map: makeFaceTexture() });
+  const skin = new THREE.MeshLambertMaterial({ color: look.skin });
+  const hair = new THREE.MeshLambertMaterial({ color: look.hair });
+  const shirt = new THREE.MeshLambertMaterial({ color: look.shirt });
+  const pants = new THREE.MeshLambertMaterial({ color: look.pants });
+  const face = new THREE.MeshLambertMaterial({
+    map: makeFaceTexture(look.skin, look.hair, look.style !== 3),
+  });
 
   // Face on +z so the camera (side view / map view) sees it.
   const head = new THREE.Mesh(box, [skin, hair, hair, skin, face, hair]);
@@ -75,12 +132,16 @@ export function makeKidMesh(scale = 1) {
   const legR = mkLimb(pants, 0.18, 0.5);
   legR.position.set(0, 0.5, 0.14);
 
-  group.add(head, body, armL, armR, legL, legR);
+  const hairExtra = buildHairExtras(look.style, hair);
+
+  group.add(head, body, armL, armR, legL, legR, hairExtra);
   group.scale.setScalar(scale);
   group.userData.parts = {
-    head, body, armL, armR, legL, legR,
+    head, body, armL, armR, legL, legR, face, hairExtra,
     mats: [skin, hair, shirt, pants],
   };
+  // Buzz cut needs the style-specific head materials.
+  if (look.style === 3) group.userData.parts.head.material = [skin, skin, hair, skin, face, skin];
   return group;
 }
 

@@ -4,6 +4,8 @@
 import * as THREE from 'three';
 import { Game } from './game.js';
 import { Overworld } from './overworld.js';
+import { CharScene } from './charscene.js';
+import { applyLook, currentLook } from './player.js';
 import * as ui from './ui.js';
 import * as store from './store.js';
 import * as speech from './speech.js';
@@ -19,7 +21,7 @@ let current = { world: 0, level: 0, secret: false };
 let selected = null; // node info from the map banner
 let lastRun = null; // { results, coins, gems, stars, keyFound }
 let bonus = null; // active bonus round state
-let mode = 'map'; // which scene renders: 'map' | 'game'
+let mode = 'map'; // which scene renders: 'map' | 'game' | 'char'
 
 // ---------- iOS audio unlock on first gesture ----------
 const unlock = () => unlockAudio();
@@ -59,6 +61,8 @@ const map = new Overworld(renderer, {
   },
 });
 
+const charScene = new CharScene();
+
 // Debug handle for automated testing (headless tabs freeze rAF, so tests
 // step the sim manually via game.updateRun(dt) and game.debugResolve()).
 window.__wr = { game, store, map };
@@ -69,6 +73,9 @@ renderer.setAnimationLoop(() => {
   if (mode === 'game') {
     game.tick(dt);
     renderer.render(game.scene, game.camera);
+  } else if (mode === 'char') {
+    charScene.tick(dt);
+    renderer.render(charScene.scene, charScene.camera);
   } else {
     map.tick(dt);
     renderer.render(map.scene, map.camera);
@@ -76,7 +83,7 @@ renderer.setAnimationLoop(() => {
 });
 
 function onResize() {
-  for (const cam of [game.camera, map.camera]) {
+  for (const cam of [game.camera, map.camera, charScene.camera]) {
     cam.aspect = window.innerWidth / window.innerHeight;
     cam.updateProjectionMatrix();
   }
@@ -92,6 +99,28 @@ function showMap() {
   map.enter();
   ui.showHUD(false);
   ui.showScreen('map');
+}
+
+// ---------- character creator ----------
+
+function showCharacter() {
+  mode = 'char';
+  map.exit();
+  charScene.setLook(currentLook());
+  ui.buildCharacterUI((part, idx) => {
+    store.setCharacterPart(part, idx);
+    charScene.setLook(currentLook());
+  });
+  ui.showScreen('char');
+}
+
+function closeCharacter() {
+  // Push the final look onto the persistent meshes (in-level kid + map token).
+  const look = currentLook();
+  applyLook(game.player.group, look);
+  applyLook(map.token, look);
+  mode = 'map'; // map scene renders behind the title again
+  ui.showScreen('title');
 }
 
 function startLevel(worldIdx, levelIdx, secret = false) {
@@ -266,6 +295,8 @@ function bonusMicUp() {
 
 ui.init({
   onPlay: () => showMap(),
+  onCharacter: () => showCharacter(),
+  onCharacterDone: () => closeCharacter(),
   onToggleSound: () => {
     const on = !store.get().sound;
     store.setSound(on);

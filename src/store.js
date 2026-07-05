@@ -22,6 +22,8 @@ const defaults = () => ({
   secretUnlocked: {},
   // secretStars[world] = 0..3
   secretStars: {},
+  // character look — indices into character.js palettes/styles
+  character: { skin: 0, hair: 0, style: 0, shirt: 0, pants: 0 },
 });
 
 let state = defaults();
@@ -170,6 +172,12 @@ export function isWorldUnlocked(worldIdx) {
 
 export function devUnlockAll() {
   state.devUnlocked = true; // also unlocks secrets via isSecretUnlocked
+  save();
+}
+
+export function setCharacterPart(part, idx) {
+  // Merge over defaults so blobs saved before this field existed still work.
+  state.character = { ...defaults().character, ...state.character, [part]: idx };
   save();
 }
 

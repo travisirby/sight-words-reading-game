@@ -8,4 +8,6 @@ const useHttps = !!process.env.HTTPS;
 export default {
   base: './',
   plugins: useHttps ? [basicSsl()] : [],
+  // Honor an assigned port (e.g. from the preview harness) instead of 5173.
+  server: process.env.PORT ? { port: Number(process.env.PORT) } : {},
 };

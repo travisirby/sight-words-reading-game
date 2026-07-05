@@ -4,13 +4,17 @@
 
 import { speak } from './audio.js';
 import * as store from './store.js';
+import { PALETTES, STYLES } from './character.js';
 
 const $ = (id) => document.getElementById(id);
 
-const SCREENS = ['title', 'map', 'pause', 'complete', 'bonus'];
+const SCREENS = ['title', 'map', 'pause', 'complete', 'bonus', 'char'];
 
 export function init(h) {
   bindSpeak($('btn-play'), 'Play!', () => h.onPlay());
+  bindSpeak($('btn-character'), 'Make your character!', () => h.onCharacter());
+  bindSpeak($('btn-char-back'), 'Back', () => h.onCharacterDone());
+  bindSpeak($('btn-char-done'), 'Looking good!', () => h.onCharacterDone());
   bindSpeak($('btn-settings'), 'Settings', () => $('settings-panel').classList.toggle('hidden'));
   bindSpeak($('btn-settings-close'), 'Close', () => $('settings-panel').classList.add('hidden'));
   bindSpeak($('btn-toggle-sound'), 'Sound', () => h.onToggleSound());
@@ -94,6 +98,55 @@ export function hideLevelBanner() {
 
 export function isLevelBannerVisible() {
   return !$('level-banner').classList.contains('hidden');
+}
+
+// ---------- character creator ----------
+
+// Rebuilt on every open/pick — cheap, and keeps selection rings in sync.
+// onPick(part, idx) updates the store + live preview, then we re-render.
+export function buildCharacterUI(onPick) {
+  const wrap = $('char-rows');
+  wrap.innerHTML = '';
+  const char = store.get().character;
+
+  const addRow = (label, buttons) => {
+    const row = document.createElement('div');
+    row.className = 'char-row';
+    const lab = document.createElement('div');
+    lab.className = 'char-label';
+    lab.textContent = label;
+    row.appendChild(lab);
+    const opts = document.createElement('div');
+    opts.className = 'char-options';
+    for (const b of buttons) opts.appendChild(b);
+    row.appendChild(opts);
+    wrap.appendChild(row);
+  };
+
+  const pick = (part, idx, name) => {
+    speak(name, { rate: 1.0 });
+    onPick(part, idx);
+    buildCharacterUI(onPick);
+  };
+
+  for (const [part, def] of Object.entries(PALETTES)) {
+    addRow(def.label, def.colors.map((color, i) => {
+      const b = document.createElement('button');
+      b.className = 'swatch' + (i === char[part] ? ' selected' : '');
+      b.style.background = `#${color.toString(16).padStart(6, '0')}`;
+      b.addEventListener('click', () => pick(part, i, def.names[i]));
+      return b;
+    }));
+  }
+
+  addRow(STYLES.label, STYLES.names.map((name, i) => {
+    const b = document.createElement('button');
+    b.className = 'swatch style-swatch' + (i === char.style ? ' selected' : '');
+    b.textContent = STYLES.icons[i];
+    b.title = name;
+    b.addEventListener('click', () => pick('style', i, name));
+    return b;
+  }));
 }
 
 // ---------- HUD ----------
