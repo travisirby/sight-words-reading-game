@@ -71,7 +71,7 @@ const map = new Overworld(renderer, {
     speak('My house!', { rate: 1.0 });
     showHouse('map');
   },
-  onTokenTapped: () => {
+  onEditTapped: () => {
     speak('Make your character!', { rate: 1.0 });
     showCharacter('map');
   },

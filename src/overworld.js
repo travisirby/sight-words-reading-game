@@ -75,14 +75,40 @@ export class Overworld {
 
     this.token = makeKidMesh(0.75);
     this.token.rotation.y = -Math.PI / 2; // camera-facing when idle
-    // Fat invisible touch target: tapping the kid opens the character editor.
+    const tokenBox = new THREE.BoxGeometry(1, 1, 1);
+    // Fat invisible touch target: tapping the kid acts like pressing Enter
+    // (select the node under him; play if the banner is already up).
     this.tokenHit = new THREE.Mesh(
-      new THREE.BoxGeometry(1, 1, 1),
+      tokenBox,
       new THREE.MeshBasicMaterial({ visible: false })
     );
     this.tokenHit.scale.set(2, 2.6, 2);
     this.tokenHit.position.y = 1;
     this.token.add(this.tokenHit);
+    // Floating gold mini-kid above the token (bobs and spins in tick(), like
+    // the house marker): tapping IT opens the character editor.
+    const gold = new THREE.MeshLambertMaterial({ color: 0xffd54a, emissive: 0x664d00 });
+    this.editIcon = new THREE.Group();
+    const iHead = new THREE.Mesh(tokenBox, gold);
+    iHead.scale.setScalar(0.34);
+    iHead.position.y = 0.4;
+    const iBody = new THREE.Mesh(tokenBox, gold);
+    iBody.scale.set(0.42, 0.44, 0.24);
+    const iArmL = new THREE.Mesh(tokenBox, gold);
+    iArmL.scale.set(0.13, 0.36, 0.13);
+    iArmL.position.set(-0.31, 0.02, 0);
+    const iArmR = iArmL.clone();
+    iArmR.position.x = 0.31;
+    this.editIcon.add(iHead, iBody, iArmL, iArmR);
+    this.editIcon.position.y = 2.7;
+    this.token.add(this.editIcon);
+    this.editHit = new THREE.Mesh(
+      tokenBox,
+      new THREE.MeshBasicMaterial({ visible: false })
+    );
+    this.editHit.scale.setScalar(1.7);
+    this.editHit.position.y = 2.7;
+    this.token.add(this.editHit);
     this.scene.add(this.token);
     this.tokenNav = 0; // index into navList
     this.walk = null; // { points, t, dur, target }
@@ -1025,8 +1051,12 @@ export class Overworld {
       -(cy / window.innerHeight) * 2 + 1
     );
     this.raycaster.setFromCamera(ndc, this.camera);
+    if (this.raycaster.intersectObject(this.editHit, false).length) {
+      this.cb.onEditTapped();
+      return;
+    }
     if (this.raycaster.intersectObject(this.tokenHit, false).length) {
-      this.cb.onTokenTapped();
+      this.cb.onEnterKey();
       return;
     }
     if (this.raycaster.intersectObject(this.houseHit, false).length) {
@@ -1227,6 +1257,11 @@ export class Overworld {
     // Floating house marker: slow spin + bob, like the key icons.
     this.houseIcon.rotation.y = t * 1.2;
     this.houseIcon.position.y = 4.3 + Math.sin(t * 2) * 0.15;
+
+    // Dress-up marker over the token: counter-rotate so it spins in world
+    // space no matter which way the kid is facing.
+    this.editIcon.rotation.y = t * 1.2 - this.token.rotation.y;
+    this.editIcon.position.y = 2.7 + Math.sin(t * 2 + 1) * 0.12;
 
     // Lazy chimney smoke: a soft puff every couple of seconds.
     this.houseSmokeT -= dt;
