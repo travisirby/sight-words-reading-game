@@ -1,0 +1,72 @@
+name: Deploy branch preview
+
+on:
+  push:
+    branches-ignore:
+      - main
+      - gh-pages
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: gh-pages-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - run: npm run build
+
+      - name: Compute preview path from branch name
+        id: path
+        run: |
+          # Slashes in branch names become dashes so each branch maps to one flat folder.
+          SAFE_NAME=$(echo "$GITHUB_REF_NAME" | tr '/' '-')
+          echo "safe_name=$SAFE_NAME" >> "$GITHUB_OUTPUT"
+
+      - name: Deploy to previews/<branch>
+        uses: JamesIves/github-pages-deploy-action@v4
+        with:
+          folder: dist
+          branch: gh-pages
+          target-folder: previews/${{ steps.path.outputs.safe_name }}
+          clean: true
+
+      - name: Add preview URL to summary
+        run: |
+          echo "### 🔍 Preview deployed for \`$GITHUB_REF_NAME\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "https://travisirby.github.io/sight-words-reading-game/previews/${{ steps.path.outputs.safe_name }}/" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Comment preview URL on the branch's open PR
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SAFE_NAME: ${{ steps.path.outputs.safe_name }}
+        run: |
+          PR=$(gh pr list --repo "$GITHUB_REPOSITORY" --head "$GITHUB_REF_NAME" --state open --json number --jq '.[0].number')
+          if [ -z "$PR" ]; then
+            echo "No open PR for $GITHUB_REF_NAME, skipping comment."
+            exit 0
+          fi
+          MARKER="<!-- branch-preview-url -->"
+          URL="https://travisirby.github.io/sight-words-reading-game/previews/$SAFE_NAME/"
+          BODY=$(printf '%s\n🔍 **Branch preview:** %s\n\n_Redeploys on every push to `%s`; removed when the branch is deleted. It can take a minute after this comment appears for GitHub Pages to publish._' "$MARKER" "$URL" "$GITHUB_REF_NAME")
+          EXISTING=$(gh api "repos/$GITHUB_REPOSITORY/issues/$PR/comments" --jq "[.[] | select(.body | startswith(\"$MARKER\"))][0].id // empty")
+          if [ -n "$EXISTING" ]; then
+            gh api -X PATCH "repos/$GITHUB_REPOSITORY/issues/comments/$EXISTING" -f body="$BODY" > /dev/null
+            echo "Updated existing preview comment on PR #$PR."
+          else
+            gh api "repos/$GITHUB_REPOSITORY/issues/$PR/comments" -f body="$BODY" > /dev/null
+            echo "Commented preview URL on PR #$PR."
+          fi

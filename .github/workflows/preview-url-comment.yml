@@ -1,0 +1,35 @@
+name: Comment preview URL on new PR
+
+# The preview itself is deployed by deploy-preview.yml on push. This only
+# covers the common push-first-then-open-PR flow, where the push-time comment
+# step finds no PR yet.
+on:
+  pull_request:
+    types: [opened, reopened]
+
+permissions:
+  pull-requests: write
+
+jobs:
+  comment:
+    # Forks can't get previews (no push access to gh-pages), so skip them.
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - name: Post preview URL comment
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BRANCH: ${{ github.head_ref }}
+        run: |
+          SAFE_NAME=$(echo "$BRANCH" | tr '/' '-')
+          PR=${{ github.event.pull_request.number }}
+          MARKER="<!-- branch-preview-url -->"
+          URL="https://travisirby.github.io/sight-words-reading-game/previews/$SAFE_NAME/"
+          BODY=$(printf '%s\n🔍 **Branch preview:** %s\n\n_Redeploys on every push to `%s`; removed when the branch is deleted. It can take a minute after this comment appears for GitHub Pages to publish._' "$MARKER" "$URL" "$BRANCH")
+          EXISTING=$(gh api "repos/$GITHUB_REPOSITORY/issues/$PR/comments" --jq "[.[] | select(.body | startswith(\"$MARKER\"))][0].id // empty")
+          if [ -z "$EXISTING" ]; then
+            gh api "repos/$GITHUB_REPOSITORY/issues/$PR/comments" -f body="$BODY" > /dev/null
+            echo "Commented preview URL on PR #$PR."
+          else
+            echo "PR #$PR already has a preview comment."
+          fi
