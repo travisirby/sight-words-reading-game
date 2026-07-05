@@ -7,7 +7,8 @@
     "dev": "vite --host",
     "build": "vite build",
     "preview": "vite preview",
-    "dev:ipad": "HTTPS=1 vite --host"
+    "dev:ipad": "HTTPS=1 vite --host",
+    "gen:tts": "node scripts/generate-tts.mjs"
   },
   "keywords": [],
   "author": "",
