@@ -6,8 +6,8 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <title>Word Runner</title>
-  <script type="module" crossorigin src="./assets/index-DPwJ-PFU.js"></script>
-  <link rel="stylesheet" crossorigin href="./assets/index-cAk2BiCp.css">
+  <script type="module" crossorigin src="./assets/index-Cgb6HaqA.js"></script>
+  <link rel="stylesheet" crossorigin href="./assets/index-esfTn5Ma.css">
 </head>
 <body>
   <!-- 3D canvas mounts here -->
@@ -27,19 +27,23 @@
       <button id="btn-toggle-mic" class="btn btn-wide">🎤 Mic Round: ON</button>
       <button id="btn-settings-close" class="btn btn-wide">✖️ Close</button>
     </div>
-    <div id="version-tag">v1.0</div>
+    <div id="version-tag">v2.0</div>
   </div>
 
-  <!-- ============ WORLD / LEVEL MAP ============ -->
-  <div id="screen-map" class="screen hidden">
+  <!-- ============ OVERWORLD MAP (3D; DOM chrome only) ============ -->
+  <div id="screen-map" class="screen map-screen hidden">
     <button id="btn-map-back" class="btn btn-round corner-top-left">⬅️</button>
-    <h2 class="map-title">🗺️ Pick a Level</h2>
-    <div id="world-scroll"></div>
+    <div id="level-banner" class="hidden">
+      <div id="banner-name">Grass Plains 1</div>
+      <div id="banner-stars">· · ·</div>
+      <button id="btn-banner-play" class="btn btn-huge">▶️ PLAY</button>
+    </div>
   </div>
 
   <!-- ============ HUD (during run) ============ -->
   <div id="hud" class="hidden">
     <div id="hud-coins">🪙 <span id="coin-count">0</span></div>
+    <div id="hud-key" class="hidden">🔑</div>
     <button id="btn-pause" class="btn btn-round btn-pause">⏸️</button>
     <button id="btn-repeat-word" class="btn btn-repeat">🔊</button>
     <div id="progress-dots"></div>
