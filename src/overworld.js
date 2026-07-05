@@ -522,7 +522,9 @@ export class Overworld {
     // Blocky clouds drifting high above the diorama (no shadow maps, so
     // they cast nothing).
     this.mapClouds = [];
-    const mat = new THREE.MeshLambertMaterial({ color: 0xffffff });
+    const mat = new THREE.MeshLambertMaterial({
+      color: 0xffffff, transparent: true, opacity: 0.45, depthWrite: false,
+    });
     const rand = mulberry32(909);
     for (let i = 0; i < 4; i++) {
       const gp = new THREE.Group();
