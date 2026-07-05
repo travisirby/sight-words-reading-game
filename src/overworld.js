@@ -73,7 +73,7 @@ export class Overworld {
     }));
     this.applyLockTints();
 
-    this.token = makeKidMesh(0.94); // ~25% bigger than the old 0.75 token
+    this.token = makeKidMesh(1.125); // 50% bigger than the old 0.75 token
     this.token.rotation.y = -Math.PI / 2; // camera-facing when idle
     const tokenBox = new THREE.BoxGeometry(1, 1, 1);
     // Fat invisible touch target: tapping the kid acts like pressing Enter
