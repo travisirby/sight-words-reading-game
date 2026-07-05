@@ -168,7 +168,16 @@ export function generateLevel({ seed, wordCount, theme, secret = false, hasKey =
         cc = { x0: s.a - 1 - w, x1: s.a - 1 };
       }
     }
-    if (cc.x0 > 12 && clearOf(cc) &&
+    // Trim the pace range to the flat run of ground around its midpoint —
+    // filler stretches step up/down, and a range straddling a step makes
+    // the critter clip into the raised blocks.
+    const mid = Math.max(0, Math.min(x() - 1, Math.round((cc.x0 + cc.x1) / 2)));
+    const y = groundY[mid];
+    let a = mid, b = mid;
+    while (a > cc.x0 && groundY[a - 1] === y) a--;
+    while (b < cc.x1 && groundY[b + 1] === y) b++;
+    cc = { x0: a, x1: b };
+    if (cc.x1 - cc.x0 >= 2 && cc.x0 > 12 && clearOf(cc) &&
         placedCritters.every((o) => cc.x1 < o.x0 - 2 || cc.x0 > o.x1 + 2)) {
       placedCritters.push(cc);
     }

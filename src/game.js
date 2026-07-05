@@ -475,7 +475,11 @@ export class Game {
         c.g.visible = false;
         continue;
       }
-      const gy = this.level.groundTopAt(c.x);
+      // Stand on the higher of the two body-edge columns so a critter
+      // near a ground step (fleeing ones cross many) rides over the
+      // raised blocks instead of clipping through them.
+      const gy = Math.max(this.level.groundTopAt(c.x - 0.45),
+                          this.level.groundTopAt(c.x + 0.45));
       c.g.position.set(c.x, gy + Math.abs(Math.sin(this.elapsed * 8 + c.x)) * 0.08, 0);
       c.g.rotation.y = c.dir > 0 ? 0.25 : -0.25;
       c.g.rotation.z = Math.sin(this.elapsed * 8 + c.x) * 0.08;
