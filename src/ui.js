@@ -4,10 +4,11 @@
 
 import { speak } from './audio.js';
 import * as store from './store.js';
+import { HOUSE_ITEMS } from './housedata.js';
 
 const $ = (id) => document.getElementById(id);
 
-const SCREENS = ['title', 'map', 'pause', 'complete', 'bonus'];
+const SCREENS = ['title', 'map', 'pause', 'complete', 'bonus', 'house'];
 
 export function init(h) {
   bindSpeak($('btn-play'), 'Play!', () => h.onPlay());
@@ -31,6 +32,15 @@ export function init(h) {
   bindSpeak($('btn-complete-map'), 'Map', () => h.onCompleteMap());
 
   bindSpeak($('btn-bonus-skip'), 'Skip', () => h.onBonusSkip());
+
+  // On the map the house is a real building in the world (overworld.js
+  // raycasts it) — only title/complete need chrome buttons.
+  bindSpeak($('btn-title-house'), 'My house!', () => h.onHouse('title'));
+  bindSpeak($('btn-complete-house'), 'My house!', () => h.onHouse('complete'));
+  bindSpeak($('btn-house-back'), 'Back', () => h.onHouseBack());
+  bindSpeak($('btn-house-shop'), 'Shop!', () => toggleShop(true));
+  bindSpeak($('btn-shop-close'), 'Close', () => toggleShop(false));
+  onBuyItem = h.onBuyItem;
 
   // Mic: press-and-hold.
   bindHold($('btn-mic'), h.onMicDown, h.onMicUp);
@@ -162,4 +172,55 @@ export function setBonusFeedback(text) {
 
 export function setMicListening(on) {
   $('btn-mic').classList.toggle('listening', on);
+}
+
+// ---------- my house / shop ----------
+
+let onBuyItem = null;
+let toastTimer = null;
+
+function toggleShop(open) {
+  $('shop-panel').classList.toggle('hidden', !open);
+  if (open) refreshShop();
+}
+
+export function showHouse() {
+  showScreen('house');
+  toggleShop(false);
+  refreshWallet();
+}
+
+export function refreshWallet() {
+  const s = store.get();
+  $('house-coins').textContent = s.coins;
+  $('house-gems').textContent = s.gems;
+}
+
+// Rebuild the whole list — it's small and this keeps owned/afford states
+// trivially in sync after every purchase.
+export function refreshShop() {
+  refreshWallet();
+  const s = store.get();
+  const list = $('shop-list');
+  list.innerHTML = '';
+  for (const item of HOUSE_ITEMS) {
+    const owned = store.ownsHouseItem(item.id);
+    const wallet = item.currency === 'gems' ? s.gems : s.coins;
+    const btn = document.createElement('button');
+    btn.className = 'shop-item' + (owned ? ' owned' : wallet < item.cost ? ' cant-afford' : '');
+    const coin = item.currency === 'gems' ? '💎' : '🪙';
+    btn.innerHTML = `<span class="shop-emoji">${item.emoji}</span>
+      <span class="shop-info"><span>${item.name}</span>
+      <span class="shop-cost">${owned ? '✅ Got it!' : `${coin} ${item.cost}`}</span></span>`;
+    btn.addEventListener('click', () => onBuyItem && onBuyItem(item));
+    list.appendChild(btn);
+  }
+}
+
+export function houseToast(text) {
+  const el = $('house-toast');
+  el.textContent = text;
+  el.classList.remove('hidden');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.add('hidden'), 1800);
 }

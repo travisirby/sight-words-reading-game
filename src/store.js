@@ -25,6 +25,8 @@ const defaults = () => ({
   secretStars: {},
   // bossBeaten[world] = true once that world's castle boss fell
   bossBeaten: {},
+  // house.owned[itemId] = true for every furniture/pet purchase
+  house: { owned: {} },
 });
 
 let state = defaults();
@@ -144,6 +146,33 @@ export function keyAnchorLevel(worldIdx) {
     if (w === worldIdx) return l;
   }
   return null;
+}
+
+// ---------- house ----------
+
+export function ownsHouseItem(id) {
+  return !!(state.house && state.house.owned && state.house.owned[id]);
+}
+
+// Atomically pay for and own an item. Returns false (and changes nothing)
+// if it's already owned or the balance can't cover it.
+export function buyHouseItem(id, cost, currency) {
+  if (ownsHouseItem(id)) return false;
+  if (currency === 'gems') {
+    if (state.gems < cost) return false;
+    state.gems -= cost;
+  } else {
+    if (state.coins < cost) return false;
+    state.coins -= cost;
+  }
+  if (!state.house) state.house = { owned: {} };
+  state.house.owned[id] = true;
+  save();
+  return true;
+}
+
+export function houseItemCount() {
+  return state.house ? Object.keys(state.house.owned || {}).length : 0;
 }
 
 // ---------- bosses ----------
