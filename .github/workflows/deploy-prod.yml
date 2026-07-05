@@ -1,0 +1,44 @@
+name: Deploy production
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+# All jobs that push to gh-pages share this group so deploys never race.
+concurrency:
+  group: gh-pages-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - run: npm run build
+
+      - name: Deploy to gh-pages root
+        uses: JamesIves/github-pages-deploy-action@v4
+        with:
+          folder: dist
+          branch: gh-pages
+          clean: true
+          clean-exclude: |
+            previews
+            previews/**
+
+      - name: Add URL to summary
+        run: |
+          echo "### 🚀 Production deployed" >> "$GITHUB_STEP_SUMMARY"
+          echo "https://travisirby.github.io/sight-words-reading-game/" >> "$GITHUB_STEP_SUMMARY"

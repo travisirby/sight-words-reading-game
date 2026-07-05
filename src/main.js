@@ -47,6 +47,7 @@ const game = new Game(renderer, {
   onDotsInit: (n) => ui.initDots(n),
   onDot: (i, cls) => ui.setDot(i, cls),
   onKey: (found) => ui.setKeyFound(found),
+  onChoice: (on) => ui.showMoveControls(on),
   onRunComplete: (res) => onRunComplete(res),
 });
 
@@ -369,6 +370,10 @@ ui.init({
   onHouse: (from) => showHouse(from),
   onHouseBack: () => leaveHouse(),
   onBuyItem: (item) => buyItem(item),
+  onMoveDown: (dir) => game.setMove('btn', dir, true),
+  onMoveUp: (dir) => game.setMove('btn', dir, false),
+  onJumpDown: () => game.running && !game.paused && game.player.jump(),
+  onJumpUp: () => {}, // every jump is full power; release does nothing
   onDevUnlock: () => {
     store.devUnlockAll(WORLDS.length);
     speak('All levels unlocked!', { rate: 1.0 });

@@ -42,15 +42,12 @@ export function init(h) {
   onBuyItem = h.onBuyItem;
 
   // Mic: press-and-hold.
-  const mic = $('btn-mic');
-  const down = (e) => { e.preventDefault(); h.onMicDown(); };
-  const up = (e) => { e.preventDefault(); h.onMicUp(); };
-  mic.addEventListener('touchstart', down, { passive: false });
-  mic.addEventListener('touchend', up, { passive: false });
-  mic.addEventListener('touchcancel', up, { passive: false });
-  mic.addEventListener('mousedown', down);
-  mic.addEventListener('mouseup', up);
-  mic.addEventListener('mouseleave', up);
+  bindHold($('btn-mic'), h.onMicDown, h.onMicUp);
+
+  // Choice-mode steering: press-and-hold arrows + jump.
+  bindHold($('btn-move-left'), () => h.onMoveDown(-1), () => h.onMoveUp(-1));
+  bindHold($('btn-move-right'), () => h.onMoveDown(1), () => h.onMoveUp(1));
+  bindHold($('btn-move-jump'), h.onJumpDown, h.onJumpUp);
 
   // Hidden dev unlock: tap the version number 5 times.
   let taps = 0;
@@ -69,6 +66,18 @@ function bindSpeak(el, label, fn) {
     speak(label, { rate: 1.0 });
     fn();
   });
+}
+
+// Press-and-hold button (mic, steering arrows, jump).
+function bindHold(el, onDown, onUp) {
+  const down = (e) => { e.preventDefault(); onDown(); };
+  const up = (e) => { e.preventDefault(); onUp(); };
+  el.addEventListener('touchstart', down, { passive: false });
+  el.addEventListener('touchend', up, { passive: false });
+  el.addEventListener('touchcancel', up, { passive: false });
+  el.addEventListener('mousedown', down);
+  el.addEventListener('mouseup', up);
+  el.addEventListener('mouseleave', up);
 }
 
 export function showScreen(name) {
@@ -113,6 +122,11 @@ export function setCoins(n) {
 
 export function setKeyFound(on) {
   $('hud-key').classList.toggle('hidden', !on);
+}
+
+// Steering controls appear only while time is frozen at a word choice.
+export function showMoveControls(on) {
+  $('move-controls').classList.toggle('hidden', !on);
 }
 
 export function initDots(count) {

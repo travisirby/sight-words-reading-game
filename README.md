@@ -4,7 +4,11 @@
 (On the iPad: open that link in Safari → Share → **Add to Home Screen** for
 fullscreen. HTTPS is built in, so the read-aloud mic round works too.)
 
-To ship changes: `npm run deploy` (builds and publishes to GitHub Pages).
+Deploys are automatic: merging to `main` redeploys the production URL above,
+and every other pushed branch gets its own preview at
+`https://travisirby.github.io/sight-words-reading-game/previews/<branch>/`
+(slashes in branch names become dashes). Previews are removed when the branch
+is deleted. See `.github/workflows/`.
 
 A Three.js sight-words game for early readers. A Mario-style 2.5D platformer
 through a Minecraft-look voxel world, with a Super Mario World-style overworld

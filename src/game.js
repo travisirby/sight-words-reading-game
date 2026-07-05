@@ -10,7 +10,8 @@ import { BossFight, BOSSES } from './boss.js';
 import { Effects } from './effects.js';
 import { createInput } from './input.js';
 import {
-  sfxCoin, sfxWrong, sfxStomp, sfxBoing, sfxKeyJingle, sfxFireworks, speak,
+  sfxCoin, sfxWrong, sfxStomp, sfxBoing, sfxKeyJingle, sfxFireworks, sfxPlink,
+  speak,
 } from './audio.js';
 import {
   WORLDS, DOLCH, PRAISE, getLevelWords, getSecretWords, getBossWords,
@@ -19,8 +20,8 @@ import {
 import * as store from './store.js';
 
 const WALK_SPEED = 4.5;
-const EVENT_SPEED = 2.7; // eased to inside word-event zones
 const STARS_SPEED = 2.5;
+const CHOICE_SPEED = 3.4; // manual left/right steering while time is frozen
 const CRITTER_COLORS = [0xff7f50, 0xba68c8, 0x4dd0e1, 0x9fa8da, 0xffb74d];
 
 const boxGeo = new THREE.BoxGeometry(1, 1, 1);
@@ -82,7 +83,7 @@ export function makeKeyMesh() {
 
 export class Game {
   // callbacks: { onCoins(n), onDotsInit(count), onDot(index, cls),
-  //              onKey(found), onRunComplete(res) }
+  //              onKey(found), onRunComplete(res), onChoice(on) }
   constructor(renderer, cb) {
     this.cb = cb;
     this.renderer = renderer;
@@ -121,6 +122,7 @@ export class Game {
         if (this.phase === 'bossIntro') this.endIntro(); // tap skips the intro
         else this.player.jump();
       },
+      onMove: (dir, held) => this.setMove('key', dir, held),
     });
 
     this.bossFight = null;
@@ -132,6 +134,8 @@ export class Game {
     this.events = [];
     this.activeEv = null;
     this.stars = null;
+    this.choice = false; // time-freeze steering mode at a word choice
+    this.moveHeld = {}; // { Lkey, Rkey, Lbtn, Rbtn } held flags
 
     // Shared context handed to word events.
     this.api = {
@@ -232,6 +236,8 @@ export class Game {
 
     this.player.reset(2, this.data.groundY[2]);
     this.speed = 0;
+    this.setChoice(false);
+    this.moveHeld = {};
     this.camera.position.set(this.player.x + 3, 4.2, 14);
 
     if (boss) {
@@ -250,6 +256,49 @@ export class Game {
   stopRun() {
     this.running = false;
     this.clearEvents();
+    this.setChoice(false);
+  }
+
+  // ---------- choice mode (time freeze at the decision spot) ----------
+
+  setMove(src, dir, held) {
+    this.moveHeld[(dir < 0 ? 'L' : 'R') + src] = held;
+  }
+
+  get moveDir() {
+    const m = this.moveHeld;
+    return ((m.Rkey || m.Rbtn) ? 1 : 0) - ((m.Lkey || m.Lbtn) ? 1 : 0);
+  }
+
+  setChoice(on) {
+    if (this.choice === on) return;
+    this.choice = on;
+    if (this.cb.onChoice) this.cb.onChoice(on);
+  }
+
+  // The zone the player may roam while frozen: null when no choice is
+  // pending, else { engage, min, max } in world x.
+  choiceZone() {
+    const ev = this.activeEv;
+    if (ev && !ev.done) {
+      if (ev.type === 'blocks') {
+        return { engage: ev.firstX - 4.5, min: ev.firstX - 6, max: ev.lastX + 1.5 };
+      }
+      // Doors: freeze before the step ledges; clampX() already walls off max.
+      return { engage: ev.wallX - 8, min: ev.wallX - 10, max: Infinity };
+    }
+    if (this.stars && !this.stars.done && this.stars.reviews.length && this.stars.pending <= 0) {
+      const vis = this.stars.stars.filter((s) => s.holder.visible && !s.taken);
+      if (vis.length) {
+        const xs = vis.map((s) => s.holder.position.x);
+        return {
+          engage: Math.min(...xs) - 4,
+          min: Math.min(...xs) - 5.5,
+          max: Math.max(...xs) + 1.5,
+        };
+      }
+    }
+    return null;
   }
 
   clearEvents() {
@@ -485,13 +534,21 @@ export class Game {
   updateRun(dt) {
     const p = this.player;
 
-    // Target speed: slows near/inside word events, stops for flag & bounces.
-    let target = WALK_SPEED;
-    if (this.activeEv && !this.activeEv.done && p.x > this.activeEv.x - 10) {
-      target = EVENT_SPEED;
+    // Choice mode: reaching the decision spot freezes the auto-run and
+    // hands the kid left/right steering (jump still works) until answered.
+    const zone = this.choiceZone();
+    if (this.choice && !zone) {
+      this.setChoice(false);
+    } else if (!this.choice && zone && p.x >= zone.engage) {
+      this.speed = 0;
+      sfxPlink(2);
+      this.setChoice(true);
     }
+
+    // Target speed: stops for flag & bounces.
+    let target = WALK_SPEED;
     if (this.phase === 'stars') target = STARS_SPEED;
-    if (this.phase === 'flag' || this.phase === 'done') target = 0;
+    if (this.phase === 'flag' || this.phase === 'done' || this.choice) target = 0;
     if (this.phase === 'bossIntro' || this.phase === 'bossDefeat') target = 0;
     this.stumbleMul = Math.min(1, this.stumbleMul + dt * 1.2);
     target *= this.stumbleMul;
@@ -500,13 +557,18 @@ export class Game {
     if (this.bounce) {
       this.updateBounce(dt);
     } else if (this.phase !== 'flag' && this.phase !== 'done') {
-      p.update(dt, this.speed, this.level, {
+      const moveSpeed = this.choice ? this.moveDir * CHOICE_SPEED : this.speed;
+      p.update(dt, moveSpeed, this.level, {
         onLand: (fall) => {
           if (fall > 6) { // soft landing sparkle, never a penalty
             this.effects.sparkle(new THREE.Vector3(p.x, p.y + 0.2, 0));
           }
         },
       });
+      // Keep him inside the frozen zone so he can't wander past the choice.
+      if (this.choice && zone) {
+        p.x = Math.min(Math.max(p.x, zone.min), zone.max);
+      }
       // Word-event walls (doors) clamp forward progress.
       if (this.activeEv && !this.activeEv.done) {
         const cx = this.activeEv.clampX();
@@ -522,7 +584,7 @@ export class Game {
       this.effects.floatText(pos, '+1');
     }
 
-    this.updateCritters(dt);
+    if (!this.choice) this.updateCritters(dt); // critters freeze with time
     this.updateKey();
     this.level.update(dt, p.x);
     this.effects.update(dt);
