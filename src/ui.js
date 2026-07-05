@@ -9,7 +9,7 @@ import { HOUSE_ITEMS } from './housedata.js';
 
 const $ = (id) => document.getElementById(id);
 
-const SCREENS = ['title', 'map', 'pause', 'complete', 'bonus', 'char', 'house'];
+const SCREENS = ['title', 'map', 'pause', 'complete', 'bonus', 'char', 'house', 'cutscene'];
 
 export function init(h) {
   bindSpeak($('btn-play'), 'Play!', () => h.onPlay());

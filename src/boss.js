@@ -22,7 +22,7 @@ export const BOSSES = [
   { name: 'Cloud Dragon', color: 0xbfe4ff },
 ];
 
-function buildBoss(wi) {
+export function buildBoss(wi) {
   const g = new THREE.Group();
   const M = (c, e = 0) => new THREE.MeshLambertMaterial({ color: c, emissive: e });
   const box = (parent, m, sx, sy, sz, x, y, z, rz = 0) => {

@@ -83,3 +83,13 @@ Vite + vanilla JS + three.js. Everything is procedural — voxel geometry, canva
 word signs, WebAudio sound effects, Web Speech API for voice — zero external
 assets. `npm run build` outputs a static site (`dist/`) that can be hosted
 anywhere, e.g. GitHub Pages (HTTPS included, so the mic works there too).
+
+## Cutscenes
+
+Story beats between levels are data-driven: scripts live in
+`src/cutscenes.js` (plain arrays of steps — camera moves, actors, spoken
+captions with highlighted sight words, big word reveals) and are played by the
+director in `src/cutscene.js`. To iterate on a scene without playing to it,
+boot straight into it with `?cutscene=<name>`, e.g.
+`http://localhost:5173/?cutscene=demo`. Tap anywhere to fast-forward a step;
+SKIP ends the scene.

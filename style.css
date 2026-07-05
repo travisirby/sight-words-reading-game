@@ -535,3 +535,85 @@ html, body {
   from { transform: translateX(-50%) scale(0.4); opacity: 0; }
   to { transform: translateX(-50%) scale(1); opacity: 1; }
 }
+
+/* ---------- cutscenes ---------- */
+/* Transparent chrome over the 3D cutscene scene; the whole screen is a
+   tap-to-advance surface, so it keeps pointer events (unlike .map-screen). */
+.cutscene-screen {
+  background: none;
+  justify-content: flex-end;
+  gap: 0;
+  padding: 0;
+}
+.cs-bar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: clamp(36px, 7vh, 64px);
+  background: #10142b;
+  z-index: 11;
+}
+.cs-bar-top { top: 0; }
+.cs-bar-bottom { bottom: 0; }
+#btn-cutscene-skip {
+  position: absolute;
+  top: calc(clamp(36px, 7vh, 64px) + 12px);
+  right: max(14px, env(safe-area-inset-right));
+  z-index: 12;
+  font-size: 22px;
+  padding: 10px 22px;
+}
+#cs-caption {
+  position: absolute;
+  bottom: calc(clamp(36px, 7vh, 64px) + 16px);
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: min(88vw, 900px);
+  font-size: clamp(26px, 4.5vw, 42px);
+  font-weight: bold;
+  text-align: center;
+  color: #fff;
+  text-shadow: 3px 3px 0 #2c3e75;
+  background: rgba(16, 20, 43, 0.72);
+  border-radius: 24px;
+  padding: 12px 30px;
+  pointer-events: none;
+  z-index: 12;
+  animation: toast-pop 0.3s cubic-bezier(0.34, 1.5, 0.5, 1);
+}
+#cs-caption .cs-hl {
+  color: #ffd93d;
+  display: inline-block;
+  animation: cs-hl-bounce 0.8s cubic-bezier(0.34, 1.5, 0.5, 1);
+}
+@keyframes cs-hl-bounce {
+  0% { transform: scale(0.6); }
+  55% { transform: scale(1.25); }
+  100% { transform: scale(1); }
+}
+#cs-word {
+  position: absolute;
+  top: 22%;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 6px;
+  pointer-events: none;
+  z-index: 12;
+}
+.cs-letter {
+  font-size: clamp(64px, 14vw, 130px);
+  font-weight: bold;
+  color: #fff;
+  background: #2c3e75;
+  border: 6px solid #ffd93d;
+  border-radius: 22px;
+  padding: 4px 18px;
+  opacity: 0;
+  transform: scale(0.3) translateY(-30px);
+}
+.cs-letter.cs-in {
+  opacity: 1;
+  transform: scale(1) translateY(0);
+  transition: transform 0.28s cubic-bezier(0.34, 1.6, 0.5, 1), opacity 0.15s;
+}
