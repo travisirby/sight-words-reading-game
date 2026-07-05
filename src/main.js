@@ -1,6 +1,9 @@
-// Boot + screen state machine. Wires ui / game / audio / speech / store.
+// Boot + screen state machine. Owns the shared renderer and the render
+// loop, dispatching to the platformer (game) or the 3D overworld (map).
 
+import * as THREE from 'three';
 import { Game } from './game.js';
+import { Overworld } from './overworld.js';
 import * as ui from './ui.js';
 import * as store from './store.js';
 import * as speech from './speech.js';
@@ -10,39 +13,102 @@ import { WORLDS, shuffle, PRAISE } from './words.js';
 store.load();
 setMuted(!store.get().sound);
 
-let game = null;
-let current = { world: 0, level: 0 };
-let lastRun = null; // { results, coins }
-let bonus = null; // active bonus round state
-
 const LEVEL_COUNTS = WORLDS.map((w) => w.levels.length);
+
+let current = { world: 0, level: 0, secret: false };
+let selected = null; // node info from the map banner
+let lastRun = null; // { results, coins, gems, stars, keyFound }
+let bonus = null; // active bonus round state
+let mode = 'map'; // which scene renders: 'map' | 'game'
 
 // ---------- iOS audio unlock on first gesture ----------
 const unlock = () => unlockAudio();
 window.addEventListener('pointerdown', unlock, { once: true });
 window.addEventListener('touchstart', unlock, { once: true });
 
-// ---------- game ----------
+// ---------- shared renderer + loop ----------
 
-function ensureGame() {
-  if (game) return game;
-  game = new Game(document.getElementById('game-container'), {
-    onCoins: (n) => ui.setCoins(n),
-    onDotsInit: (n) => ui.initDots(n),
-    onDot: (i, cls) => ui.setDot(i, cls),
-    onRunComplete: (res) => onRunComplete(res),
-  });
-  // Debug handle for automated testing (headless tabs freeze rAF,
-  // so tests step the sim manually via game.updateRun / renderer).
-  window.__wr = { game, store };
-  return game;
+const container = document.getElementById('game-container');
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+container.appendChild(renderer.domElement);
+
+const game = new Game(renderer, {
+  onCoins: (n) => ui.setCoins(n),
+  onDotsInit: (n) => ui.initDots(n),
+  onDot: (i, cls) => ui.setDot(i, cls),
+  onKey: (found) => ui.setKeyFound(found),
+  onRunComplete: (res) => onRunComplete(res),
+});
+
+const map = new Overworld(renderer, {
+  onNodeSelected: (info) => {
+    selected = info;
+    speak(info.name, { rate: 1.0 });
+    ui.showLevelBanner(info);
+  },
+  onDismiss: () => {
+    selected = null;
+    ui.hideLevelBanner();
+  },
+  onEnterKey: () => {
+    if (selected && ui.isLevelBannerVisible()) playSelected();
+    else map.walkTo(map.tokenNav); // select the node under the token
+  },
+});
+
+// Debug handle for automated testing (headless tabs freeze rAF, so tests
+// step the sim manually via game.updateRun(dt) and game.debugResolve()).
+window.__wr = { game, store, map };
+
+const clock = new THREE.Clock();
+renderer.setAnimationLoop(() => {
+  const dt = Math.min(clock.getDelta(), 0.05);
+  if (mode === 'game') {
+    game.tick(dt);
+    renderer.render(game.scene, game.camera);
+  } else {
+    map.tick(dt);
+    renderer.render(map.scene, map.camera);
+  }
+});
+
+function onResize() {
+  for (const cam of [game.camera, map.camera]) {
+    cam.aspect = window.innerWidth / window.innerHeight;
+    cam.updateProjectionMatrix();
+  }
+  renderer.setSize(window.innerWidth, window.innerHeight);
+}
+window.addEventListener('resize', onResize);
+window.addEventListener('orientationchange', onResize);
+
+// ---------- flow ----------
+
+function showMap() {
+  mode = 'map';
+  map.enter();
+  ui.showHUD(false);
+  ui.showScreen('map');
 }
 
-function startLevel(worldIdx, levelIdx) {
-  current = { world: worldIdx, level: levelIdx };
-  ensureGame().startRun(worldIdx, levelIdx);
+function startLevel(worldIdx, levelIdx, secret = false) {
+  current = { world: worldIdx, level: levelIdx, secret };
+  map.exit();
+  mode = 'game';
+  game.startRun(worldIdx, levelIdx, { secret });
   ui.showScreen(null);
   ui.showHUD(true);
+}
+
+function playSelected() {
+  if (!selected) return;
+  const info = selected;
+  selected = null;
+  ui.hideLevelBanner();
+  startLevel(info.world, info.secret ? 0 : info.level, info.secret);
 }
 
 function nextLevelOf(w, l) {
@@ -64,10 +130,27 @@ function onRunComplete(res) {
   ui.showHUD(false);
 
   const stars = computeStars(res.results);
-  store.setStars(current.world, current.level, stars);
-  store.completeLevel(current.world, current.level, LEVEL_COUNTS);
   lastRun.stars = stars;
-  lastRun.gems = 0;
+
+  if (current.secret) {
+    store.setSecretStars(current.world, stars);
+  } else {
+    const firstTime = store.getStars(current.world, current.level) === 0;
+    store.setStars(current.world, current.level, stars);
+    store.completeLevel(current.world, current.level, LEVEL_COUNTS);
+
+    // Queue map payoff animations for when we return.
+    if (firstTime) {
+      const next = nextLevelOf(current.world, current.level);
+      if (next && store.isLevelUnlocked(next.world, next.level)) {
+        map.queueReveal({ kind: 'node', world: next.world, level: next.level });
+      }
+    }
+    if (res.keyFound && !store.hasKey(current.world, current.level)) {
+      store.foundKey(current.world, current.level);
+      map.queueReveal({ kind: 'secret', world: current.world });
+    }
+  }
 
   if (speech.isAvailable() && store.get().mic && res.results.length) {
     startBonusRound(res);
@@ -77,13 +160,18 @@ function onRunComplete(res) {
 }
 
 function showSummary() {
-  const next = nextLevelOf(current.world, current.level);
+  const next = current.secret ? null : nextLevelOf(current.world, current.level);
   ui.showComplete({
     stars: lastRun.stars,
     coins: lastRun.coins,
     gems: lastRun.gems,
     hasNext: !!next && store.isLevelUnlocked(next.world, next.level),
   });
+}
+
+function backToMap() {
+  showMap(); // enter() refreshes navList first...
+  map.setTokenTo(current.world, current.level, current.secret); // ...then snap
 }
 
 // ---------- read-aloud bonus round ----------
@@ -177,10 +265,7 @@ function bonusMicUp() {
 // ---------- wire up UI ----------
 
 ui.init({
-  onPlay: () => {
-    ui.buildMap();
-    ui.showScreen('map');
-  },
+  onPlay: () => showMap(),
   onToggleSound: () => {
     const on = !store.get().sound;
     store.setSound(on);
@@ -192,32 +277,30 @@ ui.init({
     store.setMic(!store.get().mic);
     ui.updateSettingsLabels();
   },
-  onMapBack: () => ui.showScreen('title'),
-  onSelectLevel: (w, l) => startLevel(w, l),
+  onMapBack: () => {
+    map.exit();
+    ui.showScreen('title');
+  },
+  onBannerPlay: () => playSelected(),
   onPause: () => {
-    if (game) game.pause();
+    game.pause();
     ui.showScreen('pause');
   },
   onResume: () => {
     ui.showScreen(null);
-    if (game) game.resume();
+    game.resume();
   },
   onPauseMap: () => {
-    if (game) game.stopRun();
-    ui.showHUD(false);
-    ui.buildMap();
-    ui.showScreen('map');
+    game.stopRun();
+    showMap();
   },
-  onRepeatWord: () => game && game.repeatWord(),
-  onPlayAgain: () => startLevel(current.world, current.level),
+  onRepeatWord: () => game.repeatWord(),
+  onPlayAgain: () => startLevel(current.world, current.level, current.secret),
   onNextLevel: () => {
     const next = nextLevelOf(current.world, current.level);
     if (next) startLevel(next.world, next.level);
   },
-  onCompleteMap: () => {
-    ui.buildMap();
-    ui.showScreen('map');
-  },
+  onCompleteMap: () => backToMap(),
   onBonusSkip: () => {
     if (bonus) {
       bonus.advancing = true;
@@ -231,19 +314,18 @@ ui.init({
   onDevUnlock: () => {
     store.devUnlockAll();
     speak('All levels unlocked!', { rate: 1.0 });
-    ui.buildMap();
+    map.refresh();
   },
 });
 
 ui.updateSettingsLabels();
 ui.showScreen('title');
-
-// Create the 3D world right away so it warms up behind the title screen.
-ensureGame();
+map.enter(); // warm up the map scene behind the title
+map.exit(); // ...but ignore input until PLAY
 
 // Auto-pause when the tab is hidden.
 document.addEventListener('visibilitychange', () => {
-  if (document.hidden && game && game.running && !game.paused) {
+  if (document.hidden && game.running && !game.paused) {
     game.pause();
     ui.showScreen('pause');
   }

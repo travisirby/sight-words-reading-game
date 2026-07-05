@@ -108,4 +108,21 @@ export function pickDistractors(target, pool, tierList) {
   return shuffle(nearest).slice(0, 2);
 }
 
+// The 10 hardest words in a world's tier by lifetime first-try ratio.
+// Words never seen rank last; gaps fill with random picks from the tier.
+// statsFor(word) -> {seen, correct, firstTryCorrect, missed} or null.
+export function getSecretWords(worldIdx, statsFor) {
+  const tier = DOLCH[WORLDS[worldIdx].tier];
+  const scored = tier.map((w) => {
+    const s = statsFor ? statsFor(w) : null;
+    const ratio = s && s.seen > 0 ? s.firstTryCorrect / s.seen : 2; // 2 = unseen
+    return { w, ratio, r: Math.random() };
+  });
+  scored.sort((a, b) => a.ratio - b.ratio || a.r - b.r);
+  const hard = scored.filter((s) => s.ratio <= 1).slice(0, 10).map((s) => s.w);
+  const rest = shuffle(tier.filter((w) => !hard.includes(w)));
+  while (hard.length < 10 && rest.length) hard.push(rest.pop());
+  return hard;
+}
+
 export const PRAISE = ['Great job!', 'You got it!', 'Awesome!', 'Super reading!'];

@@ -42,10 +42,14 @@ html, body {
 #screen-title {
   background: linear-gradient(180deg, #4db4f5 0%, #a8e063 100%);
 }
-#screen-map {
-  background: linear-gradient(180deg, #56ccf2 0%, #b2f7b8 100%);
-  justify-content: flex-start;
-  padding-top: calc(18px + env(safe-area-inset-top));
+/* The map screen is transparent chrome over the 3D overworld — it must
+   not intercept taps meant for the canvas. */
+.map-screen {
+  background: none;
+  pointer-events: none;
+}
+.map-screen .btn {
+  pointer-events: auto;
 }
 .overlay {
   background: rgba(20, 40, 80, 0.55);
@@ -138,61 +142,36 @@ html, body {
   position: absolute;
 }
 
-/* ---------- map ---------- */
-.map-title {
-  color: #fff;
-  font-size: 42px;
-  text-shadow: 3px 3px 0 #2c3e75;
-}
-#world-scroll {
-  display: flex;
-  gap: 20px;
-  overflow-x: auto;
-  width: 100%;
-  padding: 12px 24px 30px;
-  -webkit-overflow-scrolling: touch;
-}
-.world-card {
-  flex: 0 0 auto;
-  width: 300px;
-  background: #fffbe8;
-  border: 6px solid #2c3e75;
-  border-radius: 28px;
-  padding: 18px;
+/* ---------- level banner (slides up when a node is tapped) ---------- */
+#level-banner {
+  position: absolute;
+  bottom: calc(24px + env(safe-area-inset-bottom));
+  left: 50%;
+  transform: translateX(-50%);
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
+  background: #fffbe8;
+  border: 6px solid #2c3e75;
+  border-radius: 30px;
+  padding: 20px 44px;
+  pointer-events: auto;
+  animation: banner-up 0.28s cubic-bezier(0.34, 1.5, 0.5, 1);
 }
-.world-card.locked { filter: grayscale(1); opacity: 0.6; }
-.world-emoji { font-size: 60px; }
-.world-name {
-  font-size: 26px;
+@keyframes banner-up {
+  from { transform: translateX(-50%) translateY(120%); }
+  to { transform: translateX(-50%) translateY(0); }
+}
+#banner-name {
+  font-size: 34px;
   color: #2c3e75;
   text-align: center;
 }
-.level-grid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 12px;
-  width: 100%;
-}
-.btn-level {
-  min-height: 80px;
-  font-size: 24px;
-  padding: 6px 10px;
-  border-radius: 20px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 2px;
-}
-.btn-level .lvl-stars { font-size: 17px; letter-spacing: 1px; }
-.btn-level.locked {
-  background: #cfcfcf;
-  box-shadow: 0 6px 0 #9a9a9a;
-  color: #777;
+#banner-stars {
+  font-size: 30px;
+  letter-spacing: 3px;
+  color: #2c3e75;
 }
 
 /* ---------- HUD ---------- */
@@ -212,6 +191,16 @@ html, body {
   background: rgba(44, 62, 117, 0.75);
   border-radius: 22px;
   padding: 10px 22px;
+}
+#hud-key {
+  position: absolute;
+  top: calc(90px + env(safe-area-inset-top));
+  left: calc(16px + env(safe-area-inset-left));
+  font-size: 34px;
+  background: rgba(44, 62, 117, 0.75);
+  border-radius: 22px;
+  padding: 10px 16px;
+  animation: pulse 0.9s infinite alternate;
 }
 .btn-pause {
   position: absolute;

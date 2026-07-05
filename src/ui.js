@@ -1,26 +1,15 @@
 // All DOM overlay screens. Every button speaks its label, then acts.
+// The level map itself is 3D (overworld.js) — here we only manage the
+// transparent map screen chrome + the slide-up level banner.
 
 import { speak } from './audio.js';
-import { WORLDS } from './words.js';
 import * as store from './store.js';
 
 const $ = (id) => document.getElementById(id);
 
 const SCREENS = ['title', 'map', 'pause', 'complete', 'bonus'];
 
-let handlers = {};
-
-// Speak the label, then run the action.
-function bindSpeak(el, label, fn) {
-  el.addEventListener('click', () => {
-    speak(label, { rate: 1.0 });
-    fn();
-  });
-}
-
 export function init(h) {
-  handlers = h;
-
   bindSpeak($('btn-play'), 'Play!', () => h.onPlay());
   bindSpeak($('btn-settings'), 'Settings', () => $('settings-panel').classList.toggle('hidden'));
   bindSpeak($('btn-settings-close'), 'Close', () => $('settings-panel').classList.add('hidden'));
@@ -28,12 +17,13 @@ export function init(h) {
   bindSpeak($('btn-toggle-mic'), 'Mic round', () => h.onToggleMic());
 
   bindSpeak($('btn-map-back'), 'Back', () => h.onMapBack());
+  bindSpeak($('btn-banner-play'), 'Here we go!', () => h.onBannerPlay());
 
   bindSpeak($('btn-pause'), 'Pause', () => h.onPause());
   bindSpeak($('btn-resume'), 'Resume', () => h.onResume());
   bindSpeak($('btn-pause-map'), 'Map', () => h.onPauseMap());
 
-  // Repeat button re-speaks the target word itself — don't speak a label first.
+  // Repeat button re-speaks the target word itself — no label speech first.
   $('btn-repeat-word').addEventListener('click', () => h.onRepeatWord());
 
   bindSpeak($('btn-play-again'), 'Play again!', () => h.onPlayAgain());
@@ -64,10 +54,19 @@ export function init(h) {
   });
 }
 
+// Speak the label, then run the action.
+function bindSpeak(el, label, fn) {
+  el.addEventListener('click', () => {
+    speak(label, { rate: 1.0 });
+    fn();
+  });
+}
+
 export function showScreen(name) {
   for (const s of SCREENS) {
     $(`screen-${s}`).classList.toggle('hidden', s !== name);
   }
+  if (name !== 'map') hideLevelBanner();
 }
 
 export function showHUD(on) {
@@ -80,56 +79,31 @@ export function updateSettingsLabels() {
   $('btn-toggle-mic').textContent = s.mic ? '🎤 Mic Round: ON' : '🎤 Mic Round: OFF';
 }
 
-// ---------- map ----------
+// ---------- level banner (overworld node tapped) ----------
 
-export function buildMap() {
-  const scroll = $('world-scroll');
-  scroll.innerHTML = '';
-  WORLDS.forEach((world, wi) => {
-    const card = document.createElement('div');
-    card.className = 'world-card';
-    const worldOpen = store.isWorldUnlocked(wi);
-    if (!worldOpen) card.classList.add('locked');
+export function showLevelBanner({ name, stars, completed, secret }) {
+  $('banner-name').textContent = secret ? `✨ ${name} ✨` : name;
+  $('banner-stars').textContent = stars > 0 ? '⭐'.repeat(stars) : '· · ·';
+  $('btn-banner-play').textContent = completed ? '🔁 PLAY' : '▶️ PLAY';
+  $('level-banner').classList.remove('hidden');
+}
 
-    const emoji = document.createElement('div');
-    emoji.className = 'world-emoji';
-    emoji.textContent = world.emoji;
-    const name = document.createElement('div');
-    name.className = 'world-name';
-    name.textContent = `${wi + 1}. ${world.name}`;
-    const grid = document.createElement('div');
-    grid.className = 'level-grid';
+export function hideLevelBanner() {
+  $('level-banner').classList.add('hidden');
+}
 
-    world.levels.forEach((words, li) => {
-      const btn = document.createElement('button');
-      btn.className = 'btn btn-level';
-      const open = store.isLevelUnlocked(wi, li);
-      if (open) {
-        const stars = store.getStars(wi, li);
-        btn.innerHTML = `<span>${li + 1}</span><span class="lvl-stars">${
-          '⭐'.repeat(stars) || '· · ·'
-        }</span>`;
-        btn.addEventListener('click', () => {
-          speak(`Level ${li + 1}. Here we go!`, { rate: 1.0 });
-          handlers.onSelectLevel(wi, li);
-        });
-      } else {
-        btn.classList.add('locked');
-        btn.textContent = '🔒';
-        btn.addEventListener('click', () => speak('Locked! Finish more levels first.', { rate: 1.0 }));
-      }
-      grid.appendChild(btn);
-    });
-
-    card.append(emoji, name, grid);
-    scroll.appendChild(card);
-  });
+export function isLevelBannerVisible() {
+  return !$('level-banner').classList.contains('hidden');
 }
 
 // ---------- HUD ----------
 
 export function setCoins(n) {
   $('coin-count').textContent = n;
+}
+
+export function setKeyFound(on) {
+  $('hud-key').classList.toggle('hidden', !on);
 }
 
 export function initDots(count) {

@@ -1,13 +1,19 @@
-// Voxel kid: boxes only, canvas face texture, run/jump/stumble animation.
-// Forward is -z. Lane index 0..2 -> x = -2.5, 0, +2.5.
+// Side-view voxel kid. Walks +x, jump physics with coyote time, jump
+// buffering and hold-to-boost (lighter gravity while rising & held).
+// Boxes only, canvas face texture, walk/jump/stomp/stumble animations.
 
 import * as THREE from 'three';
 import { sfxJump } from './audio.js';
 
-export const LANE_X = [-2.5, 0, 2.5];
-const LANE_TWEEN = 0.15; // seconds
-const JUMP_TIME = 0.55;
-const JUMP_HEIGHT = 1.35;
+export const KID_H = 1.7; // collision height
+export const KID_W = 0.7; // collision width
+
+const GRAVITY = -24;
+const GRAVITY_HOLD = -15; // while rising and button held
+const JUMP_V = 9.8; // full-hold apex ~3.2 blocks; tap ~1 block
+const CUT_MULT = 0.42; // early release cuts upward speed
+const COYOTE = 0.12;
+const BUFFER = 0.15;
 
 function makeFaceTexture() {
   const c = document.createElement('canvas');
@@ -32,50 +38,57 @@ function makeFaceTexture() {
   return tex;
 }
 
+// Shared kid builder — the overworld token reuses it at a smaller scale.
+export function makeKidMesh(scale = 1) {
+  const group = new THREE.Group();
+  const box = new THREE.BoxGeometry(1, 1, 1);
+  const skin = new THREE.MeshLambertMaterial({ color: 0xffcf9e });
+  const hair = new THREE.MeshLambertMaterial({ color: 0x5a3d1e });
+  const shirt = new THREE.MeshLambertMaterial({ color: 0x2979ff });
+  const pants = new THREE.MeshLambertMaterial({ color: 0x37474f });
+  const face = new THREE.MeshLambertMaterial({ map: makeFaceTexture() });
+
+  // Face on +z so the camera (side view / map view) sees it.
+  const head = new THREE.Mesh(box, [skin, hair, hair, skin, face, hair]);
+  head.scale.set(0.5, 0.5, 0.5);
+  head.position.y = 1.35;
+
+  const body = new THREE.Mesh(box, shirt);
+  body.scale.set(0.5, 0.6, 0.3);
+  body.position.y = 0.8;
+
+  const mkLimb = (mat, sx, sy) => {
+    const pivot = new THREE.Group(); // pivot at shoulder/hip
+    const m = new THREE.Mesh(box, mat);
+    m.scale.set(sx, sy, sx);
+    m.position.y = -sy / 2;
+    pivot.add(m);
+    return pivot;
+  };
+
+  const armL = mkLimb(shirt, 0.16, 0.5);
+  armL.position.set(0, 1.08, -0.34);
+  const armR = mkLimb(shirt, 0.16, 0.5);
+  armR.position.set(0, 1.08, 0.34);
+  const legL = mkLimb(pants, 0.18, 0.5);
+  legL.position.set(0, 0.5, -0.14);
+  const legR = mkLimb(pants, 0.18, 0.5);
+  legR.position.set(0, 0.5, 0.14);
+
+  group.add(head, body, armL, armR, legL, legR);
+  group.scale.setScalar(scale);
+  group.userData.parts = {
+    head, body, armL, armR, legL, legR,
+    mats: [skin, hair, shirt, pants],
+  };
+  return group;
+}
+
 export class Player {
   constructor(scene) {
-    this.group = new THREE.Group();
+    this.group = makeKidMesh(1);
     scene.add(this.group);
-
-    const box = new THREE.BoxGeometry(1, 1, 1);
-    const skin = new THREE.MeshLambertMaterial({ color: 0xffcf9e });
-    const hair = new THREE.MeshLambertMaterial({ color: 0x5a3d1e });
-    const shirt = new THREE.MeshLambertMaterial({ color: 0x2979ff });
-    const pants = new THREE.MeshLambertMaterial({ color: 0x37474f });
-    const face = new THREE.MeshLambertMaterial({ map: makeFaceTexture() });
-    this.flashMats = [skin, hair, shirt, pants];
-
-    // Head: face on -z (forward), hair on top and on +z (camera side).
-    const head = new THREE.Mesh(box, [skin, skin, hair, skin, hair, face]);
-    head.scale.set(0.5, 0.5, 0.5);
-    head.position.y = 1.35;
-
-    const body = new THREE.Mesh(box, shirt);
-    body.scale.set(0.5, 0.6, 0.3);
-    body.position.y = 0.8;
-
-    const mkLimb = (mat, sx, sy) => {
-      // Pivot at the top so it swings from shoulder/hip.
-      const pivot = new THREE.Group();
-      const m = new THREE.Mesh(box, mat);
-      m.scale.set(sx, sy, sx);
-      m.position.y = -sy / 2;
-      pivot.add(m);
-      return pivot;
-    };
-
-    this.armL = mkLimb(shirt, 0.16, 0.5);
-    this.armL.position.set(-0.34, 1.08, 0);
-    this.armR = mkLimb(shirt, 0.16, 0.5);
-    this.armR.position.set(0.34, 1.08, 0);
-    this.legL = mkLimb(pants, 0.18, 0.5);
-    this.legL.position.set(-0.14, 0.5, 0);
-    this.legR = mkLimb(pants, 0.18, 0.5);
-    this.legR.position.set(0.14, 0.5, 0);
-
-    this.body = body;
-    this.head = head;
-    this.group.add(head, body, this.armL, this.armR, this.legL, this.legR);
+    this.parts = this.group.userData.parts;
 
     // Fake blob shadow (no shadow maps).
     const shadowGeo = new THREE.CircleGeometry(0.5, 16);
@@ -84,108 +97,158 @@ export class Player {
       shadowGeo,
       new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.3, depthWrite: false })
     );
-    this.shadow.position.y = 0.02;
     scene.add(this.shadow);
 
-    this.lane = 1;
-    this.laneFrom = LANE_X[1];
-    this.laneTo = LANE_X[1];
-    this.laneT = 1;
-    this.jumpT = -1; // -1 = grounded
+    this.reset(0, 0);
+  }
+
+  reset(x, y) {
+    this.x = x;
+    this.y = y;
+    this.vy = 0;
+    this.grounded = true;
+    this.holding = false;
+    this.buffer = 0;
+    this.coyote = 0;
+    this.fallPeak = y;
     this.stumbleT = 0;
-    this.runPhase = 0;
-    this.z = 0;
+    this.squashT = 0;
+    this.walkPhase = 0;
+    this.faceYaw = 0;
+    this.group.position.set(x, y, 0);
+    this.group.rotation.set(0, 0, 0);
+    this.group.scale.setScalar(1);
+    for (const m of this.parts.mats) m.emissive.setHex(0x000000);
   }
 
-  reset() {
-    this.lane = 1;
-    this.laneFrom = this.laneTo = LANE_X[1];
-    this.laneT = 1;
-    this.jumpT = -1;
-    this.stumbleT = 0;
-    this.z = 0;
-    this.group.position.set(0, 0, 0);
+  jumpStart() {
+    this.holding = true;
+    this.buffer = BUFFER;
   }
 
-  moveLane(dir) {
-    const next = this.lane + dir;
-    if (next < 0 || next > 2) return;
-    this.lane = next;
-    this.laneFrom = this.group.position.x;
-    this.laneTo = LANE_X[next];
-    this.laneT = 0;
+  jumpEnd() {
+    this.holding = false;
+    if (!this.grounded && this.vy > 0) this.vy *= CUT_MULT;
   }
 
-  jump() {
-    if (this.jumpT >= 0) return; // no double jump
-    this.jumpT = 0;
-    sfxJump();
-  }
-
-  get isAirborne() {
-    return this.jumpT >= 0;
+  // External bounce (critter stomp, bonk pushdown, ...).
+  bounce(v) {
+    this.vy = v;
+    this.grounded = false;
+    this.fallPeak = this.y;
   }
 
   stumble() {
     this.stumbleT = 0.6;
-    for (const m of this.flashMats) m.emissive.setHex(0xaa2222);
+    for (const m of this.parts.mats) m.emissive.setHex(0xaa2222);
   }
 
-  update(dt, speed) {
-    this.z -= speed * dt;
-    this.group.position.z = this.z;
+  get isAirborne() {
+    return !this.grounded;
+  }
 
-    // Lane tween (ease-out cubic).
-    if (this.laneT < 1) {
-      this.laneT = Math.min(1, this.laneT + dt / LANE_TWEEN);
-      const e = 1 - Math.pow(1 - this.laneT, 3);
-      this.group.position.x = this.laneFrom + (this.laneTo - this.laneFrom) * e;
+  // level: { groundTopAt(x), floorAt(x, feetY) }
+  // cb: { onLand(fallDist) } — fired on every landing with fall height.
+  update(dt, speed, level, cb) {
+    // ---- horizontal auto-walk; walls (ground rises) block until jumped ----
+    if (speed > 0) {
+      const nx = this.x + speed * dt;
+      const wallTop = level.groundTopAt(nx + KID_W / 2);
+      if (wallTop <= this.y + 0.25) this.x = nx;
+      // else: blocked — run in place until a jump clears it
     }
 
-    // Jump parabola.
-    let y = 0;
-    if (this.jumpT >= 0) {
-      this.jumpT += dt;
-      const t = this.jumpT / JUMP_TIME;
-      if (t >= 1) {
-        this.jumpT = -1;
+    // ---- vertical ----
+    this.buffer -= dt;
+    this.coyote -= dt;
+    if (this.grounded) this.coyote = COYOTE;
+
+    if (this.buffer > 0 && (this.grounded || this.coyote > 0)) {
+      this.vy = JUMP_V;
+      this.grounded = false;
+      this.buffer = 0;
+      this.coyote = 0;
+      this.fallPeak = this.y;
+      sfxJump();
+    }
+
+    if (!this.grounded) {
+      const g = this.holding && this.vy > 0 ? GRAVITY_HOLD : GRAVITY;
+      const prevY = this.y;
+      this.vy += g * dt;
+      this.y += this.vy * dt;
+      this.fallPeak = Math.max(this.fallPeak, this.y);
+      if (this.vy <= 0) {
+        const floor = level.floorAt(this.x, prevY + 0.05);
+        if (floor !== null && this.y <= floor) {
+          this.y = floor;
+          this.vy = 0;
+          this.grounded = true;
+          this.squashT = 0.12;
+          if (cb && cb.onLand) cb.onLand(this.fallPeak - floor);
+        }
+      }
+    } else {
+      // Follow floor; walked off an edge -> start falling (coyote grace).
+      const floor = level.floorAt(this.x, this.y + 0.05);
+      if (floor < this.y - 0.02) {
+        this.grounded = false;
+        this.vy = 0;
+        this.fallPeak = this.y;
       } else {
-        y = JUMP_HEIGHT * 4 * t * (1 - t);
+        this.y = floor;
       }
     }
 
-    // Run cycle.
-    this.runPhase += dt * speed * 1.4;
-    const swing = Math.sin(this.runPhase);
-    if (this.jumpT >= 0) {
-      // Arms up in the air.
-      this.armL.rotation.x = -2.4;
-      this.armR.rotation.x = -2.4;
-      this.legL.rotation.x = 0.5;
-      this.legR.rotation.x = -0.3;
+    // ---- animation ----
+    const p = this.parts;
+    if (!this.grounded) {
+      p.armL.rotation.z = 2.4;
+      p.armR.rotation.z = 2.4;
+      p.legL.rotation.z = -0.5;
+      p.legR.rotation.z = 0.3;
     } else {
-      this.armL.rotation.x = swing * 0.9;
-      this.armR.rotation.x = -swing * 0.9;
-      this.legL.rotation.x = -swing * 0.9;
-      this.legR.rotation.x = swing * 0.9;
+      this.walkPhase += dt * Math.max(speed, 0.001) * 2.4;
+      const swing = speed > 0.2 ? Math.sin(this.walkPhase) : 0;
+      p.armL.rotation.z = swing * 0.9;
+      p.armR.rotation.z = -swing * 0.9;
+      p.legL.rotation.z = -swing * 0.9;
+      p.legR.rotation.z = swing * 0.9;
     }
-    const bob = this.jumpT >= 0 ? 0 : Math.abs(Math.cos(this.runPhase)) * 0.06;
-    this.group.position.y = y + bob;
+    const bob = this.grounded && speed > 0.2 ? Math.abs(Math.cos(this.walkPhase)) * 0.06 : 0;
 
-    // Stumble: brief backward tilt + red flash.
+    // Three-quarter view while moving: turn ~55° toward the direction of
+    // travel (+x) so the run reads as forward motion but the face (on +z)
+    // stays visible; ease back to camera-facing when idle.
+    const targetYaw = speed > 0.2 ? 0.96 : 0;
+    this.faceYaw += (targetYaw - this.faceYaw) * Math.min(1, dt * 5);
+    this.group.rotation.y = this.faceYaw;
+
+    // Landing squash.
+    let sy = 1;
+    if (this.squashT > 0) {
+      this.squashT -= dt;
+      sy = 0.85 + 0.15 * (1 - this.squashT / 0.12);
+    }
+    this.group.scale.set(1, sy, 1);
+    this.group.position.set(this.x, this.y + bob, 0);
+
+    // Stumble: brief wobble + red flash.
     if (this.stumbleT > 0) {
       this.stumbleT -= dt;
-      this.group.rotation.x = Math.sin(this.stumbleT * 10) * 0.25 * (this.stumbleT / 0.6);
+      this.group.rotation.z = Math.sin(this.stumbleT * 10) * 0.25 * (this.stumbleT / 0.6);
       if (this.stumbleT <= 0) {
-        this.group.rotation.x = 0;
-        for (const m of this.flashMats) m.emissive.setHex(0x000000);
+        this.group.rotation.z = 0;
+        for (const m of this.parts.mats) m.emissive.setHex(0x000000);
       }
     }
 
-    // Blob shadow follows on the ground, shrinks while airborne.
-    this.shadow.position.x = this.group.position.x;
-    this.shadow.position.z = this.z;
-    const sc = 1 - Math.min(0.5, y * 0.35);
+    // Blob shadow on whatever floor is below, shrinks with height.
+    const under = level.floorAt(this.x, this.y + 0.05);
+    this.shadow.position.set(this.x, under + 0.02, 0);
+    const h = this.y - under;
+    const sc = Math.max(0.4, 1 - h * 0.12);
     this.shadow.scale.set(sc, 1, sc);
+    this.shadow.material.opacity = 0.3 * Math.max(0.3, 1 - h * 0.1);
   }
 }

@@ -26,19 +26,23 @@
       <button id="btn-toggle-mic" class="btn btn-wide">🎤 Mic Round: ON</button>
       <button id="btn-settings-close" class="btn btn-wide">✖️ Close</button>
     </div>
-    <div id="version-tag">v1.0</div>
+    <div id="version-tag">v2.0</div>
   </div>
 
-  <!-- ============ WORLD / LEVEL MAP ============ -->
-  <div id="screen-map" class="screen hidden">
+  <!-- ============ OVERWORLD MAP (3D; DOM chrome only) ============ -->
+  <div id="screen-map" class="screen map-screen hidden">
     <button id="btn-map-back" class="btn btn-round corner-top-left">⬅️</button>
-    <h2 class="map-title">🗺️ Pick a Level</h2>
-    <div id="world-scroll"></div>
+    <div id="level-banner" class="hidden">
+      <div id="banner-name">Grass Plains 1</div>
+      <div id="banner-stars">· · ·</div>
+      <button id="btn-banner-play" class="btn btn-huge">▶️ PLAY</button>
+    </div>
   </div>
 
   <!-- ============ HUD (during run) ============ -->
   <div id="hud" class="hidden">
     <div id="hud-coins">🪙 <span id="coin-count">0</span></div>
+    <div id="hud-key" class="hidden">🔑</div>
     <button id="btn-pause" class="btn btn-round btn-pause">⏸️</button>
     <button id="btn-repeat-word" class="btn btn-repeat">🔊</button>
     <div id="progress-dots"></div>

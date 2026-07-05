@@ -6,10 +6,28 @@ fullscreen. HTTPS is built in, so the read-aloud mic round works too.)
 
 To ship changes: `npm run deploy` (builds and publishes to GitHub Pages).
 
-A Three.js sight-words game for early readers. Mario-style auto-runner through a
-Minecraft-look voxel world. The game **speaks** a Dolch sight word and the player
-steers through the gate showing that word — reading by ear-to-eye recognition.
-No failure states, no timers, just coins, confetti, and encouragement.
+A Three.js sight-words game for early readers. A Mario-style 2.5D platformer
+through a Minecraft-look voxel world, with a Super Mario World-style overworld
+map that opens up as you beat levels. The game **speaks** a Dolch sight word and
+the player answers by playing — reading by ear-to-eye recognition. No failure
+states, no timers, just coins, confetti, and encouragement.
+
+## How it plays
+
+- **Auto-walk platformer**: the character walks right on his own; tap anywhere
+  to jump (hold for a higher jump). Coyote time and jump buffering keep it
+  forgiving for small hands.
+- **Word events** inside each level:
+  - **? Blocks** — bonk the spoken word from below, Mario-style
+  - **Word doors** — jump to the tier with the right word to open the way
+  - **Flag stars** — review words at the finish flagpole for bonus gems
+- **Critters** can be stomped for coins; touching one just costs a coin.
+- **Overworld map**: a voxel diorama journey across 5 regions. Beating a level
+  reveals the path to the next node block-by-block. Locked regions loom ahead,
+  darkened, until you reach them.
+- **Golden keys & secret levels**: some levels hide a key on a hard-to-reach
+  platform. Find it to reveal a purple secret path to that world's secret
+  level — loaded with the 10 words he personally finds hardest, and extra coins.
 
 ## Play on this Mac
 
@@ -44,11 +62,13 @@ everything else still works.
   Crystal Caves 💎, Sky Islands ☁️.
 - **Hear it, find it** — the word is spoken, never shown in the HUD; the 🔊 button
   repeats it anytime, and it auto-repeats if he hesitates.
-- **Gentle retry** — a wrong gate re-asks the same word seconds later, and missed
-  words come back for extra practice at the end of the run and in future runs.
+- **Gentle retry** — a wrong block/door re-asks the same word on the spot, and
+  missed words come back for extra practice in future runs (and fill the secret
+  levels).
 - **Read it aloud** — after each level, he reads 3 words into the mic for bonus gems.
-- **Progress** — stars per level, per-word mastery stats, coins/gems, all saved
-  on-device (localStorage). Finishing a level unlocks the next.
+- **Progress** — stars per level, per-word mastery stats, coins/gems, keys and
+  secret paths, all saved on-device (localStorage). Finishing a level unlocks
+  the next.
 
 Tip for grown-ups: tap the `v1.0` label on the title screen 5 times to unlock all
 levels.

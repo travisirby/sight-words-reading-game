@@ -120,6 +120,45 @@ export function sfxFireworks() {
   }
 }
 
+// Rising plink for the map path reveal: pass the tile index for pitch.
+export function sfxPlink(i = 0) {
+  const f = 587 * Math.pow(2, (i % 16) / 12);
+  tone({ type: 'triangle', from: f, dur: 0.12, vol: 0.25 });
+  tone({ type: 'sine', from: f * 2, dur: 0.09, vol: 0.08 });
+}
+
+export function sfxBonk() {
+  tone({ type: 'square', from: 150, to: 70, dur: 0.14, vol: 0.35 });
+}
+
+export function sfxStomp() {
+  tone({ type: 'square', from: 320, to: 60, dur: 0.16, vol: 0.35 });
+  tone({ type: 'sine', from: 90, dur: 0.1, at: 0.02, vol: 0.3 });
+}
+
+export function sfxBoing() {
+  tone({ type: 'sine', from: 180, to: 720, dur: 0.28, vol: 0.35 });
+  tone({ type: 'sine', from: 195, to: 750, dur: 0.28, at: 0.03, vol: 0.18 });
+}
+
+export function sfxDoorOpen() {
+  tone({ type: 'sawtooth', from: 110, to: 330, dur: 0.35, vol: 0.16 });
+  tone({ type: 'triangle', from: 523, dur: 0.18, at: 0.28, vol: 0.3 });
+  tone({ type: 'triangle', from: 784, dur: 0.24, at: 0.38, vol: 0.3 });
+}
+
+export function sfxKeyJingle() {
+  const notes = [1047, 1319, 1568, 2093, 1568, 2093];
+  notes.forEach((f, i) => {
+    tone({ type: 'triangle', from: f, dur: 0.14, at: i * 0.08, vol: 0.3 });
+  });
+}
+
+export function sfxStarGrab() {
+  tone({ type: 'sine', from: 600, to: 1800, dur: 0.3, vol: 0.35 });
+  tone({ type: 'triangle', from: 1200, dur: 0.2, at: 0.14, vol: 0.25 });
+}
+
 // ---- TTS ----
 
 function pickVoice() {

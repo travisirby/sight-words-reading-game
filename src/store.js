@@ -1,6 +1,8 @@
-// localStorage persistence. Single JSON blob under wordRunner.v1.
+// localStorage persistence. Single JSON blob under wordRunner.v2.
+// Migrates from wordRunner.v1 (same shapes; v2 adds keys/secret fields).
 
-const KEY = 'wordRunner.v1';
+const KEY = 'wordRunner.v2';
+const OLD_KEY = 'wordRunner.v1';
 
 const defaults = () => ({
   coins: 0,
@@ -14,6 +16,12 @@ const defaults = () => ({
   stars: {},
   // frontier of progression
   unlocked: { world: 0, level: 0 },
+  // keys['w-l'] = true when the golden key in that level was collected
+  keys: {},
+  // secretUnlocked[world] = true once any key in that world is found
+  secretUnlocked: {},
+  // secretStars[world] = 0..3
+  secretStars: {},
 });
 
 let state = defaults();
@@ -21,7 +29,17 @@ let state = defaults();
 export function load() {
   try {
     const raw = localStorage.getItem(KEY);
-    if (raw) state = { ...defaults(), ...JSON.parse(raw) };
+    if (raw) {
+      state = { ...defaults(), ...JSON.parse(raw) };
+    } else {
+      const old = localStorage.getItem(OLD_KEY);
+      if (old) {
+        // v1 fields (words/coins/gems/sound/mic/stars/unlocked/devUnlocked)
+        // carry over 1:1 — world/level indices are unchanged in v2.
+        state = { ...defaults(), ...JSON.parse(old) };
+        save();
+      }
+    }
   } catch (e) {
     state = defaults();
   }
@@ -89,6 +107,43 @@ export function setStars(worldIdx, levelIdx, stars) {
   save();
 }
 
+export function getSecretStars(worldIdx) {
+  return state.secretStars[worldIdx] || 0;
+}
+
+export function setSecretStars(worldIdx, stars) {
+  state.secretStars[worldIdx] = Math.max(state.secretStars[worldIdx] || 0, stars);
+  save();
+}
+
+// ---------- golden keys / secret levels ----------
+
+export function hasKey(worldIdx, levelIdx) {
+  return !!state.keys[`${worldIdx}-${levelIdx}`];
+}
+
+// Persists forever, even across replays of the level.
+export function foundKey(worldIdx, levelIdx) {
+  state.keys[`${worldIdx}-${levelIdx}`] = true;
+  state.secretUnlocked[worldIdx] = true;
+  save();
+}
+
+export function isSecretUnlocked(worldIdx) {
+  return state.devUnlocked || !!state.secretUnlocked[worldIdx];
+}
+
+// The level whose key first opened this world's secret path (for the map).
+export function keyAnchorLevel(worldIdx) {
+  for (const k of Object.keys(state.keys)) {
+    const [w, l] = k.split('-').map(Number);
+    if (w === worldIdx) return l;
+  }
+  return null;
+}
+
+// ---------- progression ----------
+
 // Advance the unlock frontier after finishing a level.
 export function completeLevel(worldIdx, levelIdx, worldLevelCounts) {
   const u = state.unlocked;
@@ -114,7 +169,7 @@ export function isWorldUnlocked(worldIdx) {
 }
 
 export function devUnlockAll() {
-  state.devUnlocked = true;
+  state.devUnlocked = true; // also unlocks secrets via isSecretUnlocked
   save();
 }
 
