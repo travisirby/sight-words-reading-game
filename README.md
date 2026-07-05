@@ -1,5 +1,11 @@
 # Word Runner 🏃🪙
 
+**Play it now: https://travisirby.github.io/sight-words-reading-game/**
+(On the iPad: open that link in Safari → Share → **Add to Home Screen** for
+fullscreen. HTTPS is built in, so the read-aloud mic round works too.)
+
+To ship changes: `npm run deploy` (builds and publishes to GitHub Pages).
+
 A Three.js sight-words game for early readers. Mario-style auto-runner through a
 Minecraft-look voxel world. The game **speaks** a Dolch sight word and the player
 steers through the gate showing that word — reading by ear-to-eye recognition.
