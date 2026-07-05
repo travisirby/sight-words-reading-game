@@ -1,11 +1,13 @@
 // The player's house: a cutaway diorama (front wall open toward the camera)
 // on a grass island. Purchased catalog items from housedata.js pop into fixed
 // spots inside or in the yard; boss trophies line a shelf on the back wall.
-// No pointer input here — the DOM overlay owns all interaction, so the camera
-// is a fixed 3/4 view with a very slow drift for life.
+// The kid stands in the yard and walks wherever you tap (lawn or floor),
+// routing through the front doorway; buttons/shop stay on the DOM overlay.
+// The camera is a fixed 3/4 view with a very slow drift for life.
 
 import * as THREE from 'three';
 import { Effects } from './effects.js';
+import { makeKidMesh, applyLook, currentLook } from './player.js';
 import * as store from './store.js';
 
 const boxGeo = new THREE.BoxGeometry(1, 1, 1);
@@ -15,6 +17,17 @@ const sphereGeo = new THREE.SphereGeometry(0.5, 10, 8);
 
 const FLOOR_Y = 0.3; // top of the house floor slab (interior items stand here)
 const GRASS_Y = 0.0; // top of the lawn (yard items stand here)
+
+// Walkable geometry for the tap-to-walk kid. FOOT is the house footprint
+// (walls included, small margin) that outdoor walks must route around;
+// INSIDE is the reachable interior; LAWN is the island edge minus a margin.
+const FOOT = { minX: -5.75, maxX: 5.75, minZ: -6.35, maxZ: 1.35 };
+const INSIDE = { minX: -4.9, maxX: 4.9, minZ: -5.4, maxZ: 0.6 };
+const LAWN = { minX: -12.4, maxX: 12.4, minZ: -8.4, maxZ: 12.4 };
+const DOOR_HALF = 2.6;   // doorway waypoints clamp to |x| <= this
+const WALK_SPEED = 3.6;  // units/s
+
+const inRect = (r, x, z) => x > r.minX && x < r.maxX && z > r.minZ && z < r.maxZ;
 const TROPHY_TINTS = [0xffd54a, 0xffc233, 0xffe082, 0xf5b942, 0xffdb6e];
 
 function lambert(hex, emissive = 0x000000) {
@@ -79,6 +92,16 @@ export class House {
     this.buildTrophyShelf();
     this.buildClouds();
 
+    // The kid: stands on the stone path, walks to wherever you tap.
+    this.kid = makeKidMesh(0.85);
+    this.kidHome = new THREE.Vector3(0.6, GRASS_Y, 3.4);
+    this.kid.position.copy(this.kidHome);
+    this.kid.rotation.y = -Math.PI / 4; // face the 3/4 camera when idle
+    this.scene.add(this.kid);
+    this.walkPath = null; // { pts, cum, dist, s, seg }
+    this.kidY = GRASS_Y;  // eased ground height (floor <-> lawn step)
+    this.attachInput();
+
     // 3/4 view: house interior on the left, yard front-right.
     this.camBase = new THREE.Vector3(10.5, 10.5, 16.5);
     this.camLook = new THREE.Vector3(-0.5, 1.2, 0.5);
@@ -95,6 +118,7 @@ export class House {
     const dirt = box(lambert(0x8d6b45), 0, -1.55, 2, 25, 1.5, 21);
     const dirt2 = box(lambert(0x77552f), 0, -2.7, 2, 22, 0.9, 18);
     this.scene.add(grass, dirt, dirt2);
+    this.grassMesh = grass; // tap-to-walk raycast target
 
     // Checker mow-lines: lighter strips across the lawn.
     const light = lambert(0x7bd158);
@@ -127,7 +151,9 @@ export class House {
     const wallDark = lambert(0xecd4a4);
     const g = new THREE.Group();
 
-    g.add(box(lambert(0xdba15f), 0, 0.15, -2.5, 11.2, 0.3, 7.4)); // wood floor
+    const floor = box(lambert(0xdba15f), 0, 0.15, -2.5, 11.2, 0.3, 7.4); // wood floor
+    g.add(floor);
+    this.floorMesh = floor; // tap-to-walk raycast target
     g.add(box(wall, 0, 1.8, -5.9, 11.2, 3.0, 0.35));              // back wall
     g.add(box(wallDark, -5.4, 1.8, -2.5, 0.35, 3.0, 7.2));        // left wall
     g.add(box(wallDark, 5.4, 1.8, -2.5, 0.35, 3.0, 7.2));         // right wall
@@ -590,11 +616,198 @@ export class House {
     this.effects.sparkle(p);
   }
 
+  // ---------- tap-to-walk ----------
+
+  attachInput() {
+    const el = this.renderer.domElement;
+    this.raycaster = new THREE.Raycaster();
+    let down = null;
+    const onDown = (e) => {
+      if (!this.active) return;
+      if (e.target && e.target.closest && e.target.closest('button')) return;
+      down = { x: e.clientX, y: e.clientY };
+    };
+    const onUp = (e) => {
+      if (!this.active || !down) return;
+      const moved = Math.hypot(e.clientX - down.x, e.clientY - down.y);
+      down = null;
+      if (moved > 10) return; // a drag, not a tap
+      this.tap(e.clientX, e.clientY);
+    };
+    if (window.PointerEvent) {
+      el.addEventListener('pointerdown', onDown);
+      window.addEventListener('pointerup', onUp);
+    } else {
+      el.addEventListener('mousedown', onDown);
+      window.addEventListener('mouseup', onUp);
+      el.addEventListener('touchstart', (e) => onDown(e.changedTouches[0]), { passive: true });
+      window.addEventListener('touchend', (e) => onUp(e.changedTouches[0]));
+    }
+  }
+
+  tap(cx, cy) {
+    const ndc = new THREE.Vector2(
+      (cx / window.innerWidth) * 2 - 1,
+      -(cy / window.innerHeight) * 2 + 1
+    );
+    this.raycaster.setFromCamera(ndc, this.camera);
+    const hits = this.raycaster.intersectObjects(
+      [this.floorMesh, this.grassMesh], false
+    );
+    if (!hits.length) return;
+    const p = hits[0].point;
+    const target = this.clampTarget({ x: p.x, z: p.z });
+    const pts = this.routeTo(target);
+    if (!pts) return;
+    // Cumulative arc length so the kid walks at constant speed.
+    const cum = [0];
+    for (let i = 1; i < pts.length; i++) {
+      cum.push(cum[i - 1] + Math.hypot(pts[i].x - pts[i - 1].x, pts[i].z - pts[i - 1].z));
+    }
+    const dist = cum[cum.length - 1];
+    if (dist < 0.15) return; // tapped where the kid already stands
+    this.walkPath = { pts, cum, dist, s: 0, seg: 0 };
+    this.effects.sparkle(new THREE.Vector3(
+      target.x, this.groundY(target) + 0.3, target.z
+    ));
+  }
+
+  // Interior taps stay inside the walls; yard taps stay on the lawn.
+  clampTarget(p) {
+    const r = inRect(FOOT, p.x, p.z) ? INSIDE : LAWN;
+    return {
+      x: Math.max(r.minX, Math.min(r.maxX, p.x)),
+      z: Math.max(r.minZ, Math.min(r.maxZ, p.z)),
+    };
+  }
+
+  groundY(p) {
+    return inRect(FOOT, p.x, p.z) ? FLOOR_Y : GRASS_Y;
+  }
+
+  // True if the straight a->b line clips the house footprint (sampled).
+  crossesHouse(a, b) {
+    const steps = Math.ceil(Math.hypot(b.x - a.x, b.z - a.z) / 0.4);
+    for (let k = 1; k < steps; k++) {
+      const t = k / steps;
+      if (inRect(FOOT, a.x + (b.x - a.x) * t, a.z + (b.z - a.z) * t)) return true;
+    }
+    return false;
+  }
+
+  // Shortest outdoor path around the house via its yard corners (Dijkstra
+  // over start + 4 corners + goal; edges are footprint-free straight lines).
+  outdoorLeg(a, b) {
+    if (!this.crossesHouse(a, b)) return [b];
+    const nodes = [
+      a,
+      { x: FOOT.minX - 1.1, z: FOOT.maxZ + 1.0 }, { x: FOOT.maxX + 1.1, z: FOOT.maxZ + 1.0 },
+      { x: FOOT.minX - 1.1, z: FOOT.minZ - 1.0 }, { x: FOOT.maxX + 1.1, z: FOOT.minZ - 1.0 },
+      b,
+    ];
+    const n = nodes.length;
+    const dist = Array(n).fill(Infinity);
+    const prev = Array(n).fill(-1);
+    const done = Array(n).fill(false);
+    dist[0] = 0;
+    for (;;) {
+      let u = -1;
+      for (let i = 0; i < n; i++) if (!done[i] && (u < 0 || dist[i] < dist[u])) u = i;
+      if (u < 0 || dist[u] === Infinity || u === n - 1) break;
+      done[u] = true;
+      for (let v = 1; v < n; v++) {
+        if (done[v] || this.crossesHouse(nodes[u], nodes[v])) continue;
+        const d = dist[u] + Math.hypot(nodes[v].x - nodes[u].x, nodes[v].z - nodes[u].z);
+        if (d < dist[v]) { dist[v] = d; prev[v] = u; }
+      }
+    }
+    if (prev[n - 1] < 0) return [b]; // shouldn't happen; walk straight
+    const out = [];
+    for (let v = n - 1; v > 0; v = prev[v]) out.unshift(nodes[v]);
+    return out;
+  }
+
+  // Waypoints from the kid to the target: through the front doorway when
+  // crossing inside<->outside, around the yard corners when the straight
+  // outdoor line would clip the house, and through the room-divider gap
+  // when crossing between the two rooms at the back.
+  routeTo(target) {
+    const from = { x: this.kid.position.x, z: this.kid.position.z };
+    const aIn = inRect(FOOT, from.x, from.z);
+    const bIn = inRect(FOOT, target.x, target.z);
+    const pts = [from];
+    if (aIn !== bIn) {
+      const doorX = Math.max(-DOOR_HALF, Math.min(DOOR_HALF, (aIn ? from : target).x));
+      const inner = { x: doorX, z: 0.4 };
+      const outer = { x: doorX, z: 2.0 };
+      if (aIn) {
+        pts.push(inner, outer, ...this.outdoorLeg(outer, target));
+      } else {
+        pts.push(...this.outdoorLeg(from, outer), inner, target);
+      }
+    } else if (!aIn) {
+      pts.push(...this.outdoorLeg(from, target));
+    } else {
+      // Divider wall at x=-0.6 spans z -5.8..-3.4; detour via its gap when
+      // the straight line would cross it.
+      if ((from.x + 0.6) * (target.x + 0.6) < 0) {
+        const t = (-0.6 - from.x) / (target.x - from.x);
+        const zc = from.z + (target.z - from.z) * t;
+        if (zc < -3.2) pts.push({ x: -0.6, z: -2.7 });
+      }
+      pts.push(target);
+    }
+    if (pts[pts.length - 1] !== target) pts.push(target);
+    return pts;
+  }
+
+  updateWalk(dt) {
+    const w = this.walkPath;
+    const parts = this.kid.userData.parts;
+    w.s = Math.min(w.dist, w.s + dt * WALK_SPEED);
+    while (w.seg < w.pts.length - 2 && w.cum[w.seg + 1] < w.s) w.seg++;
+    const a = w.pts[w.seg];
+    const b = w.pts[w.seg + 1];
+    const segLen = w.cum[w.seg + 1] - w.cum[w.seg];
+    const f = segLen > 0 ? (w.s - w.cum[w.seg]) / segLen : 1;
+    const px = a.x + (b.x - a.x) * f;
+    const pz = a.z + (b.z - a.z) * f;
+    // Face the walk direction (+x local forward), easing the turn.
+    const want = Math.atan2(a.z - b.z, b.x - a.x);
+    let dr = want - this.kid.rotation.y;
+    dr = Math.atan2(Math.sin(dr), Math.cos(dr));
+    this.kid.rotation.y += dr * (1 - Math.exp(-dt * 12));
+    // Ease over the floor <-> lawn step instead of popping.
+    this.kidY += (this.groundY({ x: px, z: pz }) - this.kidY) * (1 - Math.exp(-dt * 10));
+    const phase = w.s * 6;
+    this.kid.position.set(px, this.kidY + Math.abs(Math.sin(phase)) * 0.06, pz);
+    const swing = Math.sin(phase);
+    parts.legL.rotation.z = -swing * 0.7;
+    parts.legR.rotation.z = swing * 0.7;
+    parts.armL.rotation.z = swing * 0.7;
+    parts.armR.rotation.z = -swing * 0.7;
+    if (w.s >= w.dist) {
+      const end = w.pts[w.pts.length - 1];
+      this.kidY = this.groundY(end);
+      this.kid.position.set(end.x, this.kidY, end.z);
+      parts.legL.rotation.z = parts.legR.rotation.z = 0;
+      parts.armL.rotation.z = parts.armR.rotation.z = 0;
+      this.walkPath = null;
+    }
+  }
+
   // ---------- lifecycle ----------
 
   enter() {
     this.active = true;
     this.refresh();
+    // Pick up any character edits made since the last visit, and start the
+    // kid back on the stone path facing the camera.
+    applyLook(this.kid, currentLook());
+    this.walkPath = null;
+    this.kidY = GRASS_Y;
+    this.kid.position.copy(this.kidHome);
+    this.kid.rotation.y = -Math.PI / 4;
     this.camera.position.copy(this.camBase);
     this.camera.lookAt(this.camLook);
   }
@@ -613,6 +826,16 @@ export class House {
     }
 
     for (const fn of this.anims) fn(t, dt);
+
+    if (this.walkPath) {
+      this.updateWalk(dt);
+    } else {
+      // Idle: tiny bob, easing back to camera-facing after a walk.
+      this.kid.position.y = this.kidY + Math.abs(Math.sin(t * 2)) * 0.04;
+      let dr = -Math.PI / 4 - this.kid.rotation.y;
+      dr = Math.atan2(Math.sin(dr), Math.cos(dr));
+      this.kid.rotation.y += dr * (1 - Math.exp(-dt * 8));
+    }
 
     // Very slow camera drift — just enough that the diorama feels alive.
     this.camera.position.set(
