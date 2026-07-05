@@ -4,7 +4,7 @@
 
 import { speak } from './audio.js';
 import * as store from './store.js';
-import { PALETTES, STYLES } from './character.js';
+import { PALETTES, STYLES, OUTFITS } from './character.js';
 import { HOUSE_ITEMS } from './housedata.js';
 
 const $ = (id) => document.getElementById(id);
@@ -158,14 +158,18 @@ export function buildCharacterUI(onPick) {
     }));
   }
 
-  addRow(STYLES.label, STYLES.names.map((name, i) => {
-    const b = document.createElement('button');
-    b.className = 'swatch style-swatch' + (i === char.style ? ' selected' : '');
-    b.textContent = STYLES.icons[i];
-    b.title = name;
-    b.addEventListener('click', () => pick('style', i, name));
-    return b;
-  }));
+  const addIconRow = (part, def, selectedIdx) =>
+    addRow(def.label, def.names.map((name, i) => {
+      const b = document.createElement('button');
+      b.className = 'swatch style-swatch' + (i === selectedIdx ? ' selected' : '');
+      b.textContent = def.icons[i];
+      b.title = name;
+      b.addEventListener('click', () => pick(part, i, name));
+      return b;
+    }));
+
+  addIconRow('style', STYLES, char.style);
+  addIconRow('outfit', OUTFITS, char.outfit);
 }
 
 // ---------- HUD ----------

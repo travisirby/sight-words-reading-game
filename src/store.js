@@ -24,7 +24,7 @@ const defaults = () => ({
   // secretStars[world] = 0..3
   secretStars: {},
   // character look — indices into character.js palettes/styles
-  character: { skin: 0, hair: 0, style: 0, shirt: 0, pants: 0 },
+  character: { skin: 0, hair: 0, style: 0, shirt: 0, pants: 0, outfit: 0 },
   // bossBeaten[world] = true once that world's castle boss fell
   bossBeaten: {},
   // house.owned[itemId] = true for every furniture/pet purchase

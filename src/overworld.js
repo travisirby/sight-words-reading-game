@@ -75,6 +75,14 @@ export class Overworld {
 
     this.token = makeKidMesh(0.75);
     this.token.rotation.y = -Math.PI / 2; // camera-facing when idle
+    // Fat invisible touch target: tapping the kid opens the character editor.
+    this.tokenHit = new THREE.Mesh(
+      new THREE.BoxGeometry(1, 1, 1),
+      new THREE.MeshBasicMaterial({ visible: false })
+    );
+    this.tokenHit.scale.set(2, 2.6, 2);
+    this.tokenHit.position.y = 1;
+    this.token.add(this.tokenHit);
     this.scene.add(this.token);
     this.tokenNav = 0; // index into navList
     this.walk = null; // { points, t, dur, target }
@@ -1017,6 +1025,10 @@ export class Overworld {
       -(cy / window.innerHeight) * 2 + 1
     );
     this.raycaster.setFromCamera(ndc, this.camera);
+    if (this.raycaster.intersectObject(this.tokenHit, false).length) {
+      this.cb.onTokenTapped();
+      return;
+    }
     if (this.raycaster.intersectObject(this.houseHit, false).length) {
       this.cb.onHouseTapped();
       return;
