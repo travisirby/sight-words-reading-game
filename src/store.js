@@ -23,6 +23,8 @@ const defaults = () => ({
   secretUnlocked: {},
   // secretStars[world] = 0..3
   secretStars: {},
+  // character look — indices into character.js palettes/styles
+  character: { skin: 0, hair: 0, style: 0, shirt: 0, pants: 0 },
   // bossBeaten[world] = true once that world's castle boss fell
   bossBeaten: {},
   // house.owned[itemId] = true for every furniture/pet purchase
@@ -226,6 +228,12 @@ export function reset() {
 export function devUnlockAll(worldCount = 5) {
   state.devUnlocked = true; // also unlocks secrets via isSecretUnlocked
   for (let w = 0; w < worldCount; w++) state.bossBeaten[w] = true;
+  save();
+}
+
+export function setCharacterPart(part, idx) {
+  // Merge over defaults so blobs saved before this field existed still work.
+  state.character = { ...defaults().character, ...state.character, [part]: idx };
   save();
 }
 
