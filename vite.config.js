@@ -7,5 +7,7 @@ const useHttps = !!process.env.HTTPS;
 
 export default {
   base: './',
+  // Dev harnesses assign a port via $PORT; fall back to vite's default.
+  server: { port: Number(process.env.PORT) || 5173 },
   plugins: useHttps ? [basicSsl()] : [],
 };

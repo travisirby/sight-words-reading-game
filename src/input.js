@@ -1,10 +1,27 @@
-// Jump-only controls: press anywhere on the canvas (touch/pointer) or
-// Space / ArrowUp / W. Hold = higher jump, so we report start AND end.
-// handlers: { onJumpStart(), onJumpEnd() }
+// Controls: press anywhere on the canvas (touch/pointer) or Space /
+// ArrowUp / W to jump. Hold = higher jump, so we report start AND end.
+// ArrowLeft/A and ArrowRight/D steer during choice mode (reported as
+// per-direction held transitions; on-screen buttons feed the same path
+// via ui.js).
+// handlers: { onJumpStart(), onJumpEnd(), onMove(dir, held) }
+
+const MOVE_KEYS = { ArrowLeft: -1, KeyA: -1, ArrowRight: 1, KeyD: 1 };
 
 export function createInput(el, handlers) {
   let pointerHeld = false;
   let keyHeld = false;
+  const moveCodes = new Set(); // held movement key codes
+  const moveActive = { '-1': false, 1: false };
+
+  const refreshMove = () => {
+    for (const dir of [-1, 1]) {
+      const active = [...moveCodes].some((c) => MOVE_KEYS[c] === dir);
+      if (active !== moveActive[dir]) {
+        moveActive[dir] = active;
+        if (handlers.onMove) handlers.onMove(dir, active);
+      }
+    }
+  };
 
   const start = () => {
     if (!pointerHeld && !keyHeld) handlers.onJumpStart();
@@ -26,6 +43,12 @@ export function createInput(el, handlers) {
   };
 
   const onKeyDown = (e) => {
+    if (e.code in MOVE_KEYS) {
+      e.preventDefault();
+      moveCodes.add(e.code);
+      refreshMove();
+      return;
+    }
     if (e.code !== 'Space' && e.code !== 'ArrowUp' && e.code !== 'KeyW') return;
     e.preventDefault();
     if (e.repeat || keyHeld) return;
@@ -33,6 +56,11 @@ export function createInput(el, handlers) {
     keyHeld = true;
   };
   const onKeyUp = (e) => {
+    if (e.code in MOVE_KEYS) {
+      moveCodes.delete(e.code);
+      refreshMove();
+      return;
+    }
     if (e.code !== 'Space' && e.code !== 'ArrowUp' && e.code !== 'KeyW') return;
     if (!keyHeld) return;
     keyHeld = false;

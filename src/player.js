@@ -150,10 +150,12 @@ export class Player {
   // level: { groundTopAt(x), floorAt(x, feetY) }
   // cb: { onLand(fallDist) } — fired on every landing with fall height.
   update(dt, speed, level, cb) {
-    // ---- horizontal auto-walk; walls (ground rises) block until jumped ----
-    if (speed > 0) {
+    // ---- horizontal walk (either direction during choice mode); walls
+    // (ground rises) block until jumped ----
+    if (speed !== 0) {
+      const dir = speed > 0 ? 1 : -1;
       const nx = this.x + speed * dt;
-      const wallTop = level.groundTopAt(nx + KID_W / 2);
+      const wallTop = level.groundTopAt(nx + dir * (KID_W / 2));
       if (wallTop <= this.y + 0.25) this.x = nx;
       // else: blocked — run in place until a jump clears it
     }
@@ -208,19 +210,19 @@ export class Player {
       p.legL.rotation.z = -0.5;
       p.legR.rotation.z = 0.3;
     } else {
-      this.walkPhase += dt * Math.max(speed, 0.001) * 2.4;
-      const swing = speed > 0.2 ? Math.sin(this.walkPhase) : 0;
+      this.walkPhase += dt * Math.max(Math.abs(speed), 0.001) * 2.4;
+      const swing = Math.abs(speed) > 0.2 ? Math.sin(this.walkPhase) : 0;
       p.armL.rotation.z = swing * 0.9;
       p.armR.rotation.z = -swing * 0.9;
       p.legL.rotation.z = -swing * 0.9;
       p.legR.rotation.z = swing * 0.9;
     }
-    const bob = this.grounded && speed > 0.2 ? Math.abs(Math.cos(this.walkPhase)) * 0.06 : 0;
+    const bob = this.grounded && Math.abs(speed) > 0.2 ? Math.abs(Math.cos(this.walkPhase)) * 0.06 : 0;
 
     // Three-quarter view while moving: turn ~55° toward the direction of
-    // travel (+x) so the run reads as forward motion but the face (on +z)
+    // travel so the run reads as forward motion but the face (on +z)
     // stays visible; ease back to camera-facing when idle.
-    const targetYaw = speed > 0.2 ? 0.96 : 0;
+    const targetYaw = Math.abs(speed) > 0.2 ? Math.sign(speed) * 0.96 : 0;
     this.faceYaw += (targetYaw - this.faceYaw) * Math.min(1, dt * 5);
     this.group.rotation.y = this.faceYaw;
 

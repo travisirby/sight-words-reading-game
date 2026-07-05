@@ -244,6 +244,40 @@ html, body {
 .dot.green { background: #4cd964; }
 .dot.yellow { background: #ffd93d; }
 
+/* ---------- choice-mode steering controls ---------- */
+#move-controls {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.btn-move {
+  position: absolute;
+  pointer-events: auto;
+  bottom: calc(26px + env(safe-area-inset-bottom));
+  width: 118px;
+  min-height: 118px;
+  border-radius: 50%;
+  padding: 0;
+  font-size: 52px;
+  background: #74b9ff;
+  box-shadow: 0 6px 0 #3f7fc4, 0 10px 14px rgba(0,0,0,0.25);
+  animation: pop-in 0.25s cubic-bezier(0.34, 1.6, 0.5, 1);
+  touch-action: none;
+}
+.btn-move:active { box-shadow: 0 1px 0 #3f7fc4; }
+.btn-move-left { left: calc(22px + env(safe-area-inset-left)); }
+.btn-move-right { left: calc(162px + env(safe-area-inset-left)); }
+.btn-move-jump {
+  right: calc(22px + env(safe-area-inset-right));
+  background: #6ddf6d;
+  box-shadow: 0 6px 0 #3c9e3c, 0 10px 14px rgba(0,0,0,0.25);
+}
+.btn-move-jump:active { box-shadow: 0 1px 0 #3c9e3c; }
+@keyframes pop-in {
+  from { transform: scale(0.3); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+
 /* ---------- level complete ---------- */
 #star-row { font-size: 66px; }
 #star-row .star {
