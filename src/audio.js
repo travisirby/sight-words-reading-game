@@ -154,6 +154,27 @@ export function sfxKeyJingle() {
   });
 }
 
+// Silly cartoon roar: a descending sawtooth wobble, more raspberry than scary.
+export function sfxRoar() {
+  tone({ type: 'sawtooth', from: 300, to: 90, dur: 0.7, vol: 0.3 });
+  tone({ type: 'square', from: 150, to: 60, dur: 0.5, at: 0.15, vol: 0.18 });
+  tone({ type: 'sawtooth', from: 500, to: 200, dur: 0.4, at: 0.05, vol: 0.12 });
+}
+
+// Boss giggle-taunt after a wrong answer.
+export function sfxGiggle() {
+  [880, 1100, 880, 1320].forEach((f, i) => {
+    tone({ type: 'triangle', from: f, to: f * 1.2, dur: 0.09, at: i * 0.09, vol: 0.22 });
+  });
+}
+
+// Armor block pops off: crunch + rising chime.
+export function sfxArmorPop() {
+  tone({ type: 'square', from: 180, to: 60, dur: 0.12, vol: 0.35 });
+  tone({ type: 'triangle', from: 784, dur: 0.15, at: 0.08, vol: 0.3 });
+  tone({ type: 'triangle', from: 1047, dur: 0.2, at: 0.16, vol: 0.3 });
+}
+
 export function sfxStarGrab() {
   tone({ type: 'sine', from: 600, to: 1800, dur: 0.3, vol: 0.35 });
   tone({ type: 'triangle', from: 1200, dur: 0.2, at: 0.14, vol: 0.25 });

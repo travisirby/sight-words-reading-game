@@ -3,17 +3,18 @@
 // with the overworld and owned by main.js; main calls tick(dt) + renders.
 
 import * as THREE from 'three';
-import { LevelScene, generateLevel } from './level.js';
+import { LevelScene, generateLevel, generateBossArena } from './level.js';
 import { Player, KID_H } from './player.js';
 import { BlocksEvent, DoorsEvent, StarsEvent } from './wordevents.js';
+import { BossFight, BOSSES } from './boss.js';
 import { Effects } from './effects.js';
 import { createInput } from './input.js';
 import {
   sfxCoin, sfxWrong, sfxStomp, sfxBoing, sfxKeyJingle, sfxFireworks, speak,
 } from './audio.js';
 import {
-  WORLDS, DOLCH, PRAISE, getLevelWords, getSecretWords, buildRunQueue,
-  pickDistractors, shuffle,
+  WORLDS, DOLCH, PRAISE, getLevelWords, getSecretWords, getBossWords,
+  buildRunQueue, pickDistractors, shuffle,
 } from './words.js';
 import * as store from './store.js';
 
@@ -115,9 +116,15 @@ export class Game {
     this.scene.add(this.keyMesh);
 
     this.input = createInput(renderer.domElement, {
-      onJumpStart: () => this.running && !this.paused && this.player.jumpStart(),
+      onJumpStart: () => {
+        if (!this.running || this.paused) return;
+        if (this.phase === 'bossIntro') this.endIntro(); // tap skips the intro
+        else this.player.jumpStart();
+      },
       onJumpEnd: () => this.player.jumpEnd(),
     });
+
+    this.bossFight = null;
 
     this.running = false;
     this.paused = false;
@@ -138,19 +145,29 @@ export class Game {
       bounceBack: (toX) => this.bounceBack(toX),
       speakWord: () => this.repeatWord(),
       onCorrect: (firstTry) => this.onEventCorrect(firstTry),
+      onWrong: () => { if (this.bossFight) this.bossFight.taunt(); },
+      stumble: () => { // boss projectile brush: same gentle cost as a critter
+        sfxWrong();
+        this.player.stumble();
+        this.stumbleMul = 0.4;
+        this.addCoins(-1);
+      },
     };
   }
 
   // ---------- run lifecycle ----------
 
-  startRun(worldIdx, levelIdx, { secret = false } = {}) {
+  startRun(worldIdx, levelIdx, { secret = false, boss = false } = {}) {
     this.worldIdx = worldIdx;
     this.levelIdx = levelIdx;
     this.secret = secret;
+    this.isBoss = boss;
     this.tierList = DOLCH[WORLDS[worldIdx].tier];
-    this.levelWords = secret
-      ? getSecretWords(worldIdx, store.wordStats)
-      : getLevelWords(worldIdx, levelIdx);
+    this.levelWords = boss
+      ? getBossWords(worldIdx, store.wordStats)
+      : secret
+        ? getSecretWords(worldIdx, store.wordStats)
+        : getLevelWords(worldIdx, levelIdx);
 
     this.queue = buildRunQueue(this.levelWords, store.wordStats);
     this.results = []; // { word, firstTry }
@@ -161,10 +178,12 @@ export class Game {
 
     // Deterministic layout per level (stable across replays).
     const seed = worldIdx * 97 + levelIdx * 13 + (secret ? 7 : 1);
-    const hasKey = !secret && (worldIdx + levelIdx) % 2 === 0;
-    this.data = generateLevel({
-      seed, wordCount: this.queue.length, theme: worldIdx, secret, hasKey,
-    });
+    const hasKey = !secret && !boss && (worldIdx + levelIdx) % 2 === 0;
+    this.data = boss
+      ? generateBossArena({ seed, wordCount: this.queue.length, theme: worldIdx })
+      : generateLevel({
+        seed, wordCount: this.queue.length, theme: worldIdx, secret, hasKey,
+      });
     this.level.build(this.data);
 
     this.clearEvents();
@@ -173,7 +192,10 @@ export class Game {
     this.activeEv = null;
     this.spoken = false;
     this.stars = null;
-    this.phase = 'run'; // run | stars | flag | done
+    // run | stars | flagrun | flag | done (+ bossIntro | bossDefeat)
+    this.phase = boss ? 'bossIntro' : 'run';
+    this.introT = 0;
+    this.introSpoke = false;
     this.repeatTimer = 0;
     this.autoRepeats = 0;
     this.bounce = null;
@@ -213,6 +235,11 @@ export class Game {
     this.speed = 0;
     this.camera.position.set(this.player.x + 3, 4.2, 14);
 
+    if (boss) {
+      this.bossFight = new BossFight(this.scene, worldIdx, this.effects, this.level);
+      this.bossFight.enterAt(this.player.x + 12);
+    }
+
     this.cb.onDotsInit(this.queue.length);
     this.cb.onCoins(0);
     this.cb.onKey(false);
@@ -231,6 +258,10 @@ export class Game {
     this.activeEv = null;
     if (this.stars) this.stars.dispose();
     this.stars = null;
+    if (this.bossFight) {
+      this.bossFight.dispose();
+      this.bossFight = null;
+    }
   }
 
   pause() { this.paused = true; }
@@ -258,9 +289,17 @@ export class Game {
     if (this.running && w) speak(`Find the word: ${w}`, { rate: 0.85 });
   }
 
+  // Boss battle state for tests / debugging: { hp, phase } or null.
+  get boss() {
+    return this.bossFight
+      ? { hp: this.bossFight.hp, phase: this.bossFight.state }
+      : null;
+  }
+
   // Programmatically resolve the current word event (for automated tests).
   debugResolve(correct = true) {
     if (!this.running) return;
+    if (this.phase === 'bossIntro') this.endIntro();
     if (this.stars && !this.stars.done) {
       this.stars.debugResolve(correct, this.api);
       return;
@@ -297,6 +336,13 @@ export class Game {
     this.results.push({ word, firstTry });
     store.recordWordResult(word, firstTry);
     this.cb.onDot(this.results.length - 1, firstTry ? 'green' : 'yellow');
+    if (this.bossFight) this.bossFight.hit(); // armor block pops off
+  }
+
+  endIntro() {
+    if (this.phase !== 'bossIntro') return;
+    this.phase = 'run';
+    this.bossFight.settle();
   }
 
   startStars() {
@@ -447,6 +493,7 @@ export class Game {
     }
     if (this.phase === 'stars') target = STARS_SPEED;
     if (this.phase === 'flag' || this.phase === 'done') target = 0;
+    if (this.phase === 'bossIntro' || this.phase === 'bossDefeat') target = 0;
     this.stumbleMul = Math.min(1, this.stumbleMul + dt * 1.2);
     target *= this.stumbleMul;
     this.speed += (target - this.speed) * Math.min(1, dt * 4);
@@ -481,8 +528,24 @@ export class Game {
     this.level.update(dt, p.x);
     this.effects.update(dt);
 
+    if (this.bossFight) {
+      const ev = this.activeEv && !this.activeEv.done ? this.activeEv : null;
+      this.bossFight.update(dt, p, this.api, {
+        battle: this.phase === 'run',
+        challengeActive: !!ev,
+        minX: ev && ev.lastX ? ev.lastX + 5 : 0, // stay clear of the ? blocks
+      });
+    }
+
     // ---- event sequencing ----
-    if (this.phase === 'run') {
+    if (this.phase === 'bossIntro') {
+      this.introT += dt;
+      if (!this.introSpoke && this.introT > 1.4) {
+        this.introSpoke = true;
+        speak(`The ${BOSSES[this.worldIdx].name} wants to hear you read!`, { rate: 1.0 });
+      }
+      if (this.introT > 5.5) this.endIntro();
+    } else if (this.phase === 'run') {
       if (this.activeEv) {
         if (!this.spoken && p.x > this.activeEv.x - 2) {
           this.spoken = true;
@@ -496,11 +559,18 @@ export class Game {
         }
       } else if (this.eventIdx < this.events.length) {
         if (p.x > this.events[this.eventIdx].x - 14) this.spawnEvent();
+      } else if (this.isBoss) {
+        // Every armor block gone: the boss falls, no star review needed.
+        this.phase = 'bossDefeat';
+        this.bossFight.startDefeat(this.api, p);
+        speak(`You did it! The ${BOSSES[this.worldIdx].name} is amazed by your reading! Here comes your crown!`, { rate: 1.0 });
       } else if (p.x > this.data.starX - 10) {
         this.startStars();
       }
     } else if (this.phase === 'stars') {
       this.stars.update(dt, p, this.api);
+    } else if (this.phase === 'bossDefeat') {
+      if (this.bossFight.state === 'gone') this.phase = 'flagrun';
     } else if (this.phase === 'flagrun') {
       if (p.x >= this.data.flagX - 0.4) {
         this.phase = 'flag';

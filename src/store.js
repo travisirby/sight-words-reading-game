@@ -1,8 +1,9 @@
-// localStorage persistence. Single JSON blob under wordRunner.v2.
-// Migrates from wordRunner.v1 (same shapes; v2 adds keys/secret fields).
+// localStorage persistence. Single JSON blob under wordRunner.v3.
+// Migrates from v2/v1: same shapes; v3 adds bossBeaten. The unlock frontier
+// gains a virtual boss slot: u.level === levelCount means "castle playable".
 
-const KEY = 'wordRunner.v2';
-const OLD_KEY = 'wordRunner.v1';
+const KEY = 'wordRunner.v3';
+const OLD_KEYS = ['wordRunner.v2', 'wordRunner.v1'];
 
 const defaults = () => ({
   coins: 0,
@@ -12,7 +13,7 @@ const defaults = () => ({
   devUnlocked: false,
   // words[word] = { seen, correct, firstTryCorrect, missed }
   words: {},
-  // stars['w-l'] = 0..3
+  // stars['w-l'] = 0..3 (the boss level uses l = levelCount)
   stars: {},
   // frontier of progression
   unlocked: { world: 0, level: 0 },
@@ -22,6 +23,8 @@ const defaults = () => ({
   secretUnlocked: {},
   // secretStars[world] = 0..3
   secretStars: {},
+  // bossBeaten[world] = true once that world's castle boss fell
+  bossBeaten: {},
 });
 
 let state = defaults();
@@ -32,11 +35,12 @@ export function load() {
     if (raw) {
       state = { ...defaults(), ...JSON.parse(raw) };
     } else {
-      const old = localStorage.getItem(OLD_KEY);
+      const old = OLD_KEYS.map((k) => localStorage.getItem(k)).find(Boolean);
       if (old) {
-        // v1 fields (words/coins/gems/sound/mic/stars/unlocked/devUnlocked)
-        // carry over 1:1 — world/level indices are unchanged in v2.
         state = { ...defaults(), ...JSON.parse(old) };
+        // Grandfather old saves: a world you already passed means its boss
+        // (which didn't exist yet) counts as beaten.
+        for (let w = 0; w < state.unlocked.world; w++) state.bossBeaten[w] = true;
         save();
       }
     }
@@ -142,13 +146,26 @@ export function keyAnchorLevel(worldIdx) {
   return null;
 }
 
+// ---------- bosses ----------
+
+export function isBossBeaten(worldIdx) {
+  return !!state.bossBeaten[worldIdx];
+}
+
+export function beatBoss(worldIdx) {
+  state.bossBeaten[worldIdx] = true;
+  save();
+}
+
 // ---------- progression ----------
 
-// Advance the unlock frontier after finishing a level.
+// Advance the unlock frontier after finishing a level. Finishing the last
+// regular level opens the boss slot (u.level === count); beating the boss
+// (levelIdx === count) opens the next world.
 export function completeLevel(worldIdx, levelIdx, worldLevelCounts) {
   const u = state.unlocked;
   if (worldIdx === u.world && levelIdx === u.level) {
-    if (levelIdx + 1 < worldLevelCounts[worldIdx]) {
+    if (levelIdx + 1 <= worldLevelCounts[worldIdx]) {
       u.level++;
     } else if (worldIdx + 1 < worldLevelCounts.length) {
       u.world++;
@@ -168,8 +185,9 @@ export function isWorldUnlocked(worldIdx) {
   return state.devUnlocked || worldIdx <= state.unlocked.world;
 }
 
-export function devUnlockAll() {
+export function devUnlockAll(worldCount = 5) {
   state.devUnlocked = true; // also unlocks secrets via isSecretUnlocked
+  for (let w = 0; w < worldCount; w++) state.bossBeaten[w] = true;
   save();
 }
 

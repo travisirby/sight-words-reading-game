@@ -179,6 +179,40 @@ export function generateLevel({ seed, wordCount, theme, secret = false, hasKey =
   };
 }
 
+// Boss arena: a short, flat-ish themed runway. All word events are ? blocks
+// (the boss retreats ahead of the player between rounds); no critters, keys
+// or floating platforms — the boss IS the spectacle.
+export function generateBossArena({ seed, wordCount, theme }) {
+  const rand = mulberry32(seed);
+  const groundY = [];
+  const coins = [];
+  const events = [];
+  let g = 0;
+  const x = () => groundY.length;
+  const flat = (n) => { for (let i = 0; i < n; i++) groundY.push(g); };
+
+  flat(14); // entrance stage: the boss stomps in here
+  for (let i = 0; i < wordCount; i++) {
+    if (i > 0) g = Math.max(0, Math.min(2, g + [0, 1, -1][(rand() * 3) | 0]));
+    const gap = 5 + ((rand() * 3) | 0);
+    flat(gap);
+    if (rand() < 0.7) {
+      for (let k = 0; k < 4; k++) coins.push({ x: x() - gap + 1 + k * 1.3, y: g + 0.8 });
+    }
+    events.push({ type: 'blocks', x: x(), groundY: g });
+    flat(36);
+  }
+  const starX = x() + 4; // no star review in boss runs; kept for data shape
+  flat(8);
+  const flagX = x() + 5;
+  flat(12);
+
+  return {
+    groundY, platforms: [], coins, critters: [], events, key: null,
+    starX, flagX, length: x(), theme, secret: false, boss: true,
+  };
+}
+
 // ---------- rendering ----------
 
 const MAX_BLOCKS = 20000;
