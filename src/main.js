@@ -314,8 +314,8 @@ ui.init({
   onMicUp: bonusMicUp,
   onMoveDown: (dir) => game.setMove('btn', dir, true),
   onMoveUp: (dir) => game.setMove('btn', dir, false),
-  onJumpDown: () => game.running && !game.paused && game.player.jumpStart(),
-  onJumpUp: () => game.player.jumpEnd(),
+  onJumpDown: () => game.running && !game.paused && game.player.jump(),
+  onJumpUp: () => {}, // every jump is full power; release does nothing
   onDevUnlock: () => {
     store.devUnlockAll();
     speak('All levels unlocked!', { rate: 1.0 });

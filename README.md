@@ -15,8 +15,8 @@ states, no timers, just coins, confetti, and encouragement.
 ## How it plays
 
 - **Auto-walk platformer**: the character walks right on his own; tap anywhere
-  to jump (hold for a higher jump). Coyote time and jump buffering keep it
-  forgiving for small hands.
+  to jump — every jump is full height, no holding needed. Coyote time and jump
+  buffering keep it forgiving for small hands.
 - **Word events** inside each level:
   - **? Blocks** — bonk the spoken word from below, Mario-style
   - **Word doors** — jump to the tier with the right word to open the way

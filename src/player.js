@@ -1,5 +1,6 @@
-// Side-view voxel kid. Walks +x, jump physics with coyote time, jump
-// buffering and hold-to-boost (lighter gravity while rising & held).
+// Side-view voxel kid. Walks +x, jump physics with coyote time and jump
+// buffering. Every jump launches at full power — no hold-to-boost, so one
+// press always clears the same height (kid-friendly).
 // Boxes only, canvas face texture, walk/jump/stomp/stumble animations.
 
 import * as THREE from 'three';
@@ -8,10 +9,9 @@ import { sfxJump } from './audio.js';
 export const KID_H = 1.7; // collision height
 export const KID_W = 0.7; // collision width
 
-const GRAVITY = -24;
-const GRAVITY_HOLD = -15; // while rising and button held
-const JUMP_V = 9.8; // full-hold apex ~3.2 blocks; tap ~1 block
-const CUT_MULT = 0.42; // early release cuts upward speed
+const GRAVITY = -24; // falling
+const GRAVITY_RISE = -15; // lighter on the way up (floatier, more forgiving)
+const JUMP_V = 10.2; // fixed apex ~3.5 blocks: +3 platforms with margin
 const COYOTE = 0.12;
 const BUFFER = 0.15;
 
@@ -107,7 +107,6 @@ export class Player {
     this.y = y;
     this.vy = 0;
     this.grounded = true;
-    this.holding = false;
     this.buffer = 0;
     this.coyote = 0;
     this.fallPeak = y;
@@ -121,14 +120,8 @@ export class Player {
     for (const m of this.parts.mats) m.emissive.setHex(0x000000);
   }
 
-  jumpStart() {
-    this.holding = true;
+  jump() {
     this.buffer = BUFFER;
-  }
-
-  jumpEnd() {
-    this.holding = false;
-    if (!this.grounded && this.vy > 0) this.vy *= CUT_MULT;
   }
 
   // External bounce (critter stomp, bonk pushdown, ...).
@@ -175,7 +168,7 @@ export class Player {
     }
 
     if (!this.grounded) {
-      const g = this.holding && this.vy > 0 ? GRAVITY_HOLD : GRAVITY;
+      const g = this.vy > 0 ? GRAVITY_RISE : GRAVITY;
       const prevY = this.y;
       this.vy += g * dt;
       this.y += this.vy * dt;
