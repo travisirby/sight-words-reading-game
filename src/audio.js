@@ -1,4 +1,9 @@
-// WebAudio sfx (all synthesized) + speechSynthesis wrapper.
+// WebAudio sfx (all synthesized) + speech playback.
+// Speech prefers pre-generated neural TTS clips (public/tts/, see
+// scripts/generate-tts.mjs) and falls back to speechSynthesis for any
+// text without a clip.
+
+import TTS from './tts-manifest.js';
 
 let ctx = null;
 let master = null;
@@ -37,7 +42,7 @@ export function unlockAudio() {
 export function setMuted(m) {
   muted = m;
   if (master) master.gain.value = m ? 0 : 0.5;
-  if (m && 'speechSynthesis' in window) speechSynthesis.cancel();
+  if (m) stopSpeech();
 }
 
 export function isMuted() {
@@ -180,7 +185,105 @@ export function sfxStarGrab() {
   tone({ type: 'triangle', from: 1200, dur: 0.2, at: 0.14, vol: 0.25 });
 }
 
-// ---- TTS ----
+// ---- speech (pre-generated clips, speechSynthesis fallback) ----
+
+const CLIP_GAP = 0.12; // pause between concatenated clips, seconds
+
+const clipCache = new Map(); // file -> Promise<AudioBuffer>
+let speakToken = 0; // invalidates in-flight speaks when a new one starts
+let speakSources = []; // currently playing clip sources
+let pendingFin = null; // onend of the speech being interrupted
+
+const norm = (t) => t.trim().toLowerCase().replace(/\s+/g, ' ');
+
+// Tells the narrator fairy (fairy.js) when the voice starts/stops talking.
+function notifySpeaking(speaking, text = '') {
+  try {
+    window.dispatchEvent(new CustomEvent('wr-speech', { detail: { speaking, text } }));
+  } catch (e) { /* ignore */ }
+}
+
+// Resolve text to a clip sequence: an exact phrase, or a known
+// "prefix: word [suffix]" template assembled from segment clips.
+// Returns null when the text has no clips (caller falls back to synthesis).
+function clipsFor(text) {
+  const n = norm(text);
+  if (TTS.phrases[n]) return [TTS.phrases[n]];
+  const ci = n.indexOf(': ');
+  if (ci === -1) return TTS.words[n] ? [TTS.words[n]] : null;
+  const prefix = TTS.phrases[n.slice(0, ci + 1)];
+  if (!prefix) return null;
+  let rest = n.slice(ci + 2);
+  let suffix = null;
+  if (rest.endsWith(' try again!')) {
+    suffix = TTS.phrases['try again!'];
+    rest = rest.slice(0, -' try again!'.length);
+  }
+  const word = TTS.words[rest.replace(/[.!?]+$/, '').trim()];
+  if (!word) return null;
+  return suffix ? [prefix, word, suffix] : [prefix, word];
+}
+
+// edge-tts pads clips with a good half second of silence on each end;
+// find the actual speech bounds so concatenated sentences don't drag.
+function trimBounds(buf) {
+  const d = buf.getChannelData(0);
+  const thresh = 0.004;
+  let a = 0;
+  let b = d.length - 1;
+  while (a < b && Math.abs(d[a]) < thresh) a++;
+  while (b > a && Math.abs(d[b]) < thresh) b--;
+  const pad = Math.round(buf.sampleRate * 0.04); // keep a soft edge
+  a = Math.max(0, a - pad);
+  b = Math.min(d.length - 1, b + pad);
+  return { buf, offset: a / buf.sampleRate, dur: (b - a) / buf.sampleRate };
+}
+
+function loadClip(file) {
+  if (!clipCache.has(file)) {
+    const p = fetch(`tts/${file}`)
+      .then((r) => {
+        if (!r.ok) throw new Error(`tts fetch ${r.status}`);
+        return r.arrayBuffer();
+      })
+      .then((ab) => ctx.decodeAudioData(ab))
+      .then(trimBounds);
+    p.catch(() => clipCache.delete(file)); // allow retry after a failed load
+    clipCache.set(file, p);
+  }
+  return clipCache.get(file);
+}
+
+function stopSpeech() {
+  speakToken++;
+  for (const s of speakSources) {
+    try { s.onended = null; s.stop(); } catch (e) { /* already stopped */ }
+  }
+  speakSources = [];
+  if ('speechSynthesis' in window) speechSynthesis.cancel();
+  if (pendingFin) pendingFin(); // interrupted speech still reports done
+}
+
+function speakSynth(text, rate, fin) {
+  if (!('speechSynthesis' in window)) {
+    setTimeout(fin, 100);
+    return;
+  }
+  try {
+    const u = new SpeechSynthesisUtterance(text);
+    if (voice) u.voice = voice;
+    u.lang = 'en-US';
+    u.rate = rate;
+    u.pitch = 1.05;
+    u.onend = fin;
+    u.onerror = fin;
+    // Safety net: iOS occasionally drops onend.
+    setTimeout(fin, 1000 + text.length * 130);
+    speechSynthesis.speak(u);
+  } catch (e) {
+    fin();
+  }
+}
 
 function pickVoice() {
   if (!('speechSynthesis' in window)) return;
@@ -193,33 +296,55 @@ function pickVoice() {
     null;
 }
 
-if ('speechSynthesis' in window) {
+if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
   pickVoice();
   speechSynthesis.addEventListener('voiceschanged', pickVoice); // iOS loads late
 }
 
+// rate only applies to the speechSynthesis fallback; clips are
+// pre-rendered at a kid-friendly pace.
 export function speak(text, { rate = 1.0, onend = null } = {}) {
-  if (muted || !('speechSynthesis' in window)) {
+  stopSpeech();
+  if (muted) {
     if (onend) setTimeout(onend, 100);
     return;
   }
-  try {
-    speechSynthesis.cancel();
-    const u = new SpeechSynthesisUtterance(text);
-    if (voice) u.voice = voice;
-    u.lang = 'en-US';
-    u.rate = rate;
-    u.pitch = 1.05;
-    if (onend) {
-      let done = false;
-      const fin = () => { if (!done) { done = true; onend(); } };
-      u.onend = fin;
-      u.onerror = fin;
-      // Safety net: iOS occasionally drops onend.
-      setTimeout(fin, 1000 + text.length * 130);
-    }
-    speechSynthesis.speak(u);
-  } catch (e) {
+  let done = false;
+  const fin = () => {
+    if (done) return;
+    done = true;
+    if (pendingFin === fin) pendingFin = null;
+    notifySpeaking(false);
     if (onend) onend();
+  };
+  pendingFin = fin;
+  notifySpeaking(true, text);
+
+  const clips = clipsFor(text);
+  const c = clips && ensureCtx();
+  if (!c) {
+    speakSynth(text, rate, fin);
+    return;
   }
+  const token = speakToken;
+  Promise.all(clips.map(loadClip)).then(
+    (bufs) => {
+      if (token !== speakToken) return; // superseded by a newer speak
+      let t = c.currentTime + 0.03;
+      speakSources = bufs.map(({ buf, offset, dur }) => {
+        const src = c.createBufferSource();
+        src.buffer = buf;
+        src.connect(master);
+        src.start(t, offset, dur);
+        t += dur + CLIP_GAP;
+        return src;
+      });
+      speakSources[speakSources.length - 1].onended = fin;
+      setTimeout(fin, (t - c.currentTime) * 1000 + 500); // safety net
+    },
+    () => {
+      // Clip missing or offline: fall back to the system voice.
+      if (token === speakToken) speakSynth(text, rate, fin);
+    }
+  );
 }

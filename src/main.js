@@ -30,6 +30,7 @@ let selected = null; // node info from the map banner
 let lastRun = null; // { results, coins, gems, stars, keyFound }
 let bonus = null; // active bonus round state
 let mode = 'map'; // which scene renders: 'map' | 'game' | 'char' | 'house' | 'cutscene'
+// ('char' also backs the title + player-select screens: the spinning kid)
 let houseReturn = 'title'; // screen to go back to when leaving the house
 
 // ---------- iOS audio unlock on first gesture ----------
@@ -73,7 +74,7 @@ const map = new Overworld(renderer, {
     speak('My house!', { rate: 1.0 });
     showHouse('map');
   },
-  onTokenTapped: () => {
+  onEditTapped: () => {
     speak('Make your character!', { rate: 1.0 });
     showCharacter('map');
   },
@@ -139,6 +140,65 @@ function playCutscene(script, onDone) {
   cutscene.play(script, onDone);
 }
 
+// ---------- player profiles ----------
+
+// The title shows the active player's spinning kid (CharScene) behind the
+// buttons, with their nameplate — so switching players is instantly visible.
+function showTitle() {
+  if (mode === 'map') map.exit();
+  mode = 'char';
+  charScene.setLook(currentLook());
+  ui.setPlayerName(store.activeProfileName());
+  ui.showScreen('title');
+}
+
+// Everything downstream that caches per-save state, refreshed after the
+// active profile changes (switch, create, delete-active).
+function onProfileSwitched() {
+  const s = store.get();
+  setMuted(!s.sound);
+  const look = currentLook();
+  applyLook(game.player.group, look);
+  applyLook(map.token, look);
+  charScene.setLook(look);
+  map.refresh();
+  map.setTokenTo(s.unlocked.world, s.unlocked.level); // new save's frontier
+  house.refresh();
+  ui.setCoins(s.coins);
+  ui.updateSettingsLabels();
+  ui.setPlayerName(store.activeProfileName());
+  current = { world: 0, level: 0, secret: false };
+  selected = null;
+  lastRun = null;
+}
+
+function showPlayers() {
+  if (mode === 'map') map.exit();
+  mode = 'char'; // keep the spinning kid warm behind the cards
+  speak("Who's playing?", { rate: 1.0 });
+  ui.showPlayers({
+    onSelect: (id) => {
+      if (id !== store.activeProfileId()) {
+        store.selectProfile(id);
+        onProfileSwitched();
+      }
+      showTitle();
+    },
+    onCreate: (name) => {
+      if (!store.createProfile(name)) return; // at the cap (card is hidden, but be safe)
+      onProfileSwitched();
+      showCharacter('title'); // new kid builds their look first
+    },
+    onDelete: (id) => {
+      const wasActive = id === store.activeProfileId();
+      store.deleteProfile(id);
+      // Deleting the active profile loads another save (or a fresh one,
+      // when it was the last profile) — refresh everything downstream.
+      if (wasActive) onProfileSwitched();
+    },
+  });
+}
+
 // ---------- character creator ----------
 
 let charReturn = 'title'; // screen to go back to when leaving the editor
@@ -164,8 +224,7 @@ function closeCharacter() {
     showMap(); // token stays wherever it was
     return;
   }
-  mode = 'map'; // map scene renders behind the title again
-  ui.showScreen('title');
+  showTitle(); // the freshly-dressed kid keeps spinning behind the title
 }
 
 // ---------- my house ----------
@@ -186,8 +245,7 @@ function leaveHouse() {
   } else if (houseReturn === 'map') {
     showMap(); // token stays wherever it was
   } else {
-    mode = 'map'; // title screen shows over the idle map scene
-    ui.showScreen('title');
+    showTitle();
   }
 }
 
@@ -384,9 +442,14 @@ function bonusMicUp() {
 // ---------- wire up UI ----------
 
 ui.init({
-  onPlay: () => showMap(),
+  onPlay: () => {
+    showMap();
+    map.walkTo(map.tokenNav); // pop the current level's banner right away
+  },
   onCharacter: () => showCharacter(),
   onCharacterDone: () => closeCharacter(),
+  onSwitchPlayer: () => showPlayers(),
+  onPlayersBack: () => showTitle(),
   onToggleSound: () => {
     const on = !store.get().sound;
     store.setSound(on);
@@ -398,10 +461,7 @@ ui.init({
     store.setMic(!store.get().mic);
     ui.updateSettingsLabels();
   },
-  onMapBack: () => {
-    map.exit();
-    ui.showScreen('title');
-  },
+  onMapBack: () => showTitle(),
   onBannerPlay: () => playSelected(),
   onPause: () => {
     game.pause();
@@ -447,18 +507,15 @@ ui.init({
 });
 
 ui.updateSettingsLabels();
-ui.showScreen('title');
-map.enter(); // warm up the map scene behind the title
-map.exit(); // ...but ignore input until PLAY
+map.enter(); // warm up the map scene (build paths/locks) for the first PLAY
+map.exit(); // ...but ignore input until then
+showTitle();
 
 // Dev harness: ?cutscene=<name> boots straight into a script (loops back to
 // the title when it ends). Lets a scene be iterated on without playing to it.
 if (cheats.has('cutscene')) {
   const script = CUTSCENES[cheats.get('cutscene')] || CUTSCENES.demo;
-  playCutscene(script, () => {
-    mode = 'map';
-    ui.showScreen('title');
-  });
+  playCutscene(script, () => showTitle());
 }
 
 // Auto-pause when the tab is hidden.

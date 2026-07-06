@@ -16,6 +16,32 @@ import { WORLDS } from './words.js';
 import * as store from './store.js';
 
 const boxGeo = new THREE.BoxGeometry(1, 1, 1);
+
+// Deterministic 0..1 hash from a 2D cell + salt: per-tile jitter that stays
+// stable frame to frame without burning RNG state.
+function hash2(x, z, s = 0) {
+  const n = Math.sin(x * 127.1 + z * 311.7 + s * 74.7) * 43758.5453;
+  return n - Math.floor(n);
+}
+
+// Ground boxes tint their side faces toward earth tones via vertex colors
+// (multiplied with each instance's top color) so islands read as chunky
+// voxel terrain instead of flat-sided extrusions.
+const groundGeo = new THREE.BoxGeometry(1, 1, 1);
+{
+  const tints = [
+    [0.72, 0.58, 0.46], [0.72, 0.58, 0.46], // ±x sides: dry earth
+    [1, 1, 1],                               // top: the instance color
+    [0.4, 0.34, 0.3],                        // bottom: deep soil shadow
+    [0.8, 0.65, 0.51], [0.8, 0.65, 0.51],    // ±z sides: lit earth
+  ];
+  const cols = new Float32Array(24 * 3);
+  tints.forEach((t, f) => {
+    for (let v = 0; v < 4; v++) cols.set(t, (f * 4 + v) * 3);
+  });
+  groundGeo.setAttribute('color', new THREE.BufferAttribute(cols, 3));
+}
+
 const CAM_OFFSET = new THREE.Vector3(0, 18, 21); // ~41° down — wide diorama view
 const MAX_TILES = 700;
 const MAX_SECRET_TILES = 320;
@@ -45,6 +71,8 @@ export class Overworld {
 
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color(0x79c4f0);
+    // Fade the far sea into the sky so the horizon reads soft, not banded.
+    this.scene.fog = new THREE.Fog(0x86c9ef, 34, 72);
     this.camera = new THREE.PerspectiveCamera(
       45, window.innerWidth / window.innerHeight, 0.1, 200
     );
@@ -58,9 +86,10 @@ export class Overworld {
     this.data = buildMapData();
 
     this.buildCorridors();
-    this.buildWater();
     this.buildTerrain();
+    this.buildWater(); // after terrain: shore tints/foam read this.groundH
     this.buildProps();
+    this.buildCritters();
     this.buildSigns();
     this.buildSkyClouds();
     this.buildTiles();
@@ -73,16 +102,42 @@ export class Overworld {
     }));
     this.applyLockTints();
 
-    this.token = makeKidMesh(0.75);
+    this.token = makeKidMesh(1.125); // 50% bigger than the old 0.75 token
     this.token.rotation.y = -Math.PI / 2; // camera-facing when idle
-    // Fat invisible touch target: tapping the kid opens the character editor.
+    const tokenBox = new THREE.BoxGeometry(1, 1, 1);
+    // Fat invisible touch target: tapping the kid acts like pressing Enter
+    // (select the node under him; play if the banner is already up).
     this.tokenHit = new THREE.Mesh(
-      new THREE.BoxGeometry(1, 1, 1),
+      tokenBox,
       new THREE.MeshBasicMaterial({ visible: false })
     );
     this.tokenHit.scale.set(2, 2.6, 2);
     this.tokenHit.position.y = 1;
     this.token.add(this.tokenHit);
+    // Floating gold mini-kid above the token (bobs and spins in tick(), like
+    // the house marker): tapping IT opens the character editor.
+    const gold = new THREE.MeshLambertMaterial({ color: 0xffd54a, emissive: 0x664d00 });
+    this.editIcon = new THREE.Group();
+    const iHead = new THREE.Mesh(tokenBox, gold);
+    iHead.scale.setScalar(0.34);
+    iHead.position.y = 0.4;
+    const iBody = new THREE.Mesh(tokenBox, gold);
+    iBody.scale.set(0.42, 0.44, 0.24);
+    const iArmL = new THREE.Mesh(tokenBox, gold);
+    iArmL.scale.set(0.13, 0.36, 0.13);
+    iArmL.position.set(-0.31, 0.02, 0);
+    const iArmR = iArmL.clone();
+    iArmR.position.x = 0.31;
+    this.editIcon.add(iHead, iBody, iArmL, iArmR);
+    this.editIcon.position.y = 2.7;
+    this.token.add(this.editIcon);
+    this.editHit = new THREE.Mesh(
+      tokenBox,
+      new THREE.MeshBasicMaterial({ visible: false })
+    );
+    this.editHit.scale.setScalar(1.7);
+    this.editHit.position.y = 2.7;
+    this.token.add(this.editHit);
     this.scene.add(this.token);
     this.tokenNav = 0; // index into navList
     this.walk = null; // { points, t, dur, target }
@@ -158,37 +213,146 @@ export class Overworld {
     const b = this.data.bounds;
     const cx = (b.minX + b.maxX) / 2;
     const cz = (b.minZ + b.maxZ) / 2;
-    const base = new THREE.Mesh(boxGeo, new THREE.MeshLambertMaterial({ color: 0x3f7fc4 }));
+    const base = new THREE.Mesh(boxGeo, new THREE.MeshLambertMaterial({ color: 0x4384cc }));
     base.scale.set(b.maxX - b.minX + 60, 1, b.maxZ - b.minZ + 44);
     base.position.set(cx, -1.35, cz);
     this.scene.add(base);
 
-    // Subtle two-tone checker: lighter 3x3 tiles on alternating cells.
-    const tiles = [];
-    for (let ix = -14; ix <= 14; ix++) {
-      for (let iz = -9; iz <= 12; iz++) {
-        if ((ix + iz) & 1) continue;
-        tiles.push([cx + ix * 3, cz + iz * 3]);
+    // Living sea: one 2x2 tile per open-water patch, turquoise shallows
+    // hugging every coast and fading to deep blue offshore. Each tile keeps
+    // a base color + phase so tick() can shimmer them cheaply.
+    const deep = new THREE.Color(0x4384cc);
+    const shallow = new THREE.Color(0x5fd6d2);
+    const shoreDist = (tx, tz) => {
+      for (let r = 1; r <= 5; r++) {
+        for (let dx = -r; dx <= r; dx++) {
+          for (let dz = -r; dz <= r; dz++) {
+            if (Math.max(Math.abs(dx), Math.abs(dz)) !== r) continue;
+            if (this.groundH.has((tx + dx) + ',' + (tz + dz))) return r;
+          }
+        }
+      }
+      return 6;
+    };
+    this.waterTiles = []; // { x, z, color, phase, amp }
+    for (let tx = Math.floor(b.minX) - 30; tx <= Math.ceil(b.maxX) + 30; tx += 2) {
+      for (let tz = Math.floor(b.minZ) - 22; tz <= Math.ceil(b.maxZ) + 22; tz += 2) {
+        if (this.groundH.has(tx + ',' + tz) && this.groundH.has((tx + 1) + ',' + tz) &&
+            this.groundH.has(tx + ',' + (tz + 1)) && this.groundH.has((tx + 1) + ',' + (tz + 1))) {
+          continue; // fully under land
+        }
+        const d = shoreDist(tx, tz);
+        const color = shallow.clone().lerp(deep, Math.min(1, (d - 1) / 4.5));
+        color.offsetHSL(0, 0, (hash2(tx, tz, 5) - 0.5) * 0.05);
+        this.waterTiles.push({
+          x: tx + 0.5, z: tz + 0.5, color,
+          phase: hash2(tx, tz, 6) * Math.PI * 2,
+          amp: d < 3 ? 0.09 : 0.05, // shallows shimmer a touch more
+        });
       }
     }
-    const checker = new THREE.InstancedMesh(
-      boxGeo, new THREE.MeshLambertMaterial({ color: 0x4b8fd2 }), tiles.length
+    this.waterMesh = new THREE.InstancedMesh(
+      boxGeo, new THREE.MeshLambertMaterial(), this.waterTiles.length
     );
-    checker.frustumCulled = false;
-    const dummy = new THREE.Object3D();
-    tiles.forEach(([x, z], i) => {
-      dummy.position.set(x, -0.82, z);
-      dummy.scale.set(3, 0.1, 3);
-      dummy.updateMatrix();
-      checker.setMatrixAt(i, dummy.matrix);
+    this.waterMesh.frustumCulled = false;
+    this.waterDummy = new THREE.Object3D();
+    this.waterTiles.forEach((w, i) => {
+      this.waterDummy.position.set(w.x, -0.8, w.z);
+      this.waterDummy.scale.set(2, 0.1, 2);
+      this.waterDummy.updateMatrix();
+      this.waterMesh.setMatrixAt(i, this.waterDummy.matrix);
+      this.waterMesh.setColorAt(i, w.color);
     });
-    checker.instanceMatrix.needsUpdate = true;
-    this.scene.add(checker);
+    this.waterMesh.instanceMatrix.needsUpdate = true;
+    this.scene.add(this.waterMesh);
+
+    // Foam: little white edge voxels in the water alongside every coast,
+    // bobbing and breathing in tick().
+    this.foam = [];
+    const seen = new Set();
+    for (const key of this.groundH.keys()) {
+      const [gx, gz] = key.split(',').map(Number);
+      for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const fx = gx + dx;
+        const fz = gz + dz;
+        const fkey = fx + ',' + fz;
+        if (this.groundH.has(fkey) || seen.has(fkey)) continue;
+        seen.add(fkey);
+        if (this.foam.length >= 640) continue;
+        this.foam.push({
+          x: fx + (hash2(fx, fz, 7) - 0.5) * 0.5,
+          z: fz + (hash2(fx, fz, 8) - 0.5) * 0.5,
+          phase: hash2(fx, fz, 9) * Math.PI * 2,
+          s: 0.12 + hash2(fx, fz, 10) * 0.16,
+        });
+      }
+    }
+    this.foamMesh = new THREE.InstancedMesh(
+      boxGeo, new THREE.MeshLambertMaterial({
+        color: 0xf4fbff, transparent: true, opacity: 0.85,
+      }), this.foam.length
+    );
+    this.foamMesh.frustumCulled = false;
+    this.scene.add(this.foamMesh);
+
+    // Occasional sun-glints out on the open sea: bright pinpricks that
+    // swell and vanish (unlit material so they read as sparkle).
+    this.glints = [];
+    const grand = mulberry32(6161);
+    let guard = 0;
+    while (this.glints.length < 36 && guard++ < 300) {
+      const x = b.minX - 10 + grand() * (b.maxX - b.minX + 20);
+      const z = b.minZ - 6 + grand() * (b.maxZ - b.minZ + 12);
+      if (this.groundH.has(Math.round(x) + ',' + Math.round(z))) continue;
+      this.glints.push({ x, z, phase: grand() * Math.PI * 2, speed: 0.5 + grand() * 0.8 });
+    }
+    this.glintMesh = new THREE.InstancedMesh(
+      boxGeo, new THREE.MeshBasicMaterial({ color: 0xffffff }), this.glints.length
+    );
+    this.glintMesh.frustumCulled = false;
+    this.scene.add(this.glintMesh);
+  }
+
+  // Animated water: tile shimmer, coast foam bob, open-sea glints.
+  updateWater(t) {
+    const col = new THREE.Color();
+    for (let i = 0; i < this.waterTiles.length; i++) {
+      const w = this.waterTiles[i];
+      const k = 1 + Math.sin(t * 1.3 + w.phase + w.x * 0.35 + w.z * 0.21) * w.amp;
+      col.copy(w.color).multiplyScalar(k);
+      this.waterMesh.setColorAt(i, col);
+    }
+    this.waterMesh.instanceColor.needsUpdate = true;
+
+    const dummy = this.waterDummy;
+    for (let i = 0; i < this.foam.length; i++) {
+      const f = this.foam[i];
+      const p = Math.sin(t * 1.6 + f.phase);
+      dummy.position.set(f.x, -0.62 + p * 0.05, f.z);
+      const s = f.s * (1 + p * 0.18);
+      dummy.scale.set(s, 0.08, s);
+      dummy.rotation.set(0, f.phase, 0);
+      dummy.updateMatrix();
+      this.foamMesh.setMatrixAt(i, dummy.matrix);
+    }
+    this.foamMesh.instanceMatrix.needsUpdate = true;
+
+    for (let i = 0; i < this.glints.length; i++) {
+      const g = this.glints[i];
+      const w = Math.max(0, Math.sin(t * g.speed + g.phase));
+      const s = 0.0001 + w * w * w * 0.3;
+      dummy.position.set(g.x, -0.58, g.z);
+      dummy.scale.set(s, 0.06, s);
+      dummy.rotation.set(0, t * 0.5 + g.phase, 0);
+      dummy.updateMatrix();
+      this.glintMesh.setMatrixAt(i, dummy.matrix);
+    }
+    this.glintMesh.instanceMatrix.needsUpdate = true;
   }
 
   buildTerrain() {
     this.groundMesh = new THREE.InstancedMesh(
-      boxGeo, new THREE.MeshLambertMaterial(), MAX_GROUND
+      groundGeo, new THREE.MeshLambertMaterial({ vertexColors: true }), MAX_GROUND
     );
     this.groundMesh.frustumCulled = false;
     this.scene.add(this.groundMesh);
@@ -209,7 +373,13 @@ export class Overworld {
       this.groundMesh.setMatrixAt(this.groundMeta.length, dummy.matrix);
       const color = new THREE.Color(hex);
       if (tier > 0) color.offsetHSL(0, 0, tier * 0.035); // terraces a touch lighter
-      this.groundMeta.push({ region, color });
+      // Per-tile jitter breaks up the flat checker without losing the palette.
+      color.offsetHSL(
+        (hash2(cx, cz, 1) - 0.5) * 0.02,
+        (hash2(cx, cz, 2) - 0.5) * 0.1,
+        (hash2(cx, cz, 3) - 0.5) * 0.05
+      );
+      this.groundMeta.push({ region, color, cx, cz, tier });
     };
 
     WORLDS.forEach((w, wi) => {
@@ -285,6 +455,19 @@ export class Overworld {
           cell(isl.x + dx, isl.z + dz, 0, (dx + dz) & 1 ? 0xeed48e : 0xe5c97e, -1);
         }
       }
+    }
+
+    // Sand ring: shoreline cells blend toward beach sand so coasts read as
+    // beaches instead of abrupt grass cliffs dropping into the sea.
+    const sand = new THREE.Color(0xecd79f);
+    for (const m of this.groundMeta) {
+      if (m.tier > 0) continue;
+      const coast =
+        !this.groundH.has((m.cx + 1) + ',' + m.cz) ||
+        !this.groundH.has((m.cx - 1) + ',' + m.cz) ||
+        !this.groundH.has(m.cx + ',' + (m.cz + 1)) ||
+        !this.groundH.has(m.cx + ',' + (m.cz - 1));
+      if (coast) m.color.lerp(sand, 0.5 + hash2(m.cx, m.cz, 4) * 0.25);
     }
 
     this.groundMesh.count = this.groundMeta.length;
@@ -444,6 +627,14 @@ export class Overworld {
     for (const isl of this.islands) {
       if (isl.palm) palm(iput, isl.x, 0, isl.z);
       else rock(iput, isl.x, 0, isl.z, 0x9c9c8a);
+      // Seashells + a pink starfish dotted around each island beach.
+      for (let k = 0; k < 3; k++) {
+        const a = hash2(isl.x, isl.z, 20 + k) * Math.PI * 2;
+        const sx = isl.x + Math.cos(a) * 1.1;
+        const sz = isl.z + Math.sin(a) * 1.1;
+        if (k === 2) iput(sx, 0.07, sz, 0.32, 0.1, 0.32, 0xff9ff3, a);
+        else iput(sx, 0.08, sz, 0.22, 0.12, 0.3, 0xfdf5e6, a);
+      }
     }
     const wrand = mulberry32(31337);
     for (let k = 0; k < 42; k++) {
@@ -459,6 +650,69 @@ export class Overworld {
     this.glowMesh.count = this.glowMeta.length;
     this.decorMesh.instanceMatrix.needsUpdate = true;
     this.glowMesh.instanceMatrix.needsUpdate = true;
+  }
+
+  // Ambient sea life: ducks paddling little laps off the coasts, plus a
+  // fish that hops out of the water now and then. Animated in tick().
+  buildCritters() {
+    const mkDuck = () => {
+      const g = new THREE.Group();
+      const body = new THREE.Mesh(boxGeo, new THREE.MeshLambertMaterial({ color: 0xfff3b0 }));
+      body.scale.set(0.62, 0.34, 0.4);
+      body.position.y = 0.05;
+      const head = new THREE.Mesh(boxGeo, new THREE.MeshLambertMaterial({ color: 0xffe066 }));
+      head.scale.setScalar(0.26);
+      head.position.set(0.3, 0.33, 0);
+      const beak = new THREE.Mesh(boxGeo, new THREE.MeshLambertMaterial({ color: 0xff8c42 }));
+      beak.scale.set(0.16, 0.08, 0.12);
+      beak.position.set(0.47, 0.3, 0);
+      g.add(body, head, beak);
+      return g;
+    };
+    // Open sea is guaranteed past |x| = 22 (away from the little islands).
+    this.ducks = [];
+    for (const d of [{ x: -24.5, z: 2.5, r: 1.4 }, { x: 24, z: 21, r: 1.1 }]) {
+      if (this.groundH.has(Math.round(d.x) + ',' + Math.round(d.z))) continue;
+      const mesh = mkDuck();
+      this.scene.add(mesh);
+      this.ducks.push({ mesh, ...d, phase: d.x * 0.7 });
+    }
+    this.fish = new THREE.Group();
+    const fb = new THREE.Mesh(boxGeo, new THREE.MeshLambertMaterial({ color: 0xff8c42 }));
+    fb.scale.set(0.5, 0.26, 0.16);
+    const ft = new THREE.Mesh(boxGeo, new THREE.MeshLambertMaterial({ color: 0xffd54a }));
+    ft.scale.set(0.16, 0.22, 0.1);
+    ft.position.x = -0.32;
+    this.fish.add(fb, ft);
+    this.fish.visible = false;
+    this.fishHome = { x: -24, z: 30 };
+    this.scene.add(this.fish);
+  }
+
+  updateCritters(t) {
+    for (const d of this.ducks) {
+      const a = t * 0.35 + d.phase;
+      d.mesh.position.set(
+        d.x + Math.cos(a) * d.r,
+        -0.52 + Math.sin(t * 1.7 + d.phase) * 0.05,
+        d.z + Math.sin(a) * d.r
+      );
+      d.mesh.rotation.y = -a; // face along the paddle circle
+      d.mesh.rotation.z = Math.sin(t * 2.2 + d.phase) * 0.06;
+    }
+    const cyc = (t * 0.22 + 0.3) % 1; // a hop roughly every 4.5s
+    if (cyc < 0.28) {
+      const u = cyc / 0.28;
+      this.fish.visible = true;
+      this.fish.position.set(
+        this.fishHome.x + u * 2.4 - 1.2,
+        -0.7 + Math.sin(u * Math.PI) * 1.3,
+        this.fishHome.z
+      );
+      this.fish.rotation.z = (0.5 - u) * 1.8;
+    } else {
+      this.fish.visible = false;
+    }
   }
 
   // Big voxel "?" floating over each still-locked region.
@@ -493,20 +747,39 @@ export class Overworld {
   }
 
   buildSkyClouds() {
-    // Blocky clouds drifting high above the diorama (no shadow maps, so
+    // Puffy layered voxel clouds drifting high above the diorama: solid
+    // white tops over a slightly shaded flat underside (no shadow maps, so
     // they cast nothing).
     this.mapClouds = [];
-    const mat = new THREE.MeshLambertMaterial({ color: 0xffffff });
+    const topMat = new THREE.MeshLambertMaterial({
+      color: 0xffffff, emissive: 0xffffff, emissiveIntensity: 0.5,
+      transparent: true, opacity: 0.92,
+    });
+    const underMat = new THREE.MeshLambertMaterial({
+      color: 0xd9e6f4, emissive: 0xd9e6f4, emissiveIntensity: 0.35,
+      transparent: true, opacity: 0.92,
+    });
     const rand = mulberry32(909);
-    for (let i = 0; i < 4; i++) {
+    for (let i = 0; i < 5; i++) {
       const gp = new THREE.Group();
-      for (let j = 0; j < 3; j++) {
-        const m = new THREE.Mesh(boxGeo, mat);
-        m.scale.set(1.8 + rand() * 2, 0.8, 1.5 + rand());
-        m.position.set(j * 1.5 - 1.5, rand() * 0.4, (rand() - 0.5) * 1.6);
+      const puffs = 4 + Math.floor(rand() * 3);
+      for (let j = 0; j < puffs; j++) {
+        const m = new THREE.Mesh(boxGeo, topMat);
+        const mid = 1 - Math.abs(j - (puffs - 1) / 2) / puffs; // taller center
+        m.scale.set(1.3 + rand() * 1.6, 0.7 + mid * 1.1 + rand() * 0.4, 1.2 + rand() * 1.1);
+        m.position.set(
+          (j - (puffs - 1) / 2) * 1.2 + (rand() - 0.5) * 0.5,
+          m.scale.y * 0.35 + rand() * 0.2,
+          (rand() - 0.5) * 1.6
+        );
         gp.add(m);
       }
-      gp.position.set(-30 + rand() * 60, 9 + rand() * 3, rand() * 38);
+      const under = new THREE.Mesh(boxGeo, underMat);
+      under.scale.set(puffs * 1.2 + 0.8, 0.45, 2.4);
+      under.position.y = -0.15;
+      gp.add(under);
+      gp.scale.setScalar(0.6 + rand() * 0.2);
+      gp.position.set(-30 + rand() * 60, 12 + rand() * 3, rand() * 38);
       gp.userData.drift = 0.4 + rand() * 0.5;
       this.scene.add(gp);
       this.mapClouds.push(gp);
@@ -515,7 +788,7 @@ export class Overworld {
 
   buildTiles() {
     this.tileMesh = new THREE.InstancedMesh(
-      boxGeo, new THREE.MeshLambertMaterial({ color: 0xf7e9b0 }), MAX_TILES
+      boxGeo, new THREE.MeshLambertMaterial({ color: 0xf3d894 }), MAX_TILES
     );
     this.tileMesh.frustumCulled = false;
     this.scene.add(this.tileMesh);
@@ -584,8 +857,15 @@ export class Overworld {
       ring.scale.set(2.2, 0.12, 2.2);
       ring.position.y = 0.05;
       ring.visible = false;
+      // Always-on warm rim under the plate so every node pops off the grass.
+      const rim = new THREE.Mesh(
+        boxGeo,
+        new THREE.MeshLambertMaterial({ color: 0xffe9a8, emissive: 0x2a2010 })
+      );
+      rim.scale.set(2.02, 0.1, 2.02);
+      rim.position.y = 0.03;
       const stars = mkStars();
-      g.add(plate, dot, ring, stars);
+      g.add(plate, dot, ring, rim, stars);
 
       let crystals = null;
       if (secret) { // purple crystal cluster
@@ -734,7 +1014,7 @@ export class Overworld {
     // Road from world 0's first node, same look as the journey tiles
     // (always shown — the house is never locked). World coords, not group.
     const n0 = this.data.nodes[0];
-    const tileMat = new THREE.MeshLambertMaterial({ color: 0xf7e9b0 });
+    const tileMat = new THREE.MeshLambertMaterial({ color: 0xf3d894 });
     const dx = HOUSE_POS.x - n0.x;
     const dz = HOUSE_POS.z - n0.z;
     const len = Math.hypot(dx, dz);
@@ -743,10 +1023,12 @@ export class Overworld {
       const t = k / steps;
       const wob = Math.sin(t * Math.PI * 2) * 0.35; // gentle S like the trail
       const tile = new THREE.Mesh(boxGeo, tileMat);
-      tile.scale.set(0.72, 0.16, 0.72);
+      const w = 0.64 + hash2(k, 3, 11) * 0.16; // stepping-stone variety
+      tile.scale.set(w, 0.18, w);
+      tile.rotation.y = (hash2(k, 5, 12) - 0.5) * 0.5;
       tile.position.set(
         n0.x + dx * t - (dz / len) * wob,
-        0.08,
+        0.09,
         n0.z + dz * t + (dx / len) * wob
       );
       this.scene.add(tile);
@@ -914,8 +1196,11 @@ export class Overworld {
     const place = (mesh, list) => {
       list.forEach((t, i) => {
         const s = t.shown ? (t.pop > 0 ? 1 + Math.sin(t.pop * Math.PI) * 0.4 : 1) : 0.0001;
-        dummy.position.set(t.x, t.shown && t.pop > 0 ? 0.1 + t.pop * 0.3 : 0.08, t.z);
-        dummy.scale.set(0.72 * s, 0.16, 0.72 * s);
+        // Stepping-stone look: each tile keeps a stable size/twist of its own.
+        const w = 0.64 + hash2(t.x, t.z, 11) * 0.16;
+        dummy.position.set(t.x, t.shown && t.pop > 0 ? 0.1 + t.pop * 0.3 : 0.09, t.z);
+        dummy.rotation.y = (hash2(t.x, t.z, 12) - 0.5) * 0.5;
+        dummy.scale.set(w * s, 0.18, w * s);
         dummy.updateMatrix();
         mesh.setMatrixAt(i, dummy.matrix);
       });
@@ -1025,8 +1310,12 @@ export class Overworld {
       -(cy / window.innerHeight) * 2 + 1
     );
     this.raycaster.setFromCamera(ndc, this.camera);
+    if (this.raycaster.intersectObject(this.editHit, false).length) {
+      this.cb.onEditTapped();
+      return;
+    }
     if (this.raycaster.intersectObject(this.tokenHit, false).length) {
-      this.cb.onTokenTapped();
+      this.cb.onEnterKey();
       return;
     }
     if (this.raycaster.intersectObject(this.houseHit, false).length) {
@@ -1042,9 +1331,9 @@ export class Overworld {
     if (hits.length) {
       hits.sort((a, b) => a.dist - b.dist);
       this.walkTo(hits[0].idx);
-    } else {
-      this.cb.onDismiss();
     }
+    // Tapping empty ground keeps the current banner — it's never dismissed,
+    // only replaced when the token reaches a different node.
   }
 
   walkTo(navIdx) {
@@ -1228,6 +1517,11 @@ export class Overworld {
     this.houseIcon.rotation.y = t * 1.2;
     this.houseIcon.position.y = 4.3 + Math.sin(t * 2) * 0.15;
 
+    // Dress-up marker over the token: counter-rotate so it spins in world
+    // space no matter which way the kid is facing.
+    this.editIcon.rotation.y = t * 1.2 - this.token.rotation.y;
+    this.editIcon.position.y = 2.7 + Math.sin(t * 2 + 1) * 0.12;
+
     // Lazy chimney smoke: a soft puff every couple of seconds.
     this.houseSmokeT -= dt;
     if (this.houseSmokeT <= 0) {
@@ -1242,6 +1536,10 @@ export class Overworld {
       c.position.x += c.userData.drift * dt;
       if (c.position.x > b.maxX + 26) c.position.x = b.minX - 26;
     }
+
+    // Living sea: shimmer, foam, glints, ducks and the hopping fish.
+    this.updateWater(t);
+    this.updateCritters(t);
 
     // Node idle animations.
     this.nodeViews.forEach((v, i) => {

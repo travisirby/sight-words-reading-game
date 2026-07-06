@@ -278,8 +278,10 @@ export class DoorsEvent {
       knob.position.set(-0.44, 0.95, 1.1);
       hinge.add(panel, knob);
       this.group.add(hinge);
+      // Sign sits left of the player's stand spot (wall −0.85) so it never
+      // covers the face of a kid waiting at a door.
       const sign = makeSign(1.9, 0.95);
-      sign.position.set(-1.6, tier + 1.15, 1.3);
+      sign.position.set(-2.3, tier + 1.15, 1.3);
       setSign(sign, words[i], 'normal');
       this.group.add(sign);
       return { hinge, sign, word: words[i], tier, dead: false, shakeT: 0, openT: -1 };

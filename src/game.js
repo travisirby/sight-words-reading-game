@@ -95,10 +95,12 @@ export class Game {
     this.camera.position.set(3, 4.2, 14);
     this.lookTarget = new THREE.Vector3(4, 3, 0);
 
-    const hemi = new THREE.HemisphereLight(0xffffff, 0x88aa66, 1.1);
-    const sun = new THREE.DirectionalLight(0xfff2d9, 1.4);
+    const hemi = new THREE.HemisphereLight(0xfff4e2, 0x88aa66, 1.05);
+    const sun = new THREE.DirectionalLight(0xffe7c2, 1.5);
     sun.position.set(4, 10, 6);
     this.scene.add(hemi, sun);
+    // LevelScene retints the ground bounce per world palette in build().
+    this.scene.userData.hemiLight = hemi;
 
     this.level = new LevelScene(this.scene);
     this.player = new Player(this.scene);
@@ -470,7 +472,8 @@ export class Game {
         c.squashT -= dt;
         c.x += c.dir * 6 * dt;
         const t = Math.max(0, c.squashT / 0.5);
-        const gy0 = this.level.groundTopAt(c.x);
+        const gy0 = Math.max(this.level.groundTopAt(c.x - 0.45),
+                             this.level.groundTopAt(c.x + 0.45));
         c.g.position.set(c.x, gy0 + (1 - t) * 1.2 * Math.sin(t * Math.PI), 0);
         c.g.rotation.z += c.dir * -10 * dt;
         c.g.scale.setScalar(Math.max(0.05, t));
@@ -483,7 +486,11 @@ export class Game {
       c.x += c.dir * 1.1 * dt;
       if (c.x < c.x0) { c.x = c.x0; c.dir = 1; }
       if (c.x > c.x1) { c.x = c.x1; c.dir = -1; }
-      const gy = this.level.groundTopAt(c.x);
+      // Stand on the higher of the two body-edge columns so a critter
+      // near a ground step rides over the raised blocks instead of
+      // clipping through them.
+      const gy = Math.max(this.level.groundTopAt(c.x - 0.45),
+                          this.level.groundTopAt(c.x + 0.45));
       c.g.position.set(c.x, gy + Math.abs(Math.sin(this.elapsed * 8 + c.x)) * 0.08, 0);
       c.g.rotation.y = c.dir > 0 ? 0.25 : -0.25;
       c.g.rotation.z = Math.sin(this.elapsed * 8 + c.x) * 0.08;
