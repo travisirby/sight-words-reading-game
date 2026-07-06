@@ -3,6 +3,7 @@
 // transparent map screen chrome + the slide-up level banner.
 
 import { speak } from './audio.js';
+import * as fairy from './fairy.js';
 import * as store from './store.js';
 import { PALETTES, STYLES, OUTFITS } from './character.js';
 import { HOUSE_ITEMS } from './housedata.js';
@@ -12,6 +13,7 @@ const $ = (id) => document.getElementById(id);
 const SCREENS = ['title', 'map', 'pause', 'complete', 'bonus', 'char', 'house'];
 
 export function init(h) {
+  fairy.mount();
   bindSpeak($('btn-play'), 'Play!', () => h.onPlay());
   bindSpeak($('btn-character'), 'Make your character!', () => h.onCharacter());
   bindSpeak($('btn-char-back'), 'Back', () => h.onCharacterDone());
@@ -90,6 +92,8 @@ export function showScreen(name) {
     $(`screen-${s}`).classList.toggle('hidden', s !== name);
   }
   if (name !== 'map') hideLevelBanner();
+  // No screen means we're in a run — the fairy perches by the 🔊 button.
+  fairy.flyTo(name || 'game');
 }
 
 export function showHUD(on) {
