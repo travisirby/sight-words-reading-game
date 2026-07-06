@@ -6,8 +6,8 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <title>Word Runner</title>
-  <script type="module" crossorigin src="./assets/index-BLmqWj4y.js"></script>
-  <link rel="stylesheet" crossorigin href="./assets/index-Bsdo4iIy.css">
+  <script type="module" crossorigin src="./assets/index-Lyy5aRYP.js"></script>
+  <link rel="stylesheet" crossorigin href="./assets/index-jE3tdKr7.css">
 </head>
 <body>
   <!-- 3D canvas mounts here -->
@@ -155,6 +155,15 @@
       <div id="shop-list"></div>
     </div>
     <div id="house-toast" class="hidden"></div>
+  </div>
+
+  <!-- ============ CUTSCENE (3D; letterbox + captions) ============ -->
+  <div id="screen-cutscene" class="screen cutscene-screen hidden">
+    <div class="cs-bar cs-bar-top"></div>
+    <div class="cs-bar cs-bar-bottom"></div>
+    <div id="cs-word" class="hidden"></div>
+    <div id="cs-caption" class="hidden"></div>
+    <button id="btn-cutscene-skip" class="btn">⏭️ SKIP</button>
   </div>
 
   <!-- ============ READ-ALOUD BONUS ROUND ============ -->
