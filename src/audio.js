@@ -196,6 +196,13 @@ let pendingFin = null; // onend of the speech being interrupted
 
 const norm = (t) => t.trim().toLowerCase().replace(/\s+/g, ' ');
 
+// Tells the narrator fairy (fairy.js) when the voice starts/stops talking.
+function notifySpeaking(speaking, text = '') {
+  try {
+    window.dispatchEvent(new CustomEvent('wr-speech', { detail: { speaking, text } }));
+  } catch (e) { /* ignore */ }
+}
+
 // Resolve text to a clip sequence: an exact phrase, or a known
 // "prefix: word [suffix]" template assembled from segment clips.
 // Returns null when the text has no clips (caller falls back to synthesis).
@@ -307,9 +314,11 @@ export function speak(text, { rate = 1.0, onend = null } = {}) {
     if (done) return;
     done = true;
     if (pendingFin === fin) pendingFin = null;
+    notifySpeaking(false);
     if (onend) onend();
   };
   pendingFin = fin;
+  notifySpeaking(true, text);
 
   const clips = clipsFor(text);
   const c = clips && ensureCtx();
