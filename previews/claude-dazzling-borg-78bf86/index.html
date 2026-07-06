@@ -6,14 +6,14 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <title>Word Runner</title>
-  <script type="module" crossorigin src="./assets/index-DVf3woyM.js"></script>
-  <link rel="stylesheet" crossorigin href="./assets/index-rijXzJ3R.css">
+  <script type="module" crossorigin src="./assets/index-oeoOKev_.js"></script>
+  <link rel="stylesheet" crossorigin href="./assets/index-D-Zm8TW6.css">
 </head>
 <body>
   <!-- 3D canvas mounts here -->
   <div id="game-container"></div>
 
-  <!-- ============ TITLE SCREEN ============ -->
+  <!-- ============ TITLE SCREEN (3D char preview behind; DOM chrome only) ============ -->
   <div id="screen-title" class="screen">
     <h1 class="game-title">
       <span>W</span><span>O</span><span>R</span><span>D</span>
@@ -23,13 +23,41 @@
     <button id="btn-play" class="btn btn-huge">▶️ PLAY</button>
     <button id="btn-character" class="btn btn-wide">🧒 MY CHARACTER</button>
     <button id="btn-title-house" class="btn btn-wide">🏠 MY HOUSE</button>
+    <button id="btn-switch-player" class="btn btn-wide">👧👦 SWITCH PLAYER</button>
     <button id="btn-settings" class="btn btn-round">⚙️</button>
     <div id="settings-panel" class="panel hidden">
       <button id="btn-toggle-sound" class="btn btn-wide">🔊 Sound: ON</button>
       <button id="btn-toggle-mic" class="btn btn-wide">🎤 Mic Round: ON</button>
       <button id="btn-settings-close" class="btn btn-wide">✖️ Close</button>
     </div>
+    <!-- Chunky nameplate floating by the spinning kid; hidden when unnamed -->
+    <div id="player-nameplate" class="hidden"></div>
     <div id="version-tag">v2.0</div>
+  </div>
+
+  <!-- ============ PLAYER SELECT ============ -->
+  <div id="screen-players" class="screen hidden">
+    <button id="btn-players-back" class="btn btn-round corner-top-left">⬅️</button>
+    <h2 class="players-heading">Who's playing?</h2>
+    <div id="players-list"></div>
+    <!-- Optional-name prompt for a brand new player -->
+    <div id="new-player-panel" class="panel players-panel hidden">
+      <h2>✨ New Player</h2>
+      <input id="new-player-name" type="text" maxlength="14" placeholder="Type a name…" autocomplete="off" autocapitalize="words" />
+      <div class="panel-row">
+        <button id="btn-new-player-ok" class="btn btn-wide">✅ OK</button>
+        <button id="btn-new-player-skip" class="btn">⏭️ Skip</button>
+      </div>
+    </div>
+    <!-- Kid-safe delete confirmation: No is the big friendly default -->
+    <div id="confirm-delete-panel" class="panel players-panel hidden">
+      <h2>🗑️ Delete this player?</h2>
+      <div class="confirm-sub">All their progress will be lost.</div>
+      <div class="panel-row">
+        <button id="btn-delete-no" class="btn btn-huge">🙅 No</button>
+        <button id="btn-delete-yes" class="btn btn-danger">🗑️ Yes</button>
+      </div>
+    </div>
   </div>
 
   <!-- ============ OVERWORLD MAP (3D; DOM chrome only) ============ -->
