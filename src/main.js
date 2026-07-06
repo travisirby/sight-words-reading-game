@@ -7,6 +7,8 @@ import { Overworld } from './overworld.js';
 import { CharScene } from './charscene.js';
 import { applyLook, currentLook } from './player.js';
 import { House } from './house.js';
+import { CutsceneScene } from './cutscene.js';
+import { CUTSCENES } from './cutscenes.js';
 import * as ui from './ui.js';
 import * as store from './store.js';
 import * as speech from './speech.js';
@@ -27,7 +29,7 @@ let current = { world: 0, level: 0, secret: false };
 let selected = null; // node info from the map banner
 let lastRun = null; // { results, coins, gems, stars, keyFound }
 let bonus = null; // active bonus round state
-let mode = 'map'; // which scene renders: 'map' | 'game' | 'char' | 'house'
+let mode = 'map'; // which scene renders: 'map' | 'game' | 'char' | 'house' | 'cutscene'
 // ('char' also backs the title + player-select screens: the spinning kid)
 let houseReturn = 'title'; // screen to go back to when leaving the house
 
@@ -80,10 +82,11 @@ const map = new Overworld(renderer, {
 
 const charScene = new CharScene();
 const house = new House(renderer);
+const cutscene = new CutsceneScene();
 
 // Debug handle for automated testing (headless tabs freeze rAF, so tests
 // step the sim manually via game.updateRun(dt) and game.debugResolve()).
-window.__wr = { game, store, map, charScene, house };
+window.__wr = { game, store, map, charScene, house, cutscene };
 
 const clock = new THREE.Clock();
 renderer.setAnimationLoop(() => {
@@ -97,6 +100,9 @@ renderer.setAnimationLoop(() => {
   } else if (mode === 'house') {
     house.tick(dt);
     renderer.render(house.scene, house.camera);
+  } else if (mode === 'cutscene') {
+    cutscene.tick(dt);
+    renderer.render(cutscene.scene, cutscene.camera);
   } else {
     map.tick(dt);
     renderer.render(map.scene, map.camera);
@@ -104,7 +110,7 @@ renderer.setAnimationLoop(() => {
 });
 
 function onResize() {
-  for (const cam of [game.camera, map.camera, charScene.camera, house.camera]) {
+  for (const cam of [game.camera, map.camera, charScene.camera, house.camera, cutscene.camera]) {
     cam.aspect = window.innerWidth / window.innerHeight;
     cam.updateProjectionMatrix();
   }
@@ -122,6 +128,20 @@ function showMap() {
   ui.showScreen('map');
 }
 
+// ---------- cutscenes ----------
+
+// Play a script (see cutscenes.js), then hand control back via onDone.
+// Callers decide where to land afterwards (map, level start, title...).
+function playCutscene(script, onDone) {
+  if (mode === 'map') map.exit();
+  mode = 'cutscene';
+  ui.showHUD(false);
+  ui.showScreen('cutscene');
+  cutscene.play(script, onDone);
+}
+
+// ---------- player profiles ----------
+
 // The title shows the active player's spinning kid (CharScene) behind the
 // buttons, with their nameplate — so switching players is instantly visible.
 function showTitle() {
@@ -131,8 +151,6 @@ function showTitle() {
   ui.setPlayerName(store.activeProfileName());
   ui.showScreen('title');
 }
-
-// ---------- player profiles ----------
 
 // Everything downstream that caches per-save state, refreshed after the
 // active profile changes (switch, create, delete-active).
@@ -492,6 +510,13 @@ ui.updateSettingsLabels();
 map.enter(); // warm up the map scene (build paths/locks) for the first PLAY
 map.exit(); // ...but ignore input until then
 showTitle();
+
+// Dev harness: ?cutscene=<name> boots straight into a script (loops back to
+// the title when it ends). Lets a scene be iterated on without playing to it.
+if (cheats.has('cutscene')) {
+  const script = CUTSCENES[cheats.get('cutscene')] || CUTSCENES.demo;
+  playCutscene(script, () => showTitle());
+}
 
 // Auto-pause when the tab is hidden.
 document.addEventListener('visibilitychange', () => {

@@ -11,7 +11,7 @@ import { renderLookThumbnails } from './thumbs.js';
 
 const $ = (id) => document.getElementById(id);
 
-const SCREENS = ['title', 'players', 'map', 'pause', 'complete', 'bonus', 'char', 'house'];
+const SCREENS = ['title', 'players', 'map', 'pause', 'complete', 'bonus', 'char', 'house', 'cutscene'];
 
 export function init(h) {
   fairy.mount();

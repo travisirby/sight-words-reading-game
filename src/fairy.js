@@ -252,6 +252,9 @@ export function mount() {
 export function flyTo(screen) {
   if (!el) return;
   const p = PERCHES[screen];
+  // Screens with no perch (e.g. the self-contained cutscene) hide her —
+  // otherwise she'd be stranded at her last perch, over the scene.
+  el.classList.toggle('hidden', !p);
   if (!p) return;
   // Face the direction she's flying (art faces slightly right).
   if (p.x !== lastX) el.classList.toggle('face-left', p.x < lastX);
