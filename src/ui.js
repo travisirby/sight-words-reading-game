@@ -4,12 +4,13 @@
 
 import { speak } from './audio.js';
 import * as store from './store.js';
-import { PALETTES, STYLES, OUTFITS } from './character.js';
+import { PALETTES, STYLES, OUTFITS, lookFrom } from './character.js';
 import { HOUSE_ITEMS } from './housedata.js';
+import { renderLookThumbnails } from './thumbs.js';
 
 const $ = (id) => document.getElementById(id);
 
-const SCREENS = ['title', 'map', 'pause', 'complete', 'bonus', 'char', 'house'];
+const SCREENS = ['title', 'players', 'map', 'pause', 'complete', 'bonus', 'char', 'house'];
 
 export function init(h) {
   bindSpeak($('btn-play'), 'Play!', () => h.onPlay());
@@ -20,6 +21,14 @@ export function init(h) {
   bindSpeak($('btn-settings-close'), 'Close', () => $('settings-panel').classList.add('hidden'));
   bindSpeak($('btn-toggle-sound'), 'Sound', () => h.onToggleSound());
   bindSpeak($('btn-toggle-mic'), 'Mic round', () => h.onToggleMic());
+
+  bindSpeak($('btn-switch-player'), 'Switch player!', () => h.onSwitchPlayer());
+  bindSpeak($('btn-players-back'), 'Back', () => h.onPlayersBack());
+  // New-player prompt: OK keeps the typed name, Skip means "no name yet".
+  bindSpeak($('btn-new-player-ok'), "Let's go!", () => submitNewPlayer(true));
+  bindSpeak($('btn-new-player-skip'), "Let's go!", () => submitNewPlayer(false));
+  bindSpeak($('btn-delete-no'), 'No', () => closeDeleteConfirm());
+  bindSpeak($('btn-delete-yes'), 'Goodbye!', () => confirmDelete());
 
   bindSpeak($('btn-map-back'), 'Back', () => h.onMapBack());
   bindSpeak($('btn-banner-play'), 'Here we go!', () => h.onBannerPlay());
@@ -117,6 +126,110 @@ export function hideLevelBanner() {
 
 export function isLevelBannerVisible() {
   return !$('level-banner').classList.contains('hidden');
+}
+
+// ---------- title nameplate ----------
+
+// Shown only when the active player actually has a name — no placeholder.
+export function setPlayerName(name) {
+  const el = $('player-nameplate');
+  el.textContent = name;
+  el.classList.toggle('hidden', !name);
+}
+
+// ---------- player select ----------
+
+let playersH = null; // { onSelect(id), onCreate(name), onDelete(id) }
+let pendingDelete = null;
+
+// Open the screen and (re)build one card per profile. Rebuilt wholesale on
+// every change — the list is tiny (≤6) and this keeps states trivially
+// in sync, same trick as the shop.
+export function showPlayers(h) {
+  playersH = h;
+  buildPlayersList();
+  showScreen('players');
+}
+
+function buildPlayersList() {
+  $('new-player-panel').classList.add('hidden');
+  closeDeleteConfirm();
+  const list = $('players-list');
+  list.innerHTML = '';
+  const profiles = store.listProfiles();
+  const blobs = profiles.map((p) => store.peekProfile(p.id));
+  // One offscreen renderer paints the whole batch, then disposes itself.
+  const thumbs = renderLookThumbnails(blobs.map((b) => lookFrom(b.character)));
+
+  profiles.forEach((p, i) => {
+    const label = p.name || `Player ${i + 1}`;
+    const card = document.createElement('div');
+    card.className = 'player-card' + (p.id === store.activeProfileId() ? ' active' : '');
+    const img = document.createElement('img');
+    img.className = 'player-thumb';
+    img.src = thumbs[i];
+    img.alt = '';
+    const name = document.createElement('span');
+    name.className = 'player-name';
+    name.textContent = label; // textContent: names are typed by users
+    const prog = document.createElement('span');
+    prog.className = 'player-progress';
+    prog.textContent = `🗺️ World ${blobs[i].unlocked.world + 1}`;
+    card.append(img, name, prog);
+    card.addEventListener('click', () => {
+      speak(label, { rate: 1.0 });
+      playersH.onSelect(p.id);
+    });
+    // Delete ✕ — hidden when this is the only profile left.
+    if (profiles.length > 1) {
+      const del = document.createElement('button');
+      del.className = 'player-delete';
+      del.textContent = '✕';
+      del.addEventListener('click', (e) => {
+        e.stopPropagation(); // don't also select the card
+        speak('Delete this player? All their progress will be lost.', { rate: 1.0 });
+        pendingDelete = p.id;
+        $('confirm-delete-panel').classList.remove('hidden');
+      });
+      card.appendChild(del);
+    }
+    list.appendChild(card);
+  });
+
+  if (profiles.length < store.MAX_PROFILES) {
+    const add = document.createElement('div');
+    add.className = 'player-card new-player';
+    add.innerHTML = `<span class="player-plus">➕</span>
+      <span class="player-name">New Player</span>
+      <span class="player-progress">&nbsp;</span>`;
+    add.addEventListener('click', () => {
+      speak('New player! What is your name?', { rate: 1.0 });
+      $('new-player-name').value = '';
+      $('new-player-panel').classList.remove('hidden');
+      $('new-player-name').focus();
+    });
+    list.appendChild(add);
+  }
+}
+
+function submitNewPlayer(withName) {
+  if ($('new-player-panel').classList.contains('hidden')) return;
+  $('new-player-panel').classList.add('hidden');
+  const name = withName ? $('new-player-name').value.trim() : '';
+  playersH.onCreate(name);
+}
+
+function closeDeleteConfirm() {
+  pendingDelete = null;
+  $('confirm-delete-panel').classList.add('hidden');
+}
+
+function confirmDelete() {
+  if (!pendingDelete) return;
+  const id = pendingDelete;
+  closeDeleteConfirm();
+  playersH.onDelete(id);
+  buildPlayersList(); // reflect the removal (and re-hide ✕ at one profile)
 }
 
 // ---------- character creator ----------
