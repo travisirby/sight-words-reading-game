@@ -19,7 +19,7 @@ const BUFFER = 0.15;
 
 const css = (hex) => `#${hex.toString(16).padStart(6, '0')}`;
 
-function makeFaceTexture(skinHex, hairHex, fringe) {
+function makeFaceTexture(skinHex, hairHex, fringe, blink = false) {
   const c = document.createElement('canvas');
   c.width = 64;
   c.height = 64;
@@ -30,9 +30,17 @@ function makeFaceTexture(skinHex, hairHex, fringe) {
     g.fillStyle = css(hairHex);
     g.fillRect(0, 0, 64, 14);
   }
-  g.fillStyle = '#222'; // eyes
-  g.fillRect(16, 26, 8, 8);
-  g.fillRect(40, 26, 8, 8);
+  g.fillStyle = '#222'; // eyes (happy closed lines mid-blink)
+  if (blink) {
+    g.fillRect(15, 30, 10, 3);
+    g.fillRect(39, 30, 10, 3);
+  } else {
+    g.fillRect(16, 26, 8, 8);
+    g.fillRect(40, 26, 8, 8);
+  }
+  g.fillStyle = 'rgba(255, 110, 110, 0.4)'; // rosy cheeks
+  g.fillRect(9, 38, 10, 5);
+  g.fillRect(45, 38, 10, 5);
   g.strokeStyle = '#a34d2a'; // smile
   g.lineWidth = 4;
   g.beginPath();
@@ -125,8 +133,11 @@ export function applyLook(group, look) {
   hair.color.setHex(look.hair);
   shirt.color.setHex(look.shirt);
   pants.color.setHex(look.pants);
-  if (p.face.map) p.face.map.dispose();
-  p.face.map = makeFaceTexture(look.skin, look.hair, hasFringe(look.style));
+  if (p.faceTexOpen) p.faceTexOpen.dispose();
+  if (p.faceTexBlink) p.faceTexBlink.dispose();
+  p.faceTexOpen = makeFaceTexture(look.skin, look.hair, hasFringe(look.style));
+  p.faceTexBlink = makeFaceTexture(look.skin, look.hair, hasFringe(look.style), true);
+  p.face.map = p.faceTexOpen;
   p.face.needsUpdate = true;
   // Bald: skin instead of hair on top of the head.
   p.head.material = [skin, skin, look.style === 4 ? skin : hair, skin, p.face, skin];
@@ -151,9 +162,9 @@ export function makeKidMesh(scale = 1, look = null) {
   const hair = new THREE.MeshLambertMaterial({ color: look.hair });
   const shirt = new THREE.MeshLambertMaterial({ color: look.shirt });
   const pants = new THREE.MeshLambertMaterial({ color: look.pants });
-  const face = new THREE.MeshLambertMaterial({
-    map: makeFaceTexture(look.skin, look.hair, hasFringe(look.style)),
-  });
+  const faceTexOpen = makeFaceTexture(look.skin, look.hair, hasFringe(look.style));
+  const faceTexBlink = makeFaceTexture(look.skin, look.hair, hasFringe(look.style), true);
+  const face = new THREE.MeshLambertMaterial({ map: faceTexOpen });
 
   // The body is built facing +x (arms at the z-sides, legs swinging in the
   // x-y plane), so the face goes on +x too — head and chest always agree.
@@ -193,10 +204,73 @@ export function makeKidMesh(scale = 1, look = null) {
   group.add(head, body, armL, armR, legL, legR, hairExtra, outfitExtra);
   group.scale.setScalar(scale);
   group.userData.parts = {
-    head, body, armL, armR, legL, legR, face, hairExtra, outfitExtra,
+    head, body, armL, armR, legL, legR, face, faceTexOpen, faceTexBlink,
+    hairExtra, outfitExtra,
     mats: [skin, hair, shirt, pants],
   };
   return group;
+}
+
+// Tiny pooled dust puffs at the feet (landing thumps, run scuffs).
+// Self-contained so the player never needs a handle on the Effects system.
+const dustGeo = new THREE.BoxGeometry(1, 1, 1);
+
+class DustPool {
+  constructor(scene, n = 12) {
+    this.puffs = [];
+    for (let i = 0; i < n; i++) {
+      const m = new THREE.Mesh(
+        dustGeo,
+        new THREE.MeshBasicMaterial({ color: 0xd8d2c4, transparent: true, opacity: 0, depthWrite: false })
+      );
+      m.visible = false;
+      scene.add(m);
+      this.puffs.push({ m, life: 0, maxLife: 1, vx: 0, vy: 0, grow: 1 });
+    }
+    this.idx = 0;
+  }
+
+  spawn(x, y, { vx = 0, vy = 1.2, size = 0.14, life = 0.35 } = {}) {
+    const p = this.puffs[this.idx];
+    this.idx = (this.idx + 1) % this.puffs.length;
+    p.m.visible = true;
+    p.m.position.set(x, y + 0.06, 0.15);
+    p.m.scale.setScalar(size);
+    p.m.rotation.z = Math.random() * Math.PI;
+    p.vx = vx;
+    p.vy = vy;
+    p.grow = 1.6 + Math.random();
+    p.life = p.maxLife = life;
+  }
+
+  // A landing kicks a few puffs out to both sides; harder falls kick more.
+  burst(x, y, fall) {
+    const n = fall > 2.5 ? 5 : 3;
+    for (let i = 0; i < n; i++) {
+      this.spawn(x + (Math.random() - 0.5) * 0.5, y, {
+        vx: (i % 2 ? 1 : -1) * (0.8 + Math.random() * 1.2),
+        vy: 0.8 + Math.random() * 1.2,
+        size: 0.12 + Math.random() * 0.1,
+        life: 0.3 + Math.random() * 0.15,
+      });
+    }
+  }
+
+  update(dt) {
+    for (const p of this.puffs) {
+      if (!p.m.visible) continue;
+      p.life -= dt;
+      if (p.life <= 0) {
+        p.m.visible = false;
+        continue;
+      }
+      p.m.position.x += p.vx * dt;
+      p.m.position.y += p.vy * dt;
+      p.vy = Math.max(0, p.vy - 4 * dt);
+      p.m.scale.multiplyScalar(1 + p.grow * dt);
+      p.m.material.opacity = 0.5 * (p.life / p.maxLife);
+    }
+  }
 }
 
 export class Player {
@@ -214,6 +288,7 @@ export class Player {
     );
     scene.add(this.shadow);
 
+    this.dust = new DustPool(scene);
     this.reset(0, 0);
   }
 
@@ -228,6 +303,13 @@ export class Player {
     this.stumbleT = 0;
     this.squashT = 0;
     this.walkPhase = 0;
+    this.idleT = Math.random() * 5;
+    this.lean = 0;
+    this.blinkT = 2 + Math.random() * 3;
+    this.blinkHold = 0;
+    this.runDustT = 0;
+    this.parts.face.map = this.parts.faceTexOpen;
+    this.parts.face.needsUpdate = true;
     this.faceYaw = -Math.PI / 2; // forward (+x local) turned to the camera
     this.group.position.set(x, y, 0);
     this.group.rotation.set(0, this.faceYaw, 0);
@@ -294,7 +376,8 @@ export class Player {
           this.y = floor;
           this.vy = 0;
           this.grounded = true;
-          this.squashT = 0.12;
+          this.squashT = 0.16;
+          this.dust.burst(this.x, this.y, this.fallPeak - floor);
           if (cb && cb.onLand) cb.onLand(this.fallPeak - floor);
         }
       }
@@ -312,11 +395,35 @@ export class Player {
 
     // ---- animation ----
     const p = this.parts;
+    const running = this.grounded && Math.abs(speed) > 0.2;
+
+    // Eye blink: swap the face texture closed for a beat every few seconds.
+    if (this.blinkHold > 0) {
+      this.blinkHold -= dt;
+      if (this.blinkHold <= 0) {
+        p.face.map = p.faceTexOpen;
+        p.face.needsUpdate = true;
+        this.blinkT = 2 + Math.random() * 3;
+      }
+    } else {
+      this.blinkT -= dt;
+      if (this.blinkT <= 0) {
+        this.blinkHold = 0.13;
+        p.face.map = p.faceTexBlink;
+        p.face.needsUpdate = true;
+      }
+    }
+
     if (!this.grounded) {
-      p.armL.rotation.z = 2.4;
-      p.armR.rotation.z = 2.4;
-      p.legL.rotation.z = -0.5;
-      p.legR.rotation.z = 0.3;
+      // Arms thrown up, one leg tucked — plus a tiny flail with vy so the
+      // pose isn't frozen through the whole arc.
+      const flail = Math.max(-0.25, Math.min(0.25, this.vy * 0.02));
+      p.armL.rotation.z = 2.4 + flail;
+      p.armR.rotation.z = 2.4 - flail;
+      p.armL.rotation.x = 0.25;
+      p.armR.rotation.x = -0.25;
+      p.legL.rotation.z = -0.5 - flail * 0.5;
+      p.legR.rotation.z = 0.3 + flail * 0.5;
       p.legL.position.y = 0.5;
       p.legR.position.y = 0.5;
     } else {
@@ -324,18 +431,53 @@ export class Player {
       // sweep backward as fast as the ground scrolls or the gait reads as a
       // moonwalk (feet sliding forward). abs(): choice mode walks left too.
       this.walkPhase += dt * Math.max(Math.abs(speed), 0.001) * 2.7;
-      const swing = Math.abs(speed) > 0.2 ? Math.sin(this.walkPhase) : 0;
-      const stride = Math.abs(speed) > 0.2 ? Math.cos(this.walkPhase) : 0;
-      p.armL.rotation.z = swing * 0.9;
-      p.armR.rotation.z = -swing * 0.9;
-      p.legL.rotation.z = -swing * 0.9;
-      p.legR.rotation.z = swing * 0.9;
+      const swing = running ? Math.sin(this.walkPhase) : 0;
+      const stride = running ? Math.cos(this.walkPhase) : 0;
+      if (running) {
+        // Livelier run: bigger swing, arms flare out a touch and bend more
+        // on the back-swing so they read as pumping, not pendulums.
+        p.armL.rotation.z = swing * 1.15;
+        p.armR.rotation.z = -swing * 1.15;
+        p.armL.rotation.x = 0.14 + Math.max(0, swing) * 0.12;
+        p.armR.rotation.x = -0.14 - Math.max(0, -swing) * 0.12;
+        p.legL.rotation.z = -swing * 1.0;
+        p.legR.rotation.z = swing * 1.0;
+        // Occasional little scuff of dust off the trailing foot.
+        this.runDustT -= dt;
+        if (this.runDustT <= 0) {
+          this.runDustT = 0.28 + Math.random() * 0.2;
+          this.dust.spawn(this.x - Math.sign(speed) * 0.3, this.y, {
+            vx: -Math.sign(speed) * (0.6 + Math.random() * 0.6),
+            vy: 0.5 + Math.random() * 0.5,
+            size: 0.09 + Math.random() * 0.05,
+            life: 0.3,
+          });
+        }
+      } else {
+        // Idle: soft breathing bob, arms resting with a gentle sway.
+        this.idleT += dt;
+        const breathe = Math.sin(this.idleT * 2.3);
+        p.armL.rotation.z = breathe * 0.06;
+        p.armR.rotation.z = -breathe * 0.06;
+        p.armL.rotation.x = 0.05;
+        p.armR.rotation.x = -0.05;
+        p.legL.rotation.z = 0;
+        p.legR.rotation.z = 0;
+        p.body.scale.y = 0.6 + breathe * 0.012;
+        p.head.position.y = 1.35 + breathe * 0.012;
+      }
       // Lift whichever leg is swinging forward so the planted leg carries
       // the motion — the other foot never scuffs forward along the ground.
       p.legL.position.y = 0.5 + Math.max(0, -stride) * 0.12;
       p.legR.position.y = 0.5 + Math.max(0, stride) * 0.12;
     }
-    const bob = this.grounded && Math.abs(speed) > 0.2 ? Math.abs(Math.cos(this.walkPhase)) * 0.06 : 0;
+    if (running || !this.grounded) {
+      p.body.scale.y = 0.6;
+      p.head.position.y = 1.35;
+    }
+    const bob = running
+      ? Math.abs(Math.cos(this.walkPhase)) * 0.06
+      : this.grounded ? Math.max(0, Math.sin(this.idleT * 2.3)) * 0.015 : 0;
 
     // Three-quarter view while moving: chest and face point ~35° off the
     // direction of travel (±x, mirrored when steering left in choice mode)
@@ -347,24 +489,35 @@ export class Player {
     this.faceYaw += (targetYaw - this.faceYaw) * Math.min(1, dt * 5);
     this.group.rotation.y = this.faceYaw;
 
-    // Landing squash.
-    let sy = 1;
-    if (this.squashT > 0) {
-      this.squashT -= dt;
-      sy = 0.85 + 0.15 * (1 - this.squashT / 0.12);
-    }
-    this.group.scale.set(1, sy, 1);
-    this.group.position.set(this.x, this.y + bob, 0);
+    // Lean into the run (and ease back upright when idle or airborne).
+    const leanTarget = running ? -Math.sign(speed) * 0.09 : 0;
+    this.lean += (leanTarget - this.lean) * Math.min(1, dt * 8);
 
-    // Stumble: brief wobble + red flash.
+    // Squash and stretch: stretch tall with vertical speed in the air,
+    // squash wide on landing — width compensates so volume reads constant.
+    let sy = 1;
+    if (!this.grounded) {
+      sy = 1 + Math.min(0.14, Math.abs(this.vy) * 0.011);
+    } else if (this.squashT > 0) {
+      this.squashT -= dt;
+      sy = 0.82 + 0.18 * (1 - Math.max(0, this.squashT) / 0.16);
+    }
+    const sx = 1 + (1 - sy) * 0.7;
+    this.group.scale.set(sx, sy, sx);
+    this.group.position.set(this.x, this.y + bob, 0);
+    this.group.rotation.z = this.lean;
+
+    // Stumble: brief wobble + red flash (wobble layers over the run lean).
     if (this.stumbleT > 0) {
       this.stumbleT -= dt;
-      this.group.rotation.z = Math.sin(this.stumbleT * 10) * 0.25 * (this.stumbleT / 0.6);
+      this.group.rotation.z = this.lean +
+        Math.sin(this.stumbleT * 10) * 0.25 * (Math.max(0, this.stumbleT) / 0.6);
       if (this.stumbleT <= 0) {
-        this.group.rotation.z = 0;
         for (const m of this.parts.mats) m.emissive.setHex(0x000000);
       }
     }
+
+    this.dust.update(dt);
 
     // Blob shadow on whatever floor is below, shrinks with height.
     const under = level.floorAt(this.x, this.y + 0.05);

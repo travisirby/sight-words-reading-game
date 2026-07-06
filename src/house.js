@@ -54,10 +54,14 @@ export class House {
       45, window.innerWidth / window.innerHeight, 0.1, 200
     );
 
-    const hemi = new THREE.HemisphereLight(0xffffff, 0x88aa66, 1.1);
-    const sun = new THREE.DirectionalLight(0xfff2d9, 1.3);
+    const hemi = new THREE.HemisphereLight(0xfff3dd, 0x92a768, 1.05);
+    const sun = new THREE.DirectionalLight(0xffe7bd, 1.35);
     sun.position.set(8, 14, 10);
-    this.scene.add(hemi, sun);
+    // Warm hearth glow inside the cutaway so the rooms feel cozy
+    // (a plain point light — still no shadow maps).
+    const glow = new THREE.PointLight(0xffcf8a, 0.85, 16, 1.6);
+    glow.position.set(0, 3.4, -2.5);
+    this.scene.add(hemi, sun, glow);
 
     this.effects = new Effects(this.scene);
 
@@ -126,6 +130,17 @@ export class House {
       this.scene.add(box(light, i * 5.2, 0.01, 2, 2.6, 0.02, 22));
     }
 
+    // Soft tone patches so the lawn isn't one flat green.
+    const patchA = lambert(0x63b843);
+    const patchB = lambert(0x79cd57);
+    const patches = [
+      [-8.2, -1.5, 2.6, 2.0, 0], [4.5, 6.5, 3.0, 2.2, 1], [-3.5, 8.8, 2.2, 1.8, 0],
+      [9.0, 4.0, 2.4, 2.0, 1], [-10.5, 0.5, 2.0, 1.6, 1], [1.5, 10.6, 2.8, 1.8, 0],
+    ];
+    for (const [x, z, w, d, which] of patches) {
+      this.scene.add(box(which ? patchB : patchA, x, 0.018, z, w, 0.02, d, x * 0.1));
+    }
+
     // Stone path from the open house front out to the lawn edge.
     const stone = lambert(0xd9cfb8);
     for (let i = 0; i < 7; i++) {
@@ -154,9 +169,26 @@ export class House {
     const floor = box(lambert(0xdba15f), 0, 0.15, -2.5, 11.2, 0.3, 7.4); // wood floor
     g.add(floor);
     this.floorMesh = floor; // tap-to-walk raycast target
+    // Alternating plank strips so the floor reads as wood, not one slab.
+    const plankA = lambert(0xd2984f);
+    const plankB = lambert(0xc78e47);
+    for (let i = 0; i < 8; i++) {
+      g.add(box(i % 2 ? plankA : plankB, -4.9 + i * 1.4, 0.305, -2.5, 1.32, 0.014, 7.3));
+    }
+    // Sunlight patch spilling from the back window across the planks.
+    g.add(box(lambert(0xffedb8, 0x332a10), -2.6, 0.318, -4.3, 1.7, 0.012, 2.0, 0.15));
+    // Woven doormat just inside the front opening.
+    g.add(box(lambert(0x69b0e0), 0, 0.322, 0.2, 1.6, 0.02, 0.9));
     g.add(box(wall, 0, 1.8, -5.9, 11.2, 3.0, 0.35));              // back wall
     g.add(box(wallDark, -5.4, 1.8, -2.5, 0.35, 3.0, 7.2));        // left wall
     g.add(box(wallDark, 5.4, 1.8, -2.5, 0.35, 3.0, 7.2));         // right wall
+    // Faint plaster tone patches + a baseboard so the walls aren't flat.
+    g.add(box(lambert(0xf0dcae), 1.8, 2.3, -5.71, 2.2, 1.3, 0.06));
+    g.add(box(lambert(0xfae8c2), -4.3, 1.3, -5.71, 1.5, 1.1, 0.06));
+    const skirt = lambert(0xcfa36b);
+    g.add(box(skirt, 0, 0.48, -5.7, 11.0, 0.36, 0.08));
+    g.add(box(skirt, -5.2, 0.48, -2.5, 0.08, 0.36, 6.9));
+    g.add(box(skirt, 5.2, 0.48, -2.5, 0.08, 0.36, 6.9));
 
     // Stubby front wall returns so the opening reads as a doorway-sized cut.
     g.add(box(wall, -4.4, 1.8, 0.9, 2.3, 3.0, 0.3));
@@ -207,6 +239,7 @@ export class House {
       [-18, 8, -8, 0.5], [14, 10, -12, 0.4], [-12, 12, 14, 0.6],
       [18, 9, 8, 0.35], [0, 13, -16, 0.45],
     ];
+    const underMat = lambert(0xd9e6f4);
     for (const [x, y, z, drift] of defs) {
       const gp = new THREE.Group();
       for (let j = 0; j < 3; j++) {
@@ -215,6 +248,11 @@ export class House {
         m.position.set(j * 1.6 - 1.6, (j % 2) * 0.4, (j - 1) * 0.7);
         gp.add(m);
       }
+      // Slightly shaded flat underside so the puffs read as one cloud.
+      const under = new THREE.Mesh(boxGeo, underMat);
+      under.scale.set(5.4, 0.4, 2.6);
+      under.position.y = -0.5;
+      gp.add(under);
       gp.position.set(x, y, z);
       gp.userData.drift = drift;
       this.scene.add(gp);

@@ -95,10 +95,12 @@ export class Game {
     this.camera.position.set(3, 4.2, 14);
     this.lookTarget = new THREE.Vector3(4, 3, 0);
 
-    const hemi = new THREE.HemisphereLight(0xffffff, 0x88aa66, 1.1);
-    const sun = new THREE.DirectionalLight(0xfff2d9, 1.4);
+    const hemi = new THREE.HemisphereLight(0xfff4e2, 0x88aa66, 1.05);
+    const sun = new THREE.DirectionalLight(0xffe7c2, 1.5);
     sun.position.set(4, 10, 6);
     this.scene.add(hemi, sun);
+    // LevelScene retints the ground bounce per world palette in build().
+    this.scene.userData.hemiLight = hemi;
 
     this.level = new LevelScene(this.scene);
     this.player = new Player(this.scene);
