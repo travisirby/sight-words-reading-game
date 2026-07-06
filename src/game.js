@@ -22,6 +22,7 @@ import * as store from './store.js';
 const WALK_SPEED = 4.5;
 const STARS_SPEED = 2.5;
 const CHOICE_SPEED = 3.4; // manual left/right steering while time is frozen
+const FORWARD_BOOST = 1.9; // holding forward during auto-run speeds him up
 const CRITTER_COLORS = [0xff7f50, 0xba68c8, 0x4dd0e1, 0x9fa8da, 0xffb74d];
 
 const boxGeo = new THREE.BoxGeometry(1, 1, 1);
@@ -567,6 +568,8 @@ export class Game {
     if (this.phase === 'stars') target = STARS_SPEED;
     if (this.phase === 'flag' || this.phase === 'done' || this.choice) target = 0;
     if (this.phase === 'bossIntro' || this.phase === 'bossDefeat') target = 0;
+    // Pressing forward (right) while auto-running gives an extra speed burst.
+    if (!this.choice && target > 0 && this.moveDir > 0) target *= FORWARD_BOOST;
     this.stumbleMul = Math.min(1, this.stumbleMul + dt * 1.2);
     target *= this.stumbleMul;
     this.speed += (target - this.speed) * Math.min(1, dt * 4);

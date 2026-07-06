@@ -1,6 +1,7 @@
 // Side-view voxel kid. Walks +x, jump physics with coyote time and jump
 // buffering. Every jump launches at full power — no hold-to-boost, so one
-// press always clears the same height (kid-friendly).
+// press always clears the same height (kid-friendly). A single mid-air
+// double jump is allowed, refilled on each landing.
 // Boxes only, canvas face texture, walk/jump/stomp/stumble animations.
 
 import * as THREE from 'three';
@@ -14,6 +15,8 @@ export const KID_W = 0.7; // collision width
 const GRAVITY = -24; // falling
 const GRAVITY_RISE = -15; // lighter on the way up (floatier, more forgiving)
 const JUMP_V = 10.2; // fixed apex ~3.5 blocks: +3 platforms with margin
+const AIR_JUMPS = 1; // extra mid-air jumps allowed before landing
+const AIR_JUMP_V = 9.4; // second jump, a touch softer than the first
 const COYOTE = 0.12;
 const BUFFER = 0.15;
 
@@ -299,6 +302,7 @@ export class Player {
     this.grounded = true;
     this.buffer = 0;
     this.coyote = 0;
+    this.airJumps = AIR_JUMPS;
     this.fallPeak = y;
     this.stumbleT = 0;
     this.squashT = 0;
@@ -360,7 +364,16 @@ export class Player {
       this.grounded = false;
       this.buffer = 0;
       this.coyote = 0;
+      this.airJumps = AIR_JUMPS; // refill on every ground (or coyote) launch
       this.fallPeak = this.y;
+      sfxJump();
+    } else if (this.buffer > 0 && this.airJumps > 0) {
+      // Mid-air double jump: a fresh upward burst + a little puff of dust.
+      this.vy = AIR_JUMP_V;
+      this.buffer = 0;
+      this.airJumps -= 1;
+      this.fallPeak = this.y;
+      this.dust.burst(this.x, this.y, 1.5);
       sfxJump();
     }
 
