@@ -579,6 +579,325 @@ html, body {
   to { transform: scale(1.09); }
 }
 
+/* ---------- word study overlay ---------- */
+#screen-word-study {
+  background: rgba(20, 40, 80, 0.72);
+  justify-content: center;
+  padding:
+    calc(14px + env(safe-area-inset-top))
+    calc(14px + env(safe-area-inset-right))
+    calc(14px + env(safe-area-inset-bottom))
+    calc(14px + env(safe-area-inset-left));
+}
+#word-study-panel {
+  width: min(940px, 100%);
+  max-height: 100%;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  display: grid;
+  grid-template-rows: auto auto auto auto auto auto auto;
+  gap: 18px;
+  background: #fffbe8;
+  border: 6px solid #2c3e75;
+  border-radius: 30px;
+  padding: 20px 24px 24px;
+  box-shadow: 0 16px 28px rgba(0,0,0,0.25);
+}
+.word-study-topbar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+#word-study-step-strip {
+  flex: 1;
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 4px 2px 8px;
+  -webkit-overflow-scrolling: touch;
+}
+.word-study-step {
+  flex: 0 0 auto;
+  min-height: 42px;
+  display: flex;
+  align-items: center;
+  border: 3px solid #2c3e75;
+  border-radius: 999px;
+  background: #fff;
+  color: #2c3e75;
+  font-size: 18px;
+  font-weight: bold;
+  padding: 6px 14px;
+  opacity: 0.68;
+}
+.word-study-step.active {
+  background: #ffd93d;
+  box-shadow: 0 3px 0 #c9a227;
+  opacity: 1;
+}
+#btn-word-study-close {
+  width: 66px;
+  min-height: 66px;
+  font-size: 26px;
+  flex: 0 0 auto;
+}
+#word-study-word {
+  min-height: 122px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 7px solid #2c3e75;
+  border-radius: 28px;
+  background: #ffffff;
+  color: #2c3e75;
+  font-size: 96px;
+  font-weight: bold;
+  line-height: 1;
+  text-align: center;
+}
+#word-study-chunks,
+#word-study-build-slots,
+#word-study-build-letters,
+#word-study-sentence-choices,
+#word-study-actions {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.word-study-chunk {
+  position: relative;
+  min-width: 96px;
+  min-height: 88px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  border: 5px solid #2c3e75;
+  border-radius: 22px;
+  background: #ffffff;
+  color: #2c3e75;
+  font-family: inherit;
+  font-weight: bold;
+  cursor: pointer;
+  box-shadow: 0 5px 0 #b8ae86;
+}
+.word-study-chunk:active {
+  transform: translateY(4px);
+  box-shadow: 0 1px 0 #b8ae86;
+}
+.word-study-chunk.active {
+  outline: 5px solid #74b9ff;
+  outline-offset: 2px;
+}
+.word-study-chunk.tricky {
+  background: #fff1f1;
+  border-color: #ff6b6b;
+  box-shadow: 0 5px 0 #b94444;
+}
+.word-study-chunk-text {
+  font-size: 44px;
+  line-height: 1;
+}
+.word-study-chunk-sound {
+  font-size: 17px;
+  line-height: 1.1;
+  color: rgba(44, 62, 117, 0.74);
+}
+.word-study-tricky-badge {
+  position: absolute;
+  top: -16px;
+  right: -10px;
+  border: 3px solid #2c3e75;
+  border-radius: 999px;
+  background: #ff6b6b;
+  color: #fff;
+  font-size: 14px;
+  padding: 3px 8px;
+  text-transform: uppercase;
+}
+#word-study-build {
+  display: grid;
+  gap: 12px;
+}
+.word-study-slot,
+.word-study-letter {
+  width: 64px;
+  height: 64px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 5px solid #2c3e75;
+  border-radius: 18px;
+  color: #2c3e75;
+  font-size: 36px;
+  font-weight: bold;
+}
+.word-study-slot {
+  background: #e8f7ff;
+  border-style: dashed;
+}
+.word-study-slot.filled {
+  background: #ffffff;
+  border-style: solid;
+}
+.word-study-letter {
+  background: #ffd93d;
+  font-family: inherit;
+  cursor: pointer;
+  box-shadow: 0 5px 0 #c9a227;
+}
+.word-study-letter:active {
+  transform: translateY(4px);
+  box-shadow: 0 1px 0 #c9a227;
+}
+.word-study-letter.used {
+  opacity: 0.42;
+}
+#word-study-use {
+  display: grid;
+  gap: 12px;
+}
+#word-study-sentence {
+  min-height: 66px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  color: #2c3e75;
+  font-size: 32px;
+  font-weight: bold;
+  line-height: 1.25;
+  text-align: center;
+}
+.word-study-blank {
+  min-width: 120px;
+  min-height: 50px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 8px;
+  border-bottom: 6px solid #2c3e75;
+  color: #0d7d45;
+}
+.word-study-choice {
+  min-width: 128px;
+  min-height: 66px;
+  border: 5px solid #2c3e75;
+  border-radius: 22px;
+  background: #ffffff;
+  color: #2c3e75;
+  font-family: inherit;
+  font-size: 30px;
+  font-weight: bold;
+  padding: 6px 20px;
+  cursor: pointer;
+  box-shadow: 0 5px 0 #b8ae86;
+}
+.word-study-choice:active {
+  transform: translateY(4px);
+  box-shadow: 0 1px 0 #b8ae86;
+}
+.word-study-choice.selected {
+  outline: 5px solid #74b9ff;
+  outline-offset: 2px;
+}
+.word-study-choice.correct {
+  background: #dff8df;
+  border-color: #3c9e3c;
+}
+.word-study-choice.wrong {
+  background: #ffe3e3;
+  border-color: #ff6b6b;
+}
+#word-study-feedback {
+  min-height: 34px;
+  color: #0d7d45;
+  font-size: 26px;
+  font-weight: bold;
+  text-align: center;
+}
+#word-study-actions .btn {
+  min-height: 72px;
+  font-size: 26px;
+}
+#btn-word-study-hear {
+  background: #74b9ff;
+  box-shadow: 0 6px 0 #3f7fc4, 0 10px 14px rgba(0,0,0,0.25);
+}
+#btn-word-study-hear:active { box-shadow: 0 1px 0 #3f7fc4; }
+
+@media (max-width: 620px), (max-height: 700px) {
+  #word-study-panel {
+    gap: 12px;
+    padding: 14px;
+    border-radius: 24px;
+  }
+  .word-study-topbar { gap: 8px; }
+  .word-study-step {
+    min-height: 34px;
+    font-size: 14px;
+    padding: 4px 10px;
+  }
+  #btn-word-study-close {
+    width: 56px;
+    min-height: 56px;
+    font-size: 22px;
+  }
+  #word-study-word {
+    min-height: 86px;
+    font-size: 62px;
+    border-radius: 22px;
+  }
+  .word-study-chunk {
+    min-width: 76px;
+    min-height: 72px;
+    border-radius: 18px;
+  }
+  .word-study-chunk-text { font-size: 34px; }
+  .word-study-chunk-sound { font-size: 14px; }
+  .word-study-slot,
+  .word-study-letter {
+    width: 50px;
+    height: 50px;
+    border-radius: 14px;
+    font-size: 28px;
+  }
+  #word-study-sentence {
+    min-height: 48px;
+    font-size: 24px;
+  }
+  .word-study-blank {
+    min-width: 86px;
+    min-height: 42px;
+    border-bottom-width: 5px;
+  }
+  .word-study-choice {
+    min-width: 104px;
+    min-height: 56px;
+    font-size: 24px;
+  }
+  #word-study-feedback {
+    min-height: 28px;
+    font-size: 22px;
+  }
+  #word-study-actions .btn {
+    min-width: 210px;
+    min-height: 62px;
+    font-size: 22px;
+  }
+}
+
+@media (max-width: 420px) {
+  #word-study-actions .btn {
+    min-width: 100%;
+  }
+  .word-study-choice {
+    flex: 1 1 42%;
+  }
+}
+
 /* ---------- narrator fairy ---------- */
 /* Above every screen (screens are z 10, panels 20-30) but never tappable. */
 #fairy {

@@ -26,6 +26,20 @@ const CRITTER_COLORS = [0xff7f50, 0xba68c8, 0x4dd0e1, 0x9fa8da, 0xffb74d];
 
 const boxGeo = new THREE.BoxGeometry(1, 1, 1);
 
+export const WORD_STUDY_STEPS = Object.freeze([
+  { id: 'hear', label: 'Hear it' },
+  { id: 'map', label: 'Map it' },
+  { id: 'build', label: 'Build it' },
+  { id: 'use', label: 'Use it' },
+]);
+
+export function shouldTeachWord(word, stats) {
+  if (!word) return false;
+  const s = typeof stats === 'function' ? stats(word) : stats;
+  if (!s || Number(s.seen || 0) <= 0) return true;
+  return Number(s.missed || 0) > 0;
+}
+
 function makeCritter() {
   const g = new THREE.Group();
   const mat = new THREE.MeshLambertMaterial({ color: 0xff7f50 });
@@ -83,7 +97,10 @@ export function makeKeyMesh() {
 
 export class Game {
   // callbacks: { onCoins(n), onDotsInit(count), onDot(index, cls),
-  //              onKey(found), onRunComplete(res), onChoice(on) }
+  //              onKey(found), onRunComplete(res), onChoice(on),
+  //              onWordStudyRun(ctx), onWordStudyStart(ctx),
+  //              onWordStudyStep(ctx), onWordStudyFinish(ctx),
+  //              onWordStudyCancel(ctx) }
   constructor(renderer, cb) {
     this.cb = cb;
     this.renderer = renderer;
@@ -138,6 +155,8 @@ export class Game {
     this.stars = null;
     this.choice = false; // time-freeze steering mode at a word choice
     this.moveHeld = {}; // { Lkey, Rkey, Lbtn, Rbtn } held flags
+    this.wordStudy = null;
+    this.wordStudyToken = 0;
 
     // Shared context handed to word events.
     this.api = {
@@ -163,6 +182,7 @@ export class Game {
   // ---------- run lifecycle ----------
 
   startRun(worldIdx, levelIdx, { secret = false, boss = false } = {}) {
+    this.cancelWordStudy('new-run');
     this.worldIdx = worldIdx;
     this.levelIdx = levelIdx;
     this.secret = secret;
@@ -197,7 +217,7 @@ export class Game {
     this.activeEv = null;
     this.spoken = false;
     this.stars = null;
-    // run | stars | flagrun | flag | done (+ bossIntro | bossDefeat)
+    // run | wordTeach | stars | flagrun | flag | done (+ bossIntro | bossDefeat)
     this.phase = boss ? 'bossIntro' : 'run';
     this.introT = 0;
     this.introSpoke = false;
@@ -256,6 +276,7 @@ export class Game {
   }
 
   stopRun() {
+    this.cancelWordStudy('stop-run');
     this.running = false;
     this.clearEvents();
     this.setChoice(false);
@@ -334,6 +355,17 @@ export class Game {
     return null;
   }
 
+  get currentTeaching() {
+    const t = this.wordStudy;
+    return t ? {
+      word: t.word,
+      eventType: t.eventType,
+      step: t.step,
+      stepIndex: t.stepIndex,
+      steps: WORD_STUDY_STEPS.map((s) => s.id),
+    } : null;
+  }
+
   repeatWord() {
     const w = this.currentWord();
     if (this.running && w) speak(`Find the word: ${w}`, { rate: 0.85 });
@@ -350,6 +382,7 @@ export class Game {
   debugResolve(correct = true) {
     if (!this.running) return;
     if (this.phase === 'bossIntro') this.endIntro();
+    if (this.phase === 'wordTeach') this.cancelWordStudy('debug');
     if (this.stars && !this.stars.done) {
       this.stars.debugResolve(correct, this.api);
       return;
@@ -359,6 +392,13 @@ export class Game {
   }
 
   // ---------- events ----------
+
+  introLineForEvent(ev) {
+    if (!ev) return '';
+    return ev.type === 'blocks'
+      ? `Bonk the block with the word: ${ev.word}!`
+      : `Jump through the door with the word: ${ev.word}!`;
+  }
 
   spawnEvent() {
     const def = this.events[this.eventIdx];
@@ -371,11 +411,132 @@ export class Game {
     this.spoken = false;
   }
 
+  wordStudyPayload(study, extra = {}) {
+    return {
+      word: study.word,
+      stats: study.stats,
+      eventType: study.eventType,
+      challengeLine: this.introLineForEvent(this.activeEv),
+      steps: WORD_STUDY_STEPS,
+      step: study.step,
+      stepIndex: study.stepIndex,
+      eventIndex: study.eventIdx,
+      ...extra,
+    };
+  }
+
+  isCurrentWordStudy(study) {
+    return this.running && this.wordStudy === study && study.token === this.wordStudyToken;
+  }
+
+  beginWordStudyForActiveEvent() {
+    const ev = this.activeEv;
+    if (!ev || ev.wordStudyChecked) return false;
+    ev.wordStudyChecked = true;
+
+    const stats = store.wordStats(ev.word);
+    if (!shouldTeachWord(ev.word, stats)) return false;
+
+    const hasFullFlow = typeof this.cb.onWordStudyRun === 'function';
+    const hasStepFlow = typeof this.cb.onWordStudyStep === 'function';
+    if (!hasFullFlow && !hasStepFlow) return false;
+
+    const study = {
+      token: ++this.wordStudyToken,
+      word: ev.word,
+      stats,
+      eventType: ev.type,
+      eventIdx: this.eventIdx,
+      step: null,
+      stepIndex: -1,
+    };
+    this.wordStudy = study;
+    this.phase = 'wordTeach';
+    this.speed = 0;
+    this.repeatTimer = 0;
+    this.autoRepeats = 0;
+    this.moveHeld = {};
+    this.setChoice(false);
+    this.runWordStudy(study);
+    return true;
+  }
+
+  async runWordStudy(study) {
+    try {
+      if (typeof this.cb.onWordStudyRun === 'function') {
+        const result = await this.cb.onWordStudyRun(this.wordStudyPayload(study));
+        this.finishWordStudy(study, result !== false);
+        return;
+      }
+
+      if (typeof this.cb.onWordStudyStart === 'function') {
+        const result = await this.cb.onWordStudyStart(this.wordStudyPayload(study));
+        if (result === false) {
+          this.finishWordStudy(study, false);
+          return;
+        }
+      }
+
+      for (let i = 0; i < WORD_STUDY_STEPS.length; i++) {
+        if (!this.isCurrentWordStudy(study)) return;
+        const step = WORD_STUDY_STEPS[i];
+        study.step = step.id;
+        study.stepIndex = i;
+        const result = await this.cb.onWordStudyStep(this.wordStudyPayload(study, {
+          step,
+          stepIndex: i,
+        }));
+        if (result === false) {
+          this.finishWordStudy(study, false);
+          return;
+        }
+      }
+
+      if (typeof this.cb.onWordStudyFinish === 'function') {
+        await this.cb.onWordStudyFinish(this.wordStudyPayload(study));
+      }
+      this.finishWordStudy(study, true);
+    } catch (e) {
+      console.warn('Word study failed; continuing normal challenge.', e);
+      this.finishWordStudy(study, false);
+    }
+  }
+
+  finishWordStudy(study, completed) {
+    if (!this.isCurrentWordStudy(study)) return;
+    const payload = this.wordStudyPayload(study, {
+      completed,
+      reason: completed ? 'complete' : 'fallback',
+    });
+    this.wordStudy = null;
+    if (this.phase === 'wordTeach') this.phase = 'run';
+    this.speed = 0;
+    this.repeatTimer = 0;
+    this.autoRepeats = 0;
+    if (!completed && typeof this.cb.onWordStudyCancel === 'function') {
+      this.cb.onWordStudyCancel(payload);
+    }
+  }
+
+  cancelWordStudy(reason = 'cancel') {
+    const study = this.wordStudy;
+    if (!study) return;
+    const payload = this.wordStudyPayload(study, { completed: false, reason });
+    this.wordStudy = null;
+    if (this.phase === 'wordTeach') this.phase = 'run';
+    this.speed = 0;
+    if (typeof this.cb.onWordStudyCancel === 'function') {
+      try {
+        this.cb.onWordStudyCancel(payload);
+      } catch (e) {
+        console.warn('Word study cancel callback failed.', e);
+      }
+    }
+  }
+
   speakIntro() {
-    const w = this.activeEv.word;
-    const line = this.activeEv.type === 'blocks'
-      ? `Bonk the block with the word: ${w}!`
-      : `Jump through the door with the word: ${w}!`;
+    const line = this.introLineForEvent(this.activeEv);
+    if (!line) return;
     speak(line, { rate: 0.9 });
     this.repeatTimer = 8;
     this.autoRepeats = 0;
@@ -551,6 +712,13 @@ export class Game {
   updateRun(dt) {
     const p = this.player;
 
+    if (this.phase === 'wordTeach') {
+      this.speed = 0;
+      this.level.update(dt, p.x);
+      this.effects.update(dt);
+      return;
+    }
+
     // Choice mode: reaching the decision spot freezes the auto-run and
     // hands the kid left/right steering (jump still works) until answered.
     const zone = this.choiceZone();
@@ -636,7 +804,10 @@ export class Game {
           this.eventIdx++;
         }
       } else if (this.eventIdx < this.events.length) {
-        if (p.x > this.events[this.eventIdx].x - 14) this.spawnEvent();
+        if (p.x > this.events[this.eventIdx].x - 14) {
+          this.spawnEvent();
+          this.beginWordStudyForActiveEvent();
+        }
       } else if (this.isBoss) {
         // Every armor block gone: the boss falls, no star review needed.
         this.phase = 'bossDefeat';

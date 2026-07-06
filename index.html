@@ -94,6 +94,31 @@
     </div>
   </div>
 
+  <!-- ============ WORD STUDY (reusable 5-step loop overlay) ============ -->
+  <div id="screen-word-study" class="screen overlay hidden" role="dialog" aria-modal="true" aria-labelledby="word-study-word">
+    <div id="word-study-panel">
+      <div class="word-study-topbar">
+        <div id="word-study-step-strip" aria-label="Word study steps"></div>
+        <button id="btn-word-study-close" class="btn btn-round">✖️</button>
+      </div>
+      <div id="word-study-word" aria-live="polite"></div>
+      <div id="word-study-chunks" aria-label="Sound chunks"></div>
+      <div id="word-study-build">
+        <div id="word-study-build-slots" aria-label="Build slots"></div>
+        <div id="word-study-build-letters" aria-label="Build letters"></div>
+      </div>
+      <div id="word-study-use">
+        <div id="word-study-sentence"></div>
+        <div id="word-study-sentence-choices"></div>
+      </div>
+      <div id="word-study-feedback" aria-live="polite"></div>
+      <div id="word-study-actions">
+        <button id="btn-word-study-hear" class="btn btn-wide">🔊 HEAR IT</button>
+        <button id="btn-word-study-next" class="btn btn-wide">➡️ NEXT</button>
+      </div>
+    </div>
+  </div>
+
   <!-- ============ PAUSE ============ -->
   <div id="screen-pause" class="screen overlay hidden">
     <div class="panel">

@@ -10,13 +10,32 @@ const OLD_KEYS = ['wordRunner.v2', 'wordRunner.v1'];
 const PROFILES_KEY = 'wordRunner.profiles.v1';
 export const MAX_PROFILES = 6;
 
+const MINUTE_MS = 60 * 1000;
+const HOUR_MS = 60 * MINUTE_MS;
+const DAY_MS = 24 * HOUR_MS;
+
+export const WORD_REVIEW_INTERVALS_MS = [
+  5 * MINUTE_MS,
+  30 * MINUTE_MS,
+  4 * HOUR_MS,
+  DAY_MS,
+  3 * DAY_MS,
+  7 * DAY_MS,
+  14 * DAY_MS,
+];
+
+const MAX_REVIEW_STAGE = WORD_REVIEW_INTERVALS_MS.length - 1;
+
 const defaults = () => ({
   coins: 0,
   gems: 0,
   sound: true,
   mic: true,
   devUnlocked: false,
-  // words[word] = { seen, correct, firstTryCorrect, missed }
+  // words[word] = {
+  //   seen, correct, firstTryCorrect, missed,
+  //   lastSeenAt, lastCorrectAt, reviewStage, dueAt
+  // }
   words: {},
   // stars['w-l'] = 0..3 (the boss level uses l = levelCount)
   stars: {},
@@ -37,6 +56,77 @@ const defaults = () => ({
 });
 
 let state = defaults();
+
+const clampReviewStage = (stage) => {
+  const n = Number(stage);
+  if (!Number.isFinite(n)) return null;
+  return Math.max(0, Math.min(MAX_REVIEW_STAGE, Math.floor(n)));
+};
+
+const count = (value) => {
+  const n = Number(value);
+  return Number.isFinite(n) ? Math.max(0, Math.floor(n)) : 0;
+};
+
+const timestamp = (value) => {
+  const n = Number(value);
+  return Number.isFinite(n) && n >= 0 ? n : null;
+};
+
+export function reviewDelayForStage(stage) {
+  const s = clampReviewStage(stage);
+  return WORD_REVIEW_INTERVALS_MS[s === null ? 0 : s];
+}
+
+export function nextReviewDueAt(stage, now = Date.now()) {
+  const t = timestamp(now) ?? Date.now();
+  return t + reviewDelayForStage(stage);
+}
+
+function inferReviewStage(firstTryCorrect, missed) {
+  if (missed > 0 && firstTryCorrect < 3) return 0;
+  return Math.min(MAX_REVIEW_STAGE, firstTryCorrect);
+}
+
+export function normalizeWordStat(raw = null) {
+  const base = raw && typeof raw === 'object' ? raw : {};
+  const seen = count(base.seen);
+  const firstTryCorrect = Math.min(count(base.firstTryCorrect), seen);
+  const missed = Math.min(count(base.missed), seen);
+  const correct = Math.min(Math.max(count(base.correct), firstTryCorrect), seen);
+  const existingStage = clampReviewStage(base.reviewStage);
+  const reviewStage = existingStage ?? inferReviewStage(firstTryCorrect, missed);
+  const storedDueAt = timestamp(base.dueAt);
+
+  return {
+    seen,
+    correct,
+    firstTryCorrect,
+    missed,
+    lastSeenAt: timestamp(base.lastSeenAt),
+    lastCorrectAt: timestamp(base.lastCorrectAt),
+    reviewStage,
+    // Old saves had no dueAt. Grandfather weak missed words into the review
+    // pool without forcing already-mastered words to flood the next level.
+    dueAt: storedDueAt ?? (seen > 0 && missed > 0 && firstTryCorrect < 3 ? 0 : null),
+  };
+}
+
+export function normalizeWordStats(words = {}) {
+  const normalized = {};
+  if (!words || typeof words !== 'object') return normalized;
+  for (const [word, stat] of Object.entries(words)) {
+    if (!word) continue;
+    normalized[word.toLowerCase()] = normalizeWordStat(stat);
+  }
+  return normalized;
+}
+
+function normalizeSave(raw) {
+  const s = { ...defaults(), ...(raw && typeof raw === 'object' ? raw : {}) };
+  s.words = normalizeWordStats(s.words);
+  return s;
+}
 
 // ---------- profiles ----------
 
@@ -81,7 +171,7 @@ function ensureProfiles() {
     if (!blob) {
       const old = OLD_KEYS.map((k) => localStorage.getItem(k)).find(Boolean);
       if (old) {
-        const s = { ...defaults(), ...JSON.parse(old) };
+        const s = normalizeSave(JSON.parse(old));
         // Grandfather old saves: a world you already passed means its boss
         // (which didn't exist yet) counts as beaten.
         for (let w = 0; w < s.unlocked.world; w++) s.bossBeaten[w] = true;
@@ -115,7 +205,7 @@ export function activeProfileName() {
 export function peekProfile(id) {
   try {
     const raw = localStorage.getItem(blobKey(id));
-    if (raw) return { ...defaults(), ...JSON.parse(raw) };
+    if (raw) return normalizeSave(JSON.parse(raw));
   } catch (e) { /* fall through */ }
   return defaults();
 }
@@ -176,7 +266,7 @@ export function load() {
   ensureProfiles();
   try {
     const raw = localStorage.getItem(blobKey(profiles.active));
-    state = raw ? { ...defaults(), ...JSON.parse(raw) } : defaults();
+    state = raw ? normalizeSave(JSON.parse(raw)) : defaults();
   } catch (e) {
     state = defaults();
   }
@@ -197,24 +287,38 @@ export function get() {
 }
 
 export function wordStats(word) {
-  return state.words[word.toLowerCase()] || null;
+  const k = word.toLowerCase();
+  if (!state.words[k]) return null;
+  state.words[k] = normalizeWordStat(state.words[k]);
+  return state.words[k];
 }
 
 function ensureWord(word) {
   const k = word.toLowerCase();
   if (!state.words[k]) {
-    state.words[k] = { seen: 0, correct: 0, firstTryCorrect: 0, missed: 0 };
+    state.words[k] = normalizeWordStat();
+  } else {
+    state.words[k] = normalizeWordStat(state.words[k]);
   }
   return state.words[k];
 }
 
 // Called once per challenge resolution (when the word is finally passed).
-export function recordWordResult(word, firstTry) {
+export function recordWordResult(word, firstTry, now = Date.now()) {
+  const t = timestamp(now) ?? Date.now();
   const s = ensureWord(word);
   s.seen++;
   s.correct++;
-  if (firstTry) s.firstTryCorrect++;
-  else s.missed++;
+  s.lastSeenAt = t;
+  s.lastCorrectAt = t;
+  if (firstTry) {
+    s.firstTryCorrect++;
+    s.reviewStage = Math.min(MAX_REVIEW_STAGE, s.reviewStage + 1);
+  } else {
+    s.missed++;
+    s.reviewStage = 0;
+  }
+  s.dueAt = nextReviewDueAt(s.reviewStage, t);
   save();
 }
 

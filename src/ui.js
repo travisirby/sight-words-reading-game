@@ -8,10 +8,14 @@ import * as store from './store.js';
 import { PALETTES, STYLES, OUTFITS, lookFrom } from './character.js';
 import { HOUSE_ITEMS } from './housedata.js';
 import { renderLookThumbnails } from './thumbs.js';
+import { WORD_STUDY_STEPS } from './wordstudy.js';
 
 const $ = (id) => document.getElementById(id);
 
-const SCREENS = ['title', 'players', 'map', 'pause', 'complete', 'bonus', 'char', 'house', 'cutscene'];
+const SCREENS = [
+  'title', 'players', 'map', 'pause', 'complete', 'bonus', 'char', 'house',
+  'cutscene', 'word-study',
+];
 
 export function init(h) {
   fairy.mount();
@@ -47,6 +51,14 @@ export function init(h) {
   bindSpeak($('btn-complete-map'), 'Map', () => h.onCompleteMap());
 
   bindSpeak($('btn-bonus-skip'), 'Skip', () => h.onBonusSkip());
+
+  bindSpeak($('btn-word-study-close'), 'Close', () => closeWordStudy({ notify: true }));
+  $('btn-word-study-hear').addEventListener('click', () => {
+    if (!activeWordStudy) return;
+    speak(activeWordStudy.displayWord, { rate: 0.85 });
+    wordStudyH.onHear?.(activeWordStudy, activeWordStudyState);
+  });
+  bindSpeak($('btn-word-study-next'), 'Next', () => advanceWordStudyStep());
 
   // On the map the house is a real building in the world (overworld.js
   // raycasts it) — only title/complete need chrome buttons.
@@ -346,6 +358,236 @@ export function setBonusFeedback(text) {
 
 export function setMicListening(on) {
   $('btn-mic').classList.toggle('listening', on);
+}
+
+// ---------- word study overlay ----------
+
+let wordStudyH = {};
+let activeWordStudy = null;
+let activeWordStudyState = {};
+
+function displayWordFor(study) {
+  return study?.displayWord || study?.word || study?.id || '';
+}
+
+function normalizeWordStudy(study) {
+  if (!study) return null;
+  const displayWord = displayWordFor(study);
+  return {
+    ...study,
+    displayWord,
+    chunks: study.chunks || [{ grapheme: displayWord, sound: '', soundLabel: '' }],
+    buildLetters: study.buildLetters || Array.from(displayWord),
+    cloze: study.cloze || null,
+  };
+}
+
+function stepKeyFrom(state) {
+  if (typeof state.stepIndex === 'number') {
+    return WORD_STUDY_STEPS[state.stepIndex]?.key || WORD_STUDY_STEPS[0].key;
+  }
+  return state.step || WORD_STUDY_STEPS[0].key;
+}
+
+function renderWordStudySteps() {
+  const active = stepKeyFrom(activeWordStudyState);
+  const strip = $('word-study-step-strip');
+  strip.innerHTML = '';
+  WORD_STUDY_STEPS.forEach((step, i) => {
+    const item = document.createElement('div');
+    item.className = 'word-study-step' + (step.key === active ? ' active' : '');
+    item.textContent = `${i + 1}. ${step.label}`;
+    strip.appendChild(item);
+  });
+}
+
+function renderWordStudyChunks() {
+  const wrap = $('word-study-chunks');
+  wrap.innerHTML = '';
+  activeWordStudy.chunks.forEach((chunk, i) => {
+    const grapheme = chunk.grapheme || chunk.text || '';
+    const sound = chunk.soundLabel || chunk.sound || '';
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className =
+      'word-study-chunk' +
+      (chunk.tricky ? ' tricky' : '') +
+      (activeWordStudyState.activeChunk === i ? ' active' : '');
+    btn.title = chunk.note || '';
+    btn.setAttribute(
+      'aria-label',
+      `${grapheme}${sound ? `, ${sound}` : ''}${chunk.tricky ? ', tricky part' : ''}`
+    );
+
+    const text = document.createElement('span');
+    text.className = 'word-study-chunk-text';
+    text.textContent = grapheme;
+    btn.appendChild(text);
+    if (sound) {
+      const soundEl = document.createElement('span');
+      soundEl.className = 'word-study-chunk-sound';
+      soundEl.textContent = sound;
+      btn.appendChild(soundEl);
+    }
+    if (chunk.tricky) {
+      const badge = document.createElement('span');
+      badge.className = 'word-study-tricky-badge';
+      badge.textContent = 'tricky';
+      btn.appendChild(badge);
+    }
+
+    btn.addEventListener('click', () => {
+      const spoken = chunk.speak || [grapheme, sound].filter(Boolean).join(', ');
+      if (spoken) speak(spoken, { rate: 0.85 });
+      wordStudyH.onChunk?.(chunk, i, activeWordStudy, activeWordStudyState);
+    });
+    wrap.appendChild(btn);
+  });
+}
+
+function renderWordStudyBuild() {
+  const slots = $('word-study-build-slots');
+  const lettersEl = $('word-study-build-letters');
+  const letters = activeWordStudy.buildLetters;
+  const buildIndex = Math.max(0, Math.min(letters.length, activeWordStudyState.buildIndex || 0));
+  const placedLetters = activeWordStudyState.placedLetters || letters.slice(0, buildIndex);
+  const usedIndexes = new Set(activeWordStudyState.usedLetterIndexes || []);
+
+  slots.innerHTML = '';
+  letters.forEach((_, i) => {
+    const slot = document.createElement('div');
+    slot.className = 'word-study-slot' + (placedLetters[i] ? ' filled' : '');
+    slot.textContent = placedLetters[i] || '';
+    slots.appendChild(slot);
+  });
+
+  lettersEl.innerHTML = '';
+  letters.forEach((letter, i) => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className =
+      'word-study-letter' + (i < buildIndex || usedIndexes.has(i) ? ' used' : '');
+    btn.textContent = letter;
+    btn.addEventListener('click', () => {
+      speak(letter, { rate: 0.9 });
+      wordStudyH.onBuildLetter?.(letter, i, activeWordStudy, activeWordStudyState);
+    });
+    lettersEl.appendChild(btn);
+  });
+}
+
+function renderClozeSentence(text) {
+  const sentence = $('word-study-sentence');
+  sentence.innerHTML = '';
+  const parts = String(text || '').split('___');
+  if (parts.length === 1) {
+    sentence.textContent = text || '';
+    return;
+  }
+  parts.forEach((part, i) => {
+    sentence.appendChild(document.createTextNode(part));
+    if (i < parts.length - 1) {
+      const blank = document.createElement('span');
+      blank.className = 'word-study-blank';
+      blank.textContent = activeWordStudyState.selectedChoice || ' ';
+      sentence.appendChild(blank);
+    }
+  });
+}
+
+function renderWordStudyUse() {
+  const cloze = activeWordStudy.cloze;
+  const choicesEl = $('word-study-sentence-choices');
+  choicesEl.innerHTML = '';
+  if (!cloze) {
+    $('word-study-sentence').textContent = '';
+    return;
+  }
+
+  renderClozeSentence(cloze.text);
+  const choices = cloze.choices || [cloze.answer].filter(Boolean);
+  choices.forEach((choice) => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    const selected = activeWordStudyState.selectedChoice === choice;
+    const correct = choice === cloze.answer;
+    btn.className =
+      'word-study-choice' +
+      (selected ? ' selected' : '') +
+      (selected && correct ? ' correct' : '') +
+      (selected && !correct ? ' wrong' : '');
+    btn.textContent = choice;
+    btn.addEventListener('click', () => {
+      speak(choice, { rate: 0.95 });
+      activeWordStudyState = { ...activeWordStudyState, selectedChoice: choice };
+      renderWordStudy();
+      wordStudyH.onSentenceChoice?.(choice, correct, activeWordStudy, activeWordStudyState);
+    });
+    choicesEl.appendChild(btn);
+  });
+}
+
+function renderWordStudy() {
+  if (!activeWordStudy) {
+    $('word-study-word').textContent = '';
+    $('word-study-step-strip').innerHTML = '';
+    $('word-study-chunks').innerHTML = '';
+    $('word-study-build-slots').innerHTML = '';
+    $('word-study-build-letters').innerHTML = '';
+    $('word-study-sentence').textContent = '';
+    $('word-study-sentence-choices').innerHTML = '';
+    $('word-study-feedback').textContent = '';
+    return;
+  }
+  $('word-study-word').textContent = activeWordStudy.displayWord;
+  renderWordStudySteps();
+  renderWordStudyChunks();
+  renderWordStudyBuild();
+  renderWordStudyUse();
+  $('word-study-feedback').textContent = activeWordStudyState.feedback || '';
+}
+
+function advanceWordStudyStep() {
+  if (!activeWordStudy) return;
+  if (wordStudyH.onNext) {
+    wordStudyH.onNext(activeWordStudy, activeWordStudyState);
+    return;
+  }
+  const current = WORD_STUDY_STEPS.findIndex((step) => step.key === stepKeyFrom(activeWordStudyState));
+  const next = Math.min(WORD_STUDY_STEPS.length - 1, Math.max(0, current) + 1);
+  setWordStudyState({ step: WORD_STUDY_STEPS[next].key });
+}
+
+export function showWordStudy(study, handlers = {}, state = {}) {
+  wordStudyH = handlers || {};
+  updateWordStudy(study, state);
+  showScreen('word-study');
+}
+
+export function updateWordStudy(study, state = {}) {
+  activeWordStudy = normalizeWordStudy(study);
+  activeWordStudyState = { ...state };
+  renderWordStudy();
+}
+
+export function setWordStudyState(state = {}) {
+  if (!activeWordStudy) return;
+  activeWordStudyState = { ...activeWordStudyState, ...state };
+  renderWordStudy();
+}
+
+export function closeWordStudy({ notify = false } = {}) {
+  const h = wordStudyH;
+  const study = activeWordStudy;
+  $('screen-word-study').classList.add('hidden');
+  activeWordStudy = null;
+  activeWordStudyState = {};
+  wordStudyH = {};
+  if (notify) h.onClose?.(study);
+}
+
+export function isWordStudyVisible() {
+  return !$('screen-word-study').classList.contains('hidden');
 }
 
 // ---------- my house / shop ----------

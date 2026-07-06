@@ -14,6 +14,7 @@ import * as store from './store.js';
 import * as speech from './speech.js';
 import { unlockAudio, setMuted, speak, sfxCorrect, sfxCoin } from './audio.js';
 import { WORLDS, shuffle, PRAISE } from './words.js';
+import { getWordStudy } from './wordstudy.js';
 
 // Testing cheats via URL: ?unlock opens every level/castle/secret,
 // ?reset wipes the save first (combine as ?reset&unlock).
@@ -53,8 +54,144 @@ const game = new Game(renderer, {
   onDot: (i, cls) => ui.setDot(i, cls),
   onKey: (found) => ui.setKeyFound(found),
   onChoice: (on) => ui.showMoveControls(on),
+  ...wordStudyCallbacks(),
   onRunComplete: (res) => onRunComplete(res),
 });
+
+let activeWordStudyFlow = null;
+
+function uiFn(name) {
+  const fn = ui[name];
+  return typeof fn === 'function' ? fn : null;
+}
+
+function wordStudyCallbacks() {
+  const callbacks = {};
+  const runWordStudy = uiFn('runWordStudy');
+  if (runWordStudy) {
+    callbacks.onWordStudyRun = (ctx) => runWordStudy(ctx);
+  } else if (uiFn('showWordStudy') && uiFn('setWordStudyState')) {
+    callbacks.onWordStudyStart = (ctx) => startWordStudyOverlay(ctx);
+    callbacks.onWordStudyStep = (ctx) => showWordStudyOverlayStep(ctx);
+    callbacks.onWordStudyFinish = (ctx) => finishWordStudyOverlay(ctx);
+  }
+  if (callbacks.onWordStudyRun || callbacks.onWordStudyStep) {
+    callbacks.onWordStudyCancel = (ctx) => cancelWordStudyOverlay(ctx);
+  }
+  return callbacks;
+}
+
+function studyStepIds(ctx) {
+  const ids = (ctx.steps || [])
+    .map((step) => step.id || step.key || step)
+    .filter((step) => ['hear', 'map', 'build', 'use'].includes(step));
+  return ids.length ? ids : ['hear', 'map', 'build', 'use'];
+}
+
+function closeWordStudyOverlay(ctx) {
+  const close = uiFn('closeWordStudy');
+  if (close) close({ notify: false, ctx });
+  ui.showScreen(null);
+}
+
+function resolveWordStudyStep(flow, completed) {
+  if (!flow.resolveStep) return;
+  const resolve = flow.resolveStep;
+  flow.resolveStep = null;
+  resolve(completed);
+}
+
+function wordStudyState(flow, extra = {}) {
+  return {
+    step: flow.step,
+    stepIndex: flow.stepIndex,
+    buildIndex: flow.buildIndex,
+    placedLetters: flow.letters.slice(0, flow.buildIndex),
+    usedLetterIndexes: Array.from({ length: flow.buildIndex }, (_, i) => i),
+    selectedChoice: flow.selectedChoice,
+    ...extra,
+  };
+}
+
+function setActiveWordStudyState(extra = {}) {
+  const flow = activeWordStudyFlow;
+  const setWordStudyState = uiFn('setWordStudyState');
+  if (flow && setWordStudyState) setWordStudyState(wordStudyState(flow, extra));
+}
+
+function startWordStudyOverlay(ctx) {
+  const showWordStudy = uiFn('showWordStudy');
+  const study = getWordStudy(ctx.word);
+  if (!showWordStudy || !study) return false;
+
+  cancelWordStudyOverlay(ctx);
+  const flow = {
+    study,
+    letters: study.buildLetters || Array.from(study.displayWord || study.word || ''),
+    step: 'hear',
+    stepIndex: 0,
+    buildIndex: 0,
+    selectedChoice: '',
+    resolveStep: null,
+  };
+  activeWordStudyFlow = flow;
+
+  showWordStudy(study, {
+    onClose: () => cancelWordStudyOverlay(ctx),
+    onHear: () => setActiveWordStudyState({ feedback: '' }),
+    onChunk: (chunk, i) => {
+      if (flow.step !== 'map') return;
+      setActiveWordStudyState({ activeChunk: i, feedback: chunk.note || '' });
+    },
+    onBuildLetter: (letter, i) => {
+      if (flow.step !== 'build') return;
+      if (i !== flow.buildIndex) {
+        setActiveWordStudyState({ feedback: '' });
+        return;
+      }
+      flow.buildIndex = Math.min(flow.letters.length, flow.buildIndex + 1);
+      setActiveWordStudyState({ feedback: '' });
+    },
+    onSentenceChoice: (choice, correct) => {
+      if (flow.step !== 'use') return;
+      flow.selectedChoice = choice;
+      setActiveWordStudyState({ feedback: correct ? 'Nice!' : '' });
+    },
+    onNext: () => resolveWordStudyStep(flow, true),
+  }, wordStudyState(flow));
+
+  return true;
+}
+
+function showWordStudyOverlayStep(ctx) {
+  const flow = activeWordStudyFlow;
+  if (!flow) return false;
+  const step = ctx.step?.id || ctx.step?.key || ctx.step || 'hear';
+  const steps = studyStepIds(ctx);
+  flow.step = step;
+  flow.stepIndex = typeof ctx.stepIndex === 'number'
+    ? ctx.stepIndex
+    : Math.max(0, steps.indexOf(step));
+  if (step === 'hear') speak(flow.study.displayWord || flow.study.word, { rate: 0.85 });
+  setActiveWordStudyState({ activeChunk: -1, feedback: '' });
+  return new Promise((resolve) => { flow.resolveStep = resolve; });
+}
+
+function finishWordStudyOverlay(ctx) {
+  if (activeWordStudyFlow) {
+    activeWordStudyFlow = null;
+    closeWordStudyOverlay(ctx);
+  }
+  return true;
+}
+
+function cancelWordStudyOverlay(ctx) {
+  const flow = activeWordStudyFlow;
+  activeWordStudyFlow = null;
+  if (flow) resolveWordStudyStep(flow, false);
+  closeWordStudyOverlay(ctx);
+  return true;
+}
 
 const map = new Overworld(renderer, {
   onNodeSelected: (info) => {

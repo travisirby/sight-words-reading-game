@@ -76,10 +76,111 @@ export function shuffle(arr) {
   return a;
 }
 
+export const DEFAULT_REVIEW_WORD_CAP = 2;
+
+const norm = (word) => word.toLowerCase();
+
+const statCount = (stat, key) => {
+  const n = Number(stat && stat[key]);
+  return Number.isFinite(n) ? Math.max(0, Math.floor(n)) : 0;
+};
+
+const statTimestamp = (stat, key) => {
+  const n = Number(stat && stat[key]);
+  return Number.isFinite(n) && n >= 0 ? n : null;
+};
+
+function reviewDueAt(stat) {
+  const dueAt = statTimestamp(stat, 'dueAt');
+  if (dueAt !== null) return dueAt;
+  const seen = statCount(stat, 'seen');
+  const missed = statCount(stat, 'missed');
+  const firstTryCorrect = statCount(stat, 'firstTryCorrect');
+  return seen > 0 && missed > 0 && firstTryCorrect < 3 ? 0 : null;
+}
+
+export function isDueReviewStat(stat, now = Date.now()) {
+  const dueAt = reviewDueAt(stat);
+  return statCount(stat, 'seen') > 0 && dueAt !== null && dueAt <= now;
+}
+
+function reviewScore(word, stat, now, index) {
+  const seen = statCount(stat, 'seen');
+  const dueAt = reviewDueAt(stat);
+  return {
+    word,
+    index,
+    dueAt: dueAt ?? Number.POSITIVE_INFINITY,
+    reviewStage: statCount(stat, 'reviewStage'),
+    missed: statCount(stat, 'missed'),
+    ratio: seen > 0 ? statCount(stat, 'firstTryCorrect') / seen : 1,
+    lastSeenAt: statTimestamp(stat, 'lastSeenAt') ?? 0,
+    overdue: dueAt === null ? 0 : Math.max(0, now - dueAt),
+  };
+}
+
+function compareReviewScore(a, b) {
+  return (
+    b.overdue - a.overdue ||
+    a.reviewStage - b.reviewStage ||
+    b.missed - a.missed ||
+    a.ratio - b.ratio ||
+    a.lastSeenAt - b.lastSeenAt ||
+    a.index - b.index
+  );
+}
+
+function uniqueWords(words) {
+  const seen = new Set();
+  const out = [];
+  for (const word of words || []) {
+    const key = norm(word);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(word);
+  }
+  return out;
+}
+
+function reviewCapForLevel(levelWords, cap = DEFAULT_REVIEW_WORD_CAP) {
+  const requested = Math.max(0, Math.floor(Number(cap) || 0));
+  if (!requested) return 0;
+  return Math.min(requested, Math.max(1, Math.ceil((levelWords || []).length / 3)));
+}
+
+export function getDueReviewWords(candidates, statsFor, now = Date.now(), options = {}) {
+  if (typeof statsFor !== 'function') return [];
+  const exclude = new Set(Array.from(options.exclude || []).map(norm));
+  const cap = Number.isFinite(Number(options.cap))
+    ? Math.max(0, Math.floor(Number(options.cap)))
+    : Number.POSITIVE_INFINITY;
+  const unique = uniqueWords(candidates).filter((word) => !exclude.has(norm(word)));
+  const scored = [];
+
+  for (let i = 0; i < unique.length; i++) {
+    const word = unique[i];
+    const stat = statsFor(word);
+    if (!isDueReviewStat(stat, now)) continue;
+    scored.push(reviewScore(word, stat, now, i));
+  }
+
+  scored.sort(compareReviewScore);
+  return scored.slice(0, cap).map((s) => s.word);
+}
+
 // Build the run queue: level words shuffled, but words with lifetime misses
-// (per stored stats) move to the front so they get practiced first.
-// statsFor(word) -> {seen, correct, firstTryCorrect, missed} or null.
-export function buildRunQueue(levelWords, statsFor) {
+// (per stored stats) move to the front so they get practiced first. When
+// reviewCandidates are supplied, a small cap of due review words is inserted
+// after missed level words so review never overwhelms the current level.
+// statsFor(word) -> {seen, correct, firstTryCorrect, missed, dueAt, ...} or null.
+export function buildRunQueue(levelWords, statsFor, options = {}) {
+  const levelSet = new Set((levelWords || []).map(norm));
+  const reviewCandidates = options.reviewCandidates || [];
+  const reviewCap = reviewCapForLevel(levelWords, options.reviewCap ?? DEFAULT_REVIEW_WORD_CAP);
+  const dueReview = getDueReviewWords(reviewCandidates, statsFor, options.now ?? Date.now(), {
+    cap: reviewCap,
+    exclude: levelSet,
+  });
   const shuffled = shuffle(levelWords);
   const missed = [];
   const rest = [];
@@ -88,7 +189,7 @@ export function buildRunQueue(levelWords, statsFor) {
     if (s && s.missed > 0) missed.push(w);
     else rest.push(w);
   }
-  return missed.concat(rest);
+  return missed.concat(dueReview, rest);
 }
 
 // Pick 2 distractors for the target, preferring similar-length words from the
