@@ -33,15 +33,24 @@ function buildBoss(wi) {
     parent.add(mesh);
     return mesh;
   };
-  // Big friendly eyes + smile on the +z (camera) side.
+  // Big friendly eyes + smile on the +z (camera) side. Returns the pupils
+  // (for blinking) and a pair of hidden angry brows (shown while hurt).
   const face = (parent, y, z, s = 1) => {
     const white = M(0xffffff);
     const dark = M(0x222222);
+    const pupils = [];
+    const brows = [];
     for (const sx of [-0.32, 0.32]) {
       box(parent, white, 0.34 * s, 0.34 * s, 0.1, sx * s, y + 0.1 * s, z);
-      box(parent, dark, 0.16 * s, 0.16 * s, 0.1, sx * s, y + 0.08 * s, z + 0.07);
+      pupils.push(box(parent, dark, 0.16 * s, 0.16 * s, 0.1, sx * s, y + 0.08 * s, z + 0.07));
+      // Angry brow: a dark bar slanting in over each eye, hidden by default.
+      const brow = box(parent, dark, 0.36 * s, 0.1 * s, 0.09,
+        sx * s, y + 0.32 * s, z + 0.05, sx > 0 ? 0.45 : -0.45);
+      brow.visible = false;
+      brows.push(brow);
     }
     box(parent, dark, 0.5 * s, 0.12, 0.08, 0, y - 0.34 * s, z);
+    return { pupils, brows };
   };
   const limb = (x, y, m, sx, sy) => {
     const p = new THREE.Group();
@@ -54,6 +63,7 @@ function buildBoss(wi) {
   const arms = []; // pivots; arms[0] doubles as the throw telegraph
   let armor = []; // [x, y, z] anchors for the 5 armor blocks
   let top = 5;
+  let faceRefs = null; // { pupils, brows } for blinks and angry looks
 
   if (wi === 0) { // Grass Golem: mossy block giant with a flower
     const green = M(0x4cb545);
@@ -65,7 +75,7 @@ function buildBoss(wi) {
     box(g, M(0x3f9e3a), 0.55, 0.4, 0.55, 0.45, 4.9, 0);
     box(g, M(0xff6b81), 0.28, 0.28, 0.28, -0.5, 4.9, 0.25);
     arms.push(limb(-1.65, 3.2, green, 0.7, 1.9), limb(1.65, 3.2, green, 0.7, 1.9));
-    face(g, 4.25, 0.75, 1.1);
+    faceRefs = face(g, 4.25, 0.75, 1.1);
     armor = [[-1.04, 1.55, 0.85], [-0.52, 1.55, 0.88], [0, 1.55, 0.9],
       [0.52, 1.55, 0.88], [1.04, 1.55, 0.85]];
     top = 5.0;
@@ -81,7 +91,7 @@ function buildBoss(wi) {
     box(headP, M(0xc7a04c), 2.1, 1.3, 0.6, 0, 0.55, -0.35); // hood
     box(headP, M(0xeed48e), 1.3, 1.05, 1.1, 0, 0.5, 0.15);
     box(headP, M(0xef5350), 0.12, 0.08, 0.5, 0, 0.15, 0.82); // tongue
-    face(headP, 0.6, 0.74, 0.9);
+    faceRefs = face(headP, 0.6, 0.74, 0.9);
     g.add(headP);
     arms.push(headP); // "throws" with a head flick
     armor = [[0, 0.7, 1.05], [0.25, 1.55, 0.85], [-0.2, 2.55, 0.75],
@@ -98,7 +108,7 @@ function buildBoss(wi) {
     box(g, M(0x9fc4e8), 0.3, 0.5, 0.3, -0.55, 4.85, 0);
     box(g, M(0x9fc4e8), 0.3, 0.5, 0.3, 0.55, 4.85, 0);
     arms.push(limb(-1.8, 3.4, white, 0.85, 2.3), limb(1.8, 3.4, white, 0.85, 2.3));
-    face(g, 4.1, 0.84, 1.0);
+    faceRefs = face(g, 4.1, 0.84, 1.0);
     armor = [[-1.0, 1.5, 1.0], [-0.5, 1.5, 1.02], [0, 1.5, 1.05],
       [0.5, 1.5, 1.02], [1.0, 1.5, 1.0]];
     top = 5.1;
@@ -114,7 +124,7 @@ function buildBoss(wi) {
     box(g, M(0x7ef0ff, 0x1b5f73), 0.28, 0.8, 0.28, -0.5, 4.6, 0, 0.3);
     box(g, M(0xd07eff, 0x531b73), 0.28, 0.8, 0.28, 0.5, 4.6, 0, -0.3);
     arms.push(limb(-1.5, 2.9, slate, 0.7, 1.8), limb(1.5, 2.9, slate, 0.7, 1.8));
-    face(g, 3.85, 0.64, 1.0);
+    faceRefs = face(g, 3.85, 0.64, 1.0);
     armor = [[-0.96, 1.45, 0.8], [-0.48, 1.45, 0.83], [0, 1.45, 0.86],
       [0.48, 1.45, 0.83], [0.96, 1.45, 0.8]];
     top = 5.2;
@@ -139,14 +149,14 @@ function buildBoss(wi) {
       return p;
     };
     arms.push(wing(-1), wing(1));
-    face(g, 4.4, 0.82, 0.9);
+    faceRefs = face(g, 4.4, 0.82, 0.9);
     armor = [[-0.76, 2.0, 0.75], [-0.38, 2.0, 0.78], [0, 2.0, 0.8],
       [0.38, 2.0, 0.78], [0.76, 2.0, 0.75]];
     top = 5.2;
   }
 
   g.rotation.y = -0.42; // slight turn toward the incoming player
-  return { group: g, arms, armor, top };
+  return { group: g, arms, armor, top, face: faceRefs };
 }
 
 function makeCrown() {
@@ -186,6 +196,10 @@ export class BossFight {
     this.group = built.group;
     this.arms = built.arms;
     this.top = built.top;
+    this.face = built.face;
+    this.blinkT = 1.5 + Math.random() * 2.5;
+    this.blinkHold = 0;
+    this.flashT = 0;
     scene.add(this.group);
 
     // The 5 armor blocks (the boss's visible "hearts").
@@ -198,6 +212,17 @@ export class BossFight {
       m.position.set(x, y, z);
       this.group.add(m);
       return { m, popT: -1, vx: 0, vy: 0 };
+    });
+
+    // Every unique material on the boss (armor included), with its resting
+    // emissive, so a hit can flash the whole body white and restore it.
+    this.flashMats = [];
+    const seen = new Set();
+    this.group.traverse((o) => {
+      if (o.isMesh && !seen.has(o.material)) {
+        seen.add(o.material);
+        this.flashMats.push({ mat: o.material, base: o.material.emissive.getHex() });
+      }
     });
 
     this.projectiles = [0, 1].map(() => {
@@ -247,6 +272,7 @@ export class BossFight {
       a.popT = 0;
       a.vx = -3 - Math.random() * 2;
       a.vy = 7;
+      a.m.scale.setScalar(0.7); // pops bigger for a beat as it flies off
       const wp = new THREE.Vector3();
       a.m.getWorldPosition(wp);
       this.effects.confetti(wp);
@@ -254,6 +280,8 @@ export class BossFight {
     }
     sfxArmorPop();
     this.clearHeld();
+    this.flashT = 0.15; // whole-body white flash
+    for (const b of this.face.brows) b.visible = true; // angry face
     this.state = 'hurt';
     this.t = 0;
   }
@@ -333,7 +361,7 @@ export class BossFight {
     this.t += dt;
     const g = this.group;
 
-    // Popped armor blocks tumble away.
+    // Popped armor blocks tumble away, shrinking out at the end.
     for (const a of this.armor) {
       if (a.popT < 0) continue;
       a.popT += dt;
@@ -341,9 +369,43 @@ export class BossFight {
       a.m.position.x += a.vx * dt;
       a.m.position.y += a.vy * dt;
       a.m.rotation.z += dt * 9;
+      a.m.scale.setScalar(a.popT < 0.55 ? 0.7 : Math.max(0.01, 0.7 * (1 - (a.popT - 0.55) / 0.35)));
       if (a.popT > 0.9) {
         a.m.visible = false;
         a.popT = -1;
+      }
+    }
+
+    // Remaining armor shimmers so it reads as the thing to knock off.
+    for (let i = 0; i < this.hp; i++) {
+      const a = this.armor[i];
+      if (a && a.popT < 0) {
+        a.m.material.emissiveIntensity = 0.85 + Math.sin(this.t * 3.2 + i * 1.3) * 0.35;
+      }
+    }
+
+    // Blink: pupils flatten for a beat every few seconds.
+    if (this.blinkHold > 0) {
+      this.blinkHold -= dt;
+      if (this.blinkHold <= 0) {
+        for (const e of this.face.pupils) e.scale.y = e.scale.x;
+        this.blinkT = 1.5 + Math.random() * 2.5;
+      }
+    } else {
+      this.blinkT -= dt;
+      if (this.blinkT <= 0) {
+        this.blinkHold = 0.12;
+        for (const e of this.face.pupils) e.scale.y = e.scale.x * 0.15;
+      }
+    }
+
+    // Hit flash: whole body glows white, then eases back to normal.
+    if (this.flashT > 0) {
+      this.flashT -= dt;
+      if (this.flashT > 0) {
+        for (const f of this.flashMats) f.mat.emissive.setHex(0x999999);
+      } else {
+        for (const f of this.flashMats) f.mat.emissive.setHex(f.base);
       }
     }
 
@@ -352,6 +414,7 @@ export class BossFight {
     let bob = 0;
     let tilt = 0;
     let scale = 1;
+    let squash = 1; // extra y-squash (width compensates) for bonk wobble
     const armBase = [0, 0];
 
     if (this.state === 'enter') {
@@ -382,9 +445,12 @@ export class BossFight {
       const target = Math.max(this.x, p.x + LEAD, minX);
       const move = Math.min(dt * 6, target - this.x);
       this.x += move;
+      // Hover-bob while standing so the boss never feels like a statue,
+      // plus a slow breathing squash.
       bob = move > 0.01
         ? Math.abs(Math.sin(this.t * 8)) * 0.25
-        : Math.sin(this.t * 2.2) * 0.1;
+        : 0.12 + Math.sin(this.t * 2.2) * 0.12;
+      squash = 1 + Math.sin(this.t * 2.2) * 0.012;
       tilt = Math.sin(this.t * (this.state === 'dizzy' ? 3 : 1.7)) *
         (this.state === 'dizzy' ? 0.14 : 0.05);
       armBase[0] = Math.sin(this.t * 2) * 0.18;
@@ -424,9 +490,13 @@ export class BossFight {
       const u = Math.min(1, this.t / 1.0);
       tilt = -Math.sin(u * Math.PI) * 0.4;
       bob = -Math.sin(u * Math.PI) * 0.25;
+      // Bonk squash with a wobble as it springs back up.
+      squash = 1 - Math.sin(Math.min(1, u * 2) * Math.PI) * 0.16
+        + Math.sin(this.t * 18) * 0.03 * (1 - u);
       armBase[0] = Math.sin(u * Math.PI) * 1.4;
       armBase[1] = -Math.sin(u * Math.PI) * 1.4;
       if (u >= 1) {
+        for (const b of this.face.brows) b.visible = false; // anger over
         this.state = this.hp > 0 ? 'idle' : 'dizzy';
         this.t = 0;
       }
@@ -483,7 +553,8 @@ export class BossFight {
       const gy = this.level.groundTopAt(this.x);
       g.position.set(this.x, gy + bob, 0);
       g.rotation.z = tilt;
-      g.scale.setScalar(scale);
+      const sw = scale * (1 + (1 - squash) * 0.6); // widen as it squashes
+      g.scale.set(sw, scale * squash, sw);
       this.arms.forEach((a, i) => {
         a.rotation.z = (i === 0 ? 1 : -1) * armBase[i];
       });
