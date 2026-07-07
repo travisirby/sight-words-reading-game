@@ -5,7 +5,7 @@
 // dark desaturated tint and colorize when their first node unlocks.
 
 import * as THREE from 'three';
-import { voxelGeo, makeVoxelGeo } from './voxelgeo.js';
+import { voxelGeo, makeVoxelGeo, chamferVoxelGeo } from './voxelgeo.js';
 import { buildMapData, secretSegment } from './mapdata.js';
 import { PALETTES, mulberry32 } from './level.js';
 import { makeKidMesh } from './player.js';
@@ -31,21 +31,26 @@ function hash2(x, z, s = 0) {
 // voxel terrain instead of flat-sided extrusions.
 const groundGeo = makeVoxelGeo();
 {
-  const tints = [
-    [0.72, 0.58, 0.46], [0.72, 0.58, 0.46], // ±x sides: dry earth
-    [1, 1, 1],                               // top: the instance color
-    [0.4, 0.34, 0.3],                        // bottom: deep soil shadow
-    [0.8, 0.65, 0.51], [0.8, 0.65, 0.51],    // ±z sides: lit earth
-  ];
-  // Fill per face via the geometry's groups (RoundedBoxGeometry keeps
-  // BoxGeometry's 6 face groups, in the same ±x/±y/±z order).
-  const cols = new Float32Array(groundGeo.attributes.position.count * 3);
-  for (const g of groundGeo.groups) {
-    const t = tints[g.materialIndex];
-    for (let v = g.start; v < g.start + g.count; v++) cols.set(t, v * 3);
+  // Fill per vertex by its axis-aligned normal (chamferBox gives every
+  // vertex exactly one face's normal, so faces tint flat and the bevels
+  // blend between neighboring tints).
+  const nrm = groundGeo.attributes.normal;
+  const cols = new Float32Array(nrm.count * 3);
+  const tint = (x, y) => {
+    if (y > 0.5) return [1, 1, 1];                    // top: the instance color
+    if (y < -0.5) return [0.4, 0.34, 0.3];            // bottom: deep soil shadow
+    if (Math.abs(x) > 0.5) return [0.72, 0.58, 0.46]; // ±x sides: dry earth
+    return [0.8, 0.65, 0.51];                         // ±z sides: lit earth
+  };
+  for (let v = 0; v < nrm.count; v++) {
+    cols.set(tint(nrm.getX(v), nrm.getY(v)), v * 3);
   }
   groundGeo.setAttribute('color', new THREE.BufferAttribute(cols, 3));
 }
+
+// Water, foam and glints render as flat slabs or sub-pixel sparks — a bevel
+// could never be seen there, so they use plain 24-vert boxes.
+const flatBoxGeo = new THREE.BoxGeometry(1, 1, 1);
 
 const CAM_OFFSET = new THREE.Vector3(0, 18, 21); // ~41° down — wide diorama view
 const MAX_TILES = 700;
@@ -260,7 +265,7 @@ export class Overworld {
     }
     // The shimmer runs in the vertex shader (time uniform + per-instance
     // phase/amp attribute) so no instance buffer re-uploads per frame.
-    const waterGeo = boxGeo.clone();
+    const waterGeo = flatBoxGeo.clone();
     const phaseAmp = new Float32Array(this.waterTiles.length * 2);
     this.waterTiles.forEach((w, i) => {
       phaseAmp[i * 2] = w.phase;
@@ -313,7 +318,7 @@ export class Overworld {
       }
     }
     this.foamMesh = new THREE.InstancedMesh(
-      boxGeo, new THREE.MeshLambertMaterial({
+      flatBoxGeo, new THREE.MeshLambertMaterial({
         color: 0xf4fbff, transparent: true, opacity: 0.85,
       }), this.foam.length
     );
@@ -334,7 +339,7 @@ export class Overworld {
       this.glints.push({ x, z, phase: grand() * Math.PI * 2, speed: 0.5 + grand() * 0.8 });
     }
     this.glintMesh = new THREE.InstancedMesh(
-      boxGeo, new THREE.MeshBasicMaterial({ color: 0xffffff }), this.glints.length
+      flatBoxGeo, new THREE.MeshBasicMaterial({ color: 0xffffff }), this.glints.length
     );
     this.glintMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     this.glintMesh.frustumCulled = false;
@@ -515,13 +520,13 @@ export class Overworld {
 
   buildProps() {
     this.decorMesh = new THREE.InstancedMesh(
-      boxGeo, new THREE.MeshLambertMaterial(), MAX_DECOR
+      chamferVoxelGeo, new THREE.MeshLambertMaterial(), MAX_DECOR
     );
     this.decorMesh.frustumCulled = false;
     this.scene.add(this.decorMesh);
     this.decorMeta = [];
     this.glowMesh = new THREE.InstancedMesh(
-      boxGeo, new THREE.MeshLambertMaterial({ emissive: 0x2a2a55 }), MAX_GLOW
+      chamferVoxelGeo, new THREE.MeshLambertMaterial({ emissive: 0x2a2a55 }), MAX_GLOW
     );
     this.glowMesh.frustumCulled = false;
     this.scene.add(this.glowMesh);
@@ -771,7 +776,7 @@ export class Overworld {
   buildSigns() {
     const rows = ['01110', '10001', '00001', '00110', '00100', '00000', '00100'];
     this.signMesh = new THREE.InstancedMesh(
-      boxGeo,
+      chamferVoxelGeo,
       new THREE.MeshLambertMaterial({ color: 0xffe066, emissive: 0x5a4200 }),
       100
     );
@@ -840,7 +845,7 @@ export class Overworld {
 
   buildTiles() {
     this.tileMesh = new THREE.InstancedMesh(
-      boxGeo, new THREE.MeshLambertMaterial({ color: 0xf3d894 }), MAX_TILES
+      chamferVoxelGeo, new THREE.MeshLambertMaterial({ color: 0xf3d894 }), MAX_TILES
     );
     this.tileMesh.frustumCulled = false;
     this.scene.add(this.tileMesh);
@@ -853,7 +858,7 @@ export class Overworld {
     }
 
     this.secretTileMesh = new THREE.InstancedMesh(
-      boxGeo,
+      chamferVoxelGeo,
       new THREE.MeshLambertMaterial({ color: 0xc77df0, emissive: 0x2c0f45 }),
       MAX_SECRET_TILES
     );

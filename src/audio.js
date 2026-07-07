@@ -319,6 +319,7 @@ const clipCache = new Map(); // file -> Promise<AudioBuffer>
 let speakToken = 0; // invalidates in-flight speaks when a new one starts
 let speakSources = []; // currently playing clip sources
 let pendingFin = null; // onend of the speech being interrupted
+let inInterrupt = false; // an interrupted speech's onend is running right now
 
 const norm = (t) => t.trim().toLowerCase().replace(/\s+/g, ' ');
 
@@ -387,7 +388,13 @@ function stopSpeech() {
   }
   speakSources = [];
   if ('speechSynthesis' in window) speechSynthesis.cancel();
-  if (pendingFin) pendingFin(); // interrupted speech still reports done
+  if (pendingFin) {
+    // The interrupted speech still reports done — but any speak() its onend
+    // chains must lose to the speech doing the interrupting, or both would
+    // capture the same token and play on top of each other.
+    inInterrupt = true;
+    try { pendingFin(); } finally { inInterrupt = false; }
+  }
 }
 
 function speakSynth(text, rate, fin) {
@@ -453,6 +460,7 @@ export function speakLine(category, opts = {}) {
 // rate only applies to the speechSynthesis fallback; clips are
 // pre-rendered at a kid-friendly pace.
 export function speak(text, { rate = 1.0, onend = null } = {}) {
+  if (inInterrupt) return; // chained from an interrupted onend — superseded
   stopSpeech();
   if (muted) {
     if (onend) setTimeout(onend, 100);

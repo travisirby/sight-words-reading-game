@@ -407,8 +407,10 @@ export class DoorsEvent {
       api.effects.confetti(new THREE.Vector3(this.wallX, this.groundY + d.tier + 1.5, 0.5));
       api.effects.floatText(new THREE.Vector3(this.wallX, this.groundY + d.tier + 2.6, 0), '+3');
       api.addCoins(3);
-      api.praise();
-      api.onCorrect(this.attempts === 0);
+      const firstTry = this.attempts === 0;
+      if (firstTry && api.praiseFirstTry) api.praiseFirstTry();
+      else api.praise();
+      api.onCorrect(firstTry);
     } else {
       this.attempts++;
       d.dead = true;
@@ -567,7 +569,10 @@ export class StarsEvent {
       new THREE.Vector3(s.holder.position.x, s.holder.position.y + 1.2, 0), '+1'
     );
     this.onGem();
-    api.praise();
+    // warned means a wrong grab since this word was presented; a clean
+    // grab earns first-try praise, not the recovery line.
+    if (!this.warned && api.praiseFirstTry) api.praiseFirstTry();
+    else api.praise();
     for (const k of this.stars) k.holder.visible = false;
     this.advance(api, true);
   }
