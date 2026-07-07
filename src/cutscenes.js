@@ -15,7 +15,7 @@
 // Add `async: true` to any step to start it without waiting (walk while the
 // camera moves). Keep whole scenes to ~15-25 seconds — attention is the budget.
 
-// Dev/demo scene: the kid meets the Sand Serpent, who runs off with a word.
+// Dev/demo scene: the kid meets the Syrup Serpent, who runs off with a word.
 // Play it with ?cutscene=demo
 const demo = [
   { setting: { sky: 0xffd9a0, ground: 0xdfb45e } },

@@ -15,8 +15,8 @@ const boxGeo = new THREE.BoxGeometry(1, 1, 1);
 const LEAD = 10.5; // how far ahead of the player the boss keeps itself
 
 export const BOSSES = [
-  { name: 'Grass Golem', color: 0x4cb545 },
-  { name: 'Sand Serpent', color: 0xdfb45e },
+  { name: 'Meatball Monster', color: 0x8a4b2d },
+  { name: 'Syrup Serpent', color: 0x8a4a1a },
   { name: 'Frost Yeti', color: 0xeef6ff },
   { name: 'Crystal Golem', color: 0x9f6fd4 },
   { name: 'Cloud Dragon', color: 0xbfe4ff },
@@ -65,31 +65,37 @@ export function buildBoss(wi) {
   let top = 5;
   let faceRefs = null; // { pupils, brows } for blinks and angry looks
 
-  if (wi === 0) { // Grass Golem: mossy block giant with a flower
-    const green = M(0x4cb545);
-    box(g, M(0x3f9e3a), 0.9, 1.0, 0.9, -0.65, 0.5, 0);
-    box(g, M(0x3f9e3a), 0.9, 1.0, 0.9, 0.65, 0.5, 0);
-    box(g, green, 2.6, 2.2, 1.6, 0, 2.1, 0);
-    box(g, M(0x8fd35f), 2.9, 0.45, 1.8, 0, 3.25, 0);
-    box(g, M(0x6fbf62), 1.6, 1.2, 1.4, 0, 4.15, 0);
-    box(g, M(0x3f9e3a), 0.55, 0.4, 0.55, 0.45, 4.9, 0);
-    box(g, M(0xff6b81), 0.28, 0.28, 0.28, -0.5, 4.9, 0.25);
-    arms.push(limb(-1.65, 3.2, green, 0.7, 1.9), limb(1.65, 3.2, green, 0.7, 1.9));
+  if (wi === 0) { // Meatball Monster: saucy meatball giant with spaghetti hair
+    const brown = M(0x8a4b2d);
+    box(g, M(0x6e3a20), 0.9, 1.0, 0.9, -0.65, 0.5, 0);
+    box(g, M(0x6e3a20), 0.9, 1.0, 0.9, 0.65, 0.5, 0);
+    box(g, brown, 2.6, 2.2, 1.6, 0, 2.1, 0);
+    box(g, M(0xc0392b), 2.9, 0.45, 1.8, 0, 3.25, 0); // tomato sauce drizzle
+    box(g, M(0x9c5a36), 1.6, 1.2, 1.4, 0, 4.15, 0);
+    box(g, M(0xf5deb3), 0.55, 0.4, 0.55, 0.45, 4.9, 0, 0.3); // spaghetti tuft
+    box(g, M(0xf5deb3), 0.4, 0.35, 0.4, -0.05, 5.0, 0.1, -0.4); // more noodles
+    box(g, M(0xe74c3c), 0.28, 0.28, 0.28, -0.5, 4.9, 0.25); // cherry tomato
+    box(g, M(0xfff8e1), 0.2, 0.14, 0.2, 0.9, 3.55, 0.6); // parmesan sprinkle
+    box(g, M(0xfff8e1), 0.16, 0.12, 0.16, -0.85, 3.5, 0.55);
+    arms.push(limb(-1.65, 3.2, brown, 0.7, 1.9), limb(1.65, 3.2, brown, 0.7, 1.9));
     faceRefs = face(g, 4.25, 0.75, 1.1);
     armor = [[-1.04, 1.55, 0.85], [-0.52, 1.55, 0.88], [0, 1.55, 0.9],
       [0.52, 1.55, 0.88], [1.04, 1.55, 0.85]];
     top = 5.0;
-  } else if (wi === 1) { // Sand Serpent: swaying segment tower with a hood
-    const tan = M(0xdfb45e);
-    const tan2 = M(0xd2ad57);
-    box(g, tan2, 2.5, 1.1, 1.9, 0, 0.55, 0);
-    box(g, tan, 2.0, 1.05, 1.5, 0.25, 1.55, 0);
-    box(g, tan2, 1.7, 1.05, 1.3, -0.2, 2.55, 0);
-    box(g, tan, 1.4, 1.05, 1.1, 0.15, 3.55, 0);
+  } else if (wi === 1) { // Syrup Serpent: drizzly syrup tower with a waffle hood
+    const syrup = M(0x8a4a1a);
+    const syrup2 = M(0x7a3f14);
+    box(g, syrup2, 2.5, 1.1, 1.9, 0, 0.55, 0);
+    box(g, syrup, 2.0, 1.05, 1.5, 0.25, 1.55, 0);
+    box(g, syrup2, 1.7, 1.05, 1.3, -0.2, 2.55, 0);
+    box(g, syrup, 1.4, 1.05, 1.1, 0.15, 3.55, 0);
     const headP = new THREE.Group();
     headP.position.set(0, 4.1, 0);
-    box(headP, M(0xc7a04c), 2.1, 1.3, 0.6, 0, 0.55, -0.35); // hood
-    box(headP, M(0xeed48e), 1.3, 1.05, 1.1, 0, 0.5, 0.15);
+    box(headP, M(0xc98a3b), 2.1, 1.3, 0.6, 0, 0.55, -0.35); // waffle hood
+    box(headP, M(0xb87a2e), 0.3, 1.1, 0.08, -0.55, 0.55, -0.02); // waffle grooves
+    box(headP, M(0xb87a2e), 0.3, 1.1, 0.08, 0.55, 0.55, -0.02);
+    box(headP, M(0xf0c96b), 1.3, 1.05, 1.1, 0, 0.5, 0.15);
+    box(headP, M(0xffe082), 0.5, 0.18, 0.5, 0, 1.3, 0.1); // butter pat
     box(headP, M(0xef5350), 0.12, 0.08, 0.5, 0, 0.15, 0.82); // tongue
     faceRefs = face(headP, 0.6, 0.74, 0.9);
     g.add(headP);
