@@ -29,10 +29,24 @@ export const HOUSE_ITEMS = [
   { id: 'telescope', name: 'Telescope', emoji: '🔭', cost: 55, currency: 'gems' },
   { id: 'robot', name: 'Robot Buddy', emoji: '🤖', cost: 70, currency: 'gems' },
   { id: 'rocket', name: 'Rocket Ship', emoji: '🚀', cost: 100, currency: 'gems' },
+
+  // ---- boss prizes (never purchasable) ----
+  // earned: worldIdx — dropped by that world's castle boss during the trophy
+  // ceremony (main.js awards it via store.grantHouseItem). No cost/currency.
+  { id: 'golemstatue', name: 'Grass Golem Statue', emoji: '🗿', earned: 0 },
+  { id: 'serpentstatue', name: 'Sand Serpent Statue', emoji: '🐍', earned: 1 },
+  { id: 'yetisnowman', name: 'Yeti Snowman', emoji: '⛄', earned: 2 },
+  { id: 'crystallamp', name: 'Crystal Lamp', emoji: '💎', earned: 3 },
+  { id: 'dragonkite', name: 'Dragon Kite', emoji: '🪁', earned: 4 },
 ];
 
 export function getItem(id) {
   return HOUSE_ITEMS.find((it) => it.id === id) || null;
+}
+
+// The decoration a world's boss drops (null past the last world).
+export function decorForWorld(worldIdx) {
+  return HOUSE_ITEMS.find((it) => it.earned === worldIdx) || null;
 }
 
 // Boss trophies aren't bought — one appears on the trophy shelf per castle

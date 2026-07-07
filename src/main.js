@@ -18,6 +18,7 @@ import {
 } from './audio.js';
 import * as music from './music.js';
 import { WORLDS, shuffle, PRAISE } from './words.js';
+import { HOUSE_ITEMS, decorForWorld } from './housedata.js';
 
 // Testing cheats via URL: ?unlock opens every level/castle/secret,
 // ?reset wipes the save first (combine as ?reset&unlock).
@@ -264,8 +265,24 @@ function showHouse(from) {
   mode = 'house';
   music.play('house');
   house.enter();
+  store.clearHouseNews(); // he's here — retire the ❗ on the map house
+  spokeHouseNudge = false; // ...and re-arm the voice nudge for future news
   ui.showHUD(false);
   ui.showHouse();
+}
+
+// Post-boss payoff: land in the house for a short trophy ceremony (cup drops
+// onto the shelf, then the boss's decoration appears), with a MAP button as
+// the only — always available — way out, so it's skippable mid-fanfare.
+function showTrophyCeremony(world) {
+  houseReturn = 'complete'; // leaving lands on the map at the castle
+  mode = 'house';
+  music.play('victory');
+  const decor = decorForWorld(world);
+  if (decor) store.grantHouseItem(decor.id);
+  house.beginCeremony(world, decor && decor.id);
+  ui.showHUD(false);
+  ui.showCeremony();
 }
 
 function leaveHouse() {
@@ -280,6 +297,11 @@ function leaveHouse() {
 }
 
 function buyItem(item) {
+  if (item.earned !== undefined && !store.ownsHouseItem(item.id)) {
+    ui.houseToast('🏰 Castle prize!');
+    speak('Beat the castle boss to win that prize!', { rate: 1.0 });
+    return;
+  }
   if (store.ownsHouseItem(item.id)) {
     speak(`You already have the ${item.name}!`, { rate: 1.0 });
     return;
@@ -342,13 +364,17 @@ function onRunComplete(res) {
   const stars = computeStars(res.results);
   lastRun.stars = stars;
 
+  let firstBossWin = false;
   if (current.secret) {
     store.setSecretStars(current.world, stars);
   } else {
     const firstTime = store.getStars(current.world, current.level) === 0;
     store.setStars(current.world, current.level, stars);
     store.completeLevel(current.world, current.level, LEVEL_COUNTS);
-    if (current.boss) store.beatBoss(current.world);
+    if (current.boss) {
+      firstBossWin = !store.isBossBeaten(current.world);
+      store.beatBoss(current.world);
+    }
 
     // Queue map payoff animations for when we return.
     if (firstTime) {
@@ -364,13 +390,23 @@ function onRunComplete(res) {
   }
 
   // The last world's castle falling is the game-complete finale, not a
-  // normal summary: cutscene home, then the big stats screen.
+  // normal summary or trophy ceremony: cutscene home, then the big stats
+  // screen. Its boss decoration is still granted quietly — it's waiting in
+  // the yard next to the hero trophy.
   if (current.boss && current.world === WORLDS.length - 1) {
+    if (firstBossWin) {
+      const decor = decorForWorld(current.world);
+      if (decor) store.grantHouseItem(decor.id);
+    }
     startFinale();
     return;
   }
 
-  if (BONUS_ROUND_ENABLED && speech.isAvailable() && store.get().mic && res.results.length) {
+  if (firstBossWin) {
+    // First win over this castle: trophy ceremony at the house instead of
+    // the summary card (the run's coins are already banked by game.js).
+    showTrophyCeremony(current.world);
+  } else if (BONUS_ROUND_ENABLED && speech.isAvailable() && store.get().mic && res.results.length) {
     startBonusRound(res);
   } else {
     showSummary();
@@ -405,9 +441,17 @@ function showSummary() {
   });
 }
 
+let spokeHouseNudge = false; // one voice nudge per batch of house news
+
 function backToMap() {
   showMap(); // enter() refreshes navList first...
   map.setTokenTo(current.world, current.level, current.secret); // ...then snap
+  // Fresh loot he could spend (or a prize he skipped past)? Say so once —
+  // the ❗ over the house building carries it from there.
+  if (!spokeHouseNudge && store.hasHouseNews(HOUSE_ITEMS)) {
+    spokeHouseNudge = true;
+    speak('Something new at your house!', { rate: 1.0 });
+  }
 }
 
 // ---------- read-aloud bonus round ----------
@@ -564,6 +608,7 @@ ui.init({
   onMicUp: bonusMicUp,
   onHouse: (from) => showHouse(from),
   onHouseBack: () => leaveHouse(),
+  onCeremonyDone: () => leaveHouse(), // house.exit() finalizes the ceremony
   onBuyItem: (item) => buyItem(item),
   onMoveDown: (dir) => game.setMove('btn', dir, true),
   onMoveUp: (dir) => game.setMove('btn', dir, false),
