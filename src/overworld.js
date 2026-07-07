@@ -539,23 +539,36 @@ export class Overworld {
     };
 
     const emitters = [
-      (put, s, rand, i) => { // Grass Plains: trees, flowers, a pond
-        if (i < 5) tree(put, s.x, s.y, s.z, 0x3f9e3a, 0x4cb545);
-        else if (i === 5) {
-          put(s.x, s.y + 0.04, s.z, 2.6, 0.1, 1.9, 0x58a7e8);
-          put(s.x + 1.5, s.y + 0.15, s.z + 0.8, 0.5, 0.3, 0.5, 0x9c9c8a);
-        } else flower(put, s.x, s.y, s.z, i);
+      (put, s, rand, i) => { // Pasta Plains: meatball trees, marinara pond, tomatoes
+        if (i < 5) { // spaghetti tree: noodle trunk, meatball top, marinara splat
+          put(s.x, s.y + 0.6, s.z, 0.3, 1.2, 0.3, 0xf5d778);
+          put(s.x, s.y + 1.6, s.z, 1.4, 1.0, 1.4, 0x8a4b2d);
+          put(s.x, s.y + 2.3, s.z, 0.8, 0.4, 0.8, 0xd2422a);
+        } else if (i === 5) { // marinara pond with a parmesan boulder
+          put(s.x, s.y + 0.04, s.z, 2.6, 0.1, 1.9, 0xd2422a);
+          put(s.x + 1.5, s.y + 0.15, s.z + 0.8, 0.5, 0.3, 0.5, 0xfff2cc);
+        } else if (i & 1) { // cherry tomato on a stem
+          put(s.x, s.y + 0.22, s.z, 0.08, 0.45, 0.08, 0x3f9e3a);
+          put(s.x, s.y + 0.52, s.z, 0.26, 0.26, 0.26, 0xe23b2e);
+        } else { // farfalle bow-tie
+          put(s.x - 0.16, s.y + 0.16, s.z, 0.26, 0.3, 0.2, 0xf0c060, 0, 0.5);
+          put(s.x + 0.16, s.y + 0.16, s.z, 0.26, 0.3, 0.2, 0xf0c060, 0, -0.5);
+          put(s.x, s.y + 0.16, s.z, 0.12, 0.2, 0.22, 0xe2ad4d);
+        }
       },
-      (put, s, rand, i) => { // Sandy Desert: cacti, dunes, a palm
-        if (i < 5) {
-          put(s.x, s.y + 0.8, s.z, 0.45, 1.6, 0.45, 0x4da34c);
-          put(s.x + 0.5, s.y + 1.0, s.z, 0.8, 0.3, 0.3, 0x4da34c);
-          put(s.x + 0.75, s.y + 1.35, s.z, 0.3, 0.6, 0.3, 0x4da34c);
-        } else if (i < 10) {
-          put(s.x, s.y + 0.25, s.z, 2.6, 0.6, 1.8, 0xf2dc9c, rand() * 0.6);
-          put(s.x + 0.8, s.y + 0.45, s.z + 0.3, 1.4, 0.5, 1.1, 0xe8ce8a);
-        } else if (i === 10) palm(put, s.x, s.y, s.z);
-        else rock(put, s.x, s.y, s.z, 0xcf9b62);
+      (put, s, rand, i) => { // Waffle Desert: waffle stacks, syrup dunes, a strawberry
+        if (i < 5) { // waffle stack with a butter pat
+          put(s.x, s.y + 0.25, s.z, 1.5, 0.45, 1.5, 0xcf8c3c, rand() * 0.4);
+          put(s.x + 0.1, s.y + 0.65, s.z, 1.4, 0.4, 1.4, 0xdd9c4a);
+          put(s.x, s.y + 1.0, s.z, 0.5, 0.28, 0.5, 0xffe36a);
+        } else if (i < 10) { // syrup-drizzled dune
+          put(s.x, s.y + 0.25, s.z, 2.6, 0.6, 1.8, 0xe0a850, rand() * 0.6);
+          put(s.x + 0.5, s.y + 0.55, s.z + 0.2, 1.2, 0.25, 0.9, 0x8a4a1a);
+        } else if (i === 10) { // one giant strawberry landmark
+          put(s.x, s.y + 0.55, s.z, 1.1, 1.1, 1.1, 0xe23b2e);
+          put(s.x, s.y + 1.2, s.z, 0.7, 0.3, 0.7, 0x3f9e3a);
+          put(s.x + 0.2, s.y + 1.45, s.z, 0.14, 0.3, 0.14, 0x3f9e3a);
+        } else rock(put, s.x, s.y, s.z, 0x5a3520); // chocolate chunk
       },
       (put, s, rand, i) => { // Snowy Peaks: snowy trees, snowman, ice
         if (i < 5) {

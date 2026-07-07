@@ -56,8 +56,8 @@ export function chunkIntoLevels(list, target = 5) {
 }
 
 export const WORLDS = [
-  { name: 'Grass Plains', emoji: '🌿', tier: 'prePrimer' },
-  { name: 'Sandy Desert', emoji: '🏜️', tier: 'primer' },
+  { name: 'Pasta Plains', emoji: '🍝', tier: 'prePrimer' },
+  { name: 'Waffle Desert', emoji: '🧇', tier: 'primer' },
   { name: 'Snowy Peaks', emoji: '❄️', tier: 'first' },
   { name: 'Crystal Caves', emoji: '💎', tier: 'second' },
   { name: 'Sky Islands', emoji: '☁️', tier: 'third' },

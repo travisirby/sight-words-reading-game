@@ -10,18 +10,18 @@ import * as THREE from 'three';
 // light's ground bounce; sun/cloud tint the celestial voxels; night themes
 // swap the sun for a moon plus stars and dim the lights.
 export const PALETTES = [
-  { // Grass Plains — bright noon blue
+  { // Pasta Plains — sunny noodle country, cheese-slab platforms
     top: [0x8fd35f, 0x83c854], dirt: [0x9c7748, 0x8f6b3f],
-    plat: [0xd8a15a, 0xcc9550], hill: 0x6fbf62, hill2: 0x8fd48a,
+    plat: [0xf7c948, 0xeab52e], hill: 0x6fbf62, hill2: 0x8fd48a,
     sky: 0x87ceeb, fog: 0xa9ddf3,
     skyTop: 0x4aa3e6, skyBot: 0xaee4f8, hemiGround: 0x6da851,
     sun: 0xffec9e, cloud: 0xffffff,
   },
-  { // Sandy Desert — golden-hour warmth
-    top: [0xeed48e, 0xe5c97e], dirt: [0xd2ad57, 0xc7a04c],
-    plat: [0xe0925a, 0xd48750], hill: 0xdcb964, hill2: 0xead394,
+  { // Waffle Desert — toasty waffle-grid dunes, butter-pat sun
+    top: [0xe9b463, 0xd89c48], dirt: [0xb5772f, 0xa66a29],
+    plat: [0x8a5a2e, 0x7c4f27], hill: 0xd9a45c, hill2: 0xeecb8c,
     sky: 0x8fd4e8, fog: 0xf2debe,
-    skyTop: 0x6fb9df, skyBot: 0xffdba0, hemiGround: 0xc9a35e,
+    skyTop: 0x6fb9df, skyBot: 0xffdba0, hemiGround: 0xbb8340,
     sun: 0xffd27a, cloud: 0xfff3dd,
   },
   { // Snowy Peaks — crisp ice tones
@@ -273,36 +273,48 @@ function h01(i) {
 // Also reused by the overworld for region decoration. put()'s trailing arg
 // is a lightness jitter, used here for per-tree canopy hue variation.
 export const PROPS = [
-  (put, x, y, rand) => { // tree: oak / spruce / bush archetypes
+  (put, x, y, rand) => { // Pasta Plains: meatball trees, rigatoni, tomato bushes
     const r = rand || Math.random;
-    const j = (r() - 0.5) * 0.1; // per-tree leaf shade
+    const j = (r() - 0.5) * 0.1; // per-prop shade
     const kind = r();
-    if (kind < 0.45) { // round oak: trunk + layered lumpy canopy
-      put(x, y + 0.8, -3.5, 0.42, 1.6, 0.42, 0x7a4f2a);
-      put(x, y + 2.0, -3.5, 2.0, 0.9, 2.0, 0x3f9e3a, 0, j);
-      put(x + 0.55, y + 2.55, -3.2, 1.1, 0.7, 1.1, 0x4cb545, 0, j + 0.03);
-      put(x - 0.5, y + 2.75, -3.7, 1.2, 0.8, 1.2, 0x46ab40, 0, j);
-      put(x + 0.05, y + 3.3, -3.5, 0.8, 0.55, 0.8, 0x55c04e, 0, j + 0.05);
-    } else if (kind < 0.78) { // tall spruce: stacked shrinking tiers
-      put(x, y + 0.9, -3.5, 0.34, 1.8, 0.34, 0x6b4423);
-      put(x, y + 1.7, -3.5, 1.9, 0.7, 1.9, 0x2f8a3c, 0, j);
-      put(x, y + 2.4, -3.5, 1.4, 0.7, 1.4, 0x379645, 0, j);
-      put(x, y + 3.1, -3.5, 0.95, 0.7, 0.95, 0x40a34e, 0, j);
-      put(x, y + 3.7, -3.5, 0.5, 0.6, 0.5, 0x4ab357, 0, j);
-    } else { // low bush
+    if (kind < 0.45) { // spaghetti tree: wiggly noodle trunk, meatball canopy
+      put(x, y + 0.5, -3.5, 0.3, 1.0, 0.3, 0xf5d778);
+      put(x + 0.18, y + 1.3, -3.5, 0.3, 0.8, 0.3, 0xefcf6a);
+      put(x - 0.1, y + 2.0, -3.5, 0.3, 0.7, 0.3, 0xf5d778);
+      put(x, y + 2.8, -3.5, 1.9, 1.0, 1.9, 0x8a4b2d, 0, j); // meatball pile
+      put(x + 0.6, y + 3.4, -3.2, 1.0, 0.8, 1.0, 0x93532f, 0, j + 0.03);
+      put(x - 0.55, y + 3.5, -3.7, 1.1, 0.9, 1.1, 0x7f4327, 0, j);
+      put(x, y + 4.0, -3.5, 0.9, 0.5, 0.9, 0xd2422a, 0, j); // marinara splat
+      put(x + 0.2, y + 4.3, -3.4, 0.3, 0.15, 0.3, 0xfff2cc); // parmesan fleck
+    } else if (kind < 0.75) { // giant rigatoni standing on end
+      put(x, y + 1.1, -3.5, 1.2, 2.2, 1.2, 0xf0c060, 0, j);
+      put(x + 0.62, y + 1.1, -3.5, 0.08, 2.2, 0.9, 0xe2ad4d);
+      put(x - 0.62, y + 1.1, -3.5, 0.08, 2.2, 0.9, 0xe2ad4d);
+      put(x, y + 2.22, -3.5, 0.7, 0.14, 0.7, 0x9c6a2e); // dark tube hole
+    } else { // tomato bush
       put(x, y + 0.5, -3.3, 1.3, 1.0, 1.3, 0x3f9e3a, 0, j);
-      put(x + 0.55, y + 0.85, -3.5, 0.8, 0.6, 0.8, 0x4cb545, 0, j + 0.03);
+      put(x + 0.4, y + 0.95, -3.2, 0.5, 0.5, 0.5, 0xe23b2e);
+      put(x - 0.45, y + 0.7, -3.1, 0.45, 0.45, 0.45, 0xef5343);
     }
-    if (r() < 0.6) { // fallen-leaf voxels at the base
-      put(x + 0.9 + r() * 0.6, y + 0.06, -3 - r(), 0.22, 0.1, 0.22, 0x4cb545, 0, j + 0.06);
-      put(x - 1 - r() * 0.5, y + 0.06, -3.4, 0.22, 0.1, 0.22, 0x3f9e3a, 0, j);
+    if (r() < 0.6) { // parmesan sprinkles at the base
+      put(x + 0.9 + r() * 0.6, y + 0.06, -3 - r(), 0.2, 0.1, 0.2, 0xfff2cc);
+      put(x - 1 - r() * 0.5, y + 0.06, -3.4, 0.2, 0.1, 0.2, 0xf7e8b8);
     }
   },
-  (put, x, y, rand) => { // cactus
-    put(x, y + 1, -3.5, 0.5, 2, 0.5, 0x4da34c);
-    put(x + 0.55, y + 1.3, -3.5, 0.9, 0.35, 0.35, 0x4da34c);
-    put(x + 0.85, y + 1.7, -3.5, 0.35, 0.7, 0.35, 0x4da34c);
-    if (rand() < 0.5) put(x + 2, y + 0.25, -4, 0.9, 0.5, 0.9, 0xe0925a);
+  (put, x, y, rand) => { // Waffle Desert: waffle stacks, butter, berries, syrup
+    const stack = 2 + ((rand() * 2) | 0);
+    for (let i = 0; i < stack; i++) {
+      put(x + (i & 1 ? 0.12 : -0.08), y + 0.3 + i * 0.55, -3.5, 2.0, 0.5, 2.0,
+        i & 1 ? 0xdd9c4a : 0xcf8c3c);
+    }
+    const top = y + 0.3 + (stack - 1) * 0.55;
+    put(x, top + 0.45, -3.5, 0.7, 0.35, 0.7, 0xffe36a); // butter pat
+    put(x + 1.0, top - 0.2, -3.45, 0.16, 0.8, 0.16, 0x8a4a1a); // syrup drip
+    if (rand() < 0.6) { // strawberry pal
+      put(x + 2, y + 0.45, -4, 0.8, 0.9, 0.8, 0xe23b2e);
+      put(x + 2, y + 1.0, -4, 0.5, 0.25, 0.5, 0x3f9e3a);
+    }
+    if (rand() < 0.5) put(x - 1.6, y + 0.12, -3.2, 1.2, 0.18, 0.9, 0x8a4a1a); // syrup pool
   },
   (put, x, y) => { // snowman + snow-capped spruce
     put(x, y + 0.5, -3.5, 1, 1, 1, 0xffffff);
@@ -670,9 +682,18 @@ export class LevelScene {
       const dz = -0.9 - rand() * 0.5;
       const k = rand();
       const t = data.theme;
-      if (t === 1) { // desert: dry tufts + sandstone pebbles
-        if (k < 0.5) tuft(dx, dy, dz, 0xc9b060);
-        else pebble(dx, dy, dz, 0xd8a15a);
+      if (t === 0) { // pasta: spaghetti sprigs, cherry tomatoes, meatballs, cheese
+        if (k < 0.35) tuft(dx, dy, dz, 0xf5d778);
+        else if (k < 0.6) pebble(dx, dy, dz, 0xe23b2e);
+        else if (k < 0.85) pebble(dx, dy, dz, 0x8a4b2d);
+        else put(dx, dy + 0.14, dz, 0.26, 0.26, 0.26, 0xffd54a, 0, (rand() - 0.5) * 0.1);
+      } else if (t === 1) { // waffle: choc chips, butter pats, berries, sugar cubes
+        if (k < 0.35) pebble(dx, dy, dz, 0x4a2c1a);
+        else if (k < 0.6) put(dx, dy + 0.12, dz, 0.3, 0.22, 0.3, 0xffe36a, 0, (rand() - 0.5) * 0.08);
+        else if (k < 0.85) {
+          put(dx, dy + 0.16, dz, 0.24, 0.3, 0.24, 0xe23b2e);
+          put(dx, dy + 0.36, dz, 0.14, 0.1, 0.14, 0x3f9e3a);
+        } else put(dx, dy + 0.13, dz, 0.22, 0.24, 0.22, 0xffffff, 1);
       } else if (t === 2) { // snow: ice nubs + frosted rocks
         if (k < 0.4) put(dx, dy + 0.22, dz, 0.18, 0.44, 0.18, 0xbfe6ff, 1);
         else if (k < 0.7) pebble(dx, dy, dz, 0x9fb8cc);
@@ -682,7 +703,7 @@ export class LevelScene {
           put(dx, dy + 0.15, dz, 0.14, 0.3, 0.14, 0xcfc4e8);
           put(dx, dy + 0.38, dz, 0.42, 0.18, 0.42, k < 0.3 ? 0x7ef0ff : 0xd07eff, 1);
         } else pebble(dx, dy, dz, 0x6a6a78);
-      } else if (k < 0.42) { // grass/sky worlds
+      } else if (k < 0.42) { // sky islands
         tuft(dx, dy, dz, 0x5cbf4e);
       } else if (k < 0.72) { // flower
         put(dx, dy + 0.18, dz, 0.08, 0.36, 0.08, 0x3f9e3a);
