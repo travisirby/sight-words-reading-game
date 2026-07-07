@@ -13,6 +13,7 @@ import { BOSSES } from './boss.js';
 import { Effects } from './effects.js';
 import { sfxPlink, sfxBoing, speak } from './audio.js';
 import { WORLDS } from './words.js';
+import { HOUSE_ITEMS } from './housedata.js';
 import * as store from './store.js';
 
 const boxGeo = new THREE.BoxGeometry(1, 1, 1);
@@ -1068,6 +1069,21 @@ export class Overworld {
     this.houseIcon.position.set(0, 4.3, 0);
     g.add(this.houseIcon);
 
+    // ❗ badge beside the gold marker: something new is waiting inside
+    // (fresh trophy/decoration, or a newly affordable shop item). refresh()
+    // shows/hides it from store.hasHouseNews(); pulses in tick().
+    const bangMat = new THREE.MeshLambertMaterial({ color: 0xe53935, emissive: 0x661111 });
+    this.houseBadge = new THREE.Group();
+    const bangBar = new THREE.Mesh(boxGeo, bangMat);
+    bangBar.scale.set(0.4, 0.95, 0.4);
+    bangBar.position.y = 0.85;
+    const bangDot = new THREE.Mesh(boxGeo, bangMat);
+    bangDot.scale.set(0.42, 0.34, 0.42);
+    this.houseBadge.add(bangBar, bangDot);
+    this.houseBadge.position.set(1.7, 4.6, 0.4);
+    this.houseBadge.visible = false;
+    g.add(this.houseBadge);
+
     // Fat invisible touch target, same trick as the level nodes.
     this.houseHit = new THREE.Mesh(boxGeo, new THREE.MeshBasicMaterial({ visible: false }));
     this.houseHit.scale.set(4, 4, 4);
@@ -1200,6 +1216,7 @@ export class Overworld {
       }
     });
     this.tokenNav = Math.min(this.tokenNav, this.navList.length - 1);
+    this.houseBadge.visible = store.hasHouseNews(HOUSE_ITEMS);
     this.refreshLocks();
     this.updateTiles();
   }
@@ -1529,6 +1546,12 @@ export class Overworld {
     // Floating house marker: slow spin + bob, like the key icons.
     this.houseIcon.rotation.y = t * 1.2;
     this.houseIcon.position.y = 4.3 + Math.sin(t * 2) * 0.15;
+
+    // ❗ house badge: eager bounce + pulse so it outshines the gold marker.
+    if (this.houseBadge.visible) {
+      this.houseBadge.position.y = 4.6 + Math.abs(Math.sin(t * 3)) * 0.5;
+      this.houseBadge.scale.setScalar(1 + Math.sin(t * 6) * 0.1);
+    }
 
     // Dress-up marker over the token: counter-rotate so it spins in world
     // space no matter which way the kid is facing.
