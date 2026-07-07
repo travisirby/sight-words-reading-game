@@ -586,6 +586,13 @@ ui.init({
     store.setMic(!store.get().mic);
     ui.updateSettingsLabels();
   },
+  onToggleUnlock: () => {
+    const on = !store.get().devUnlocked;
+    store.setDevUnlocked(on);
+    ui.updateSettingsLabels();
+    speak(on ? 'All levels unlocked!' : 'Levels locked again.', { rate: 1.0 });
+    map.refresh(); // locks/paths on the warm map scene reflect the change
+  },
   onMapBack: () => showTitle(),
   onBannerPlay: () => playSelected(),
   onPause: () => {
