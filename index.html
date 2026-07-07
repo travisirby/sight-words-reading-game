@@ -6,8 +6,8 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <title>Word Runner</title>
-  <script type="module" crossorigin src="./assets/index-DpWpSjIh.js"></script>
-  <link rel="stylesheet" crossorigin href="./assets/index-CpT7Q3Kx.css">
+  <script type="module" crossorigin src="./assets/index-B9AejHuS.js"></script>
+  <link rel="stylesheet" crossorigin href="./assets/index-dTeSMfP1.css">
 </head>
 <body>
   <!-- 3D canvas mounts here -->
@@ -150,6 +150,14 @@
         <button id="btn-shop-close" class="btn btn-round">✖️</button>
       </div>
       <div id="shop-list"></div>
+      <!-- Buy confirm: the kid answers by reading the words "yes" / "no". -->
+      <div id="shop-confirm" class="hidden">
+        <div id="shop-confirm-item">
+          <span id="shop-confirm-emoji"></span>
+          <span id="shop-confirm-name"></span>
+        </div>
+        <div id="shop-confirm-words"></div>
+      </div>
     </div>
     <div id="house-toast" class="hidden"></div>
     <!-- Post-boss trophy ceremony chrome: title + the one button out -->
