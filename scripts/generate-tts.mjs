@@ -16,6 +16,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { DOLCH, WORLDS, PRAISE, PRAISE_FIRST_TRY } from '../src/words.js';
+import { HOUSE_ITEMS } from '../src/housedata.js';
 
 const run = promisify(execFile);
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
@@ -64,7 +65,20 @@ const FIXED = [
   'If you forget your word, tap the blue speaker button to hear it again!',
   'All levels unlocked!',
   'A secret path appeared!',
+  // house / trophy ceremony (main.js + house.js)
+  'My house!',
+  'You beat the castle! Time for your trophy!',
+  'A new trophy for your shelf!',
+  'Beat the castle boss to win that prize!',
+  'Something new at your house!',
 ];
+
+// Boss-prize reveal lines, one per earned decoration (house.js ceremony).
+function decorLines() {
+  return HOUSE_ITEMS.filter((it) => it.earned !== undefined).map(
+    (it) => `You won the ${it.name}! What a prize!`
+  );
+}
 
 function bossLines() {
   return bossNames().flatMap((name) => [
@@ -98,7 +112,7 @@ function buildClips() {
   for (const list of Object.values(DOLCH)) {
     for (const w of list) add(w, 'word', WORD_RATE);
   }
-  for (const t of [...SEGMENTS, ...FIXED, ...bossLines(), ...nodeNames(), ...UI_LABELS]) {
+  for (const t of [...SEGMENTS, ...FIXED, ...bossLines(), ...decorLines(), ...nodeNames(), ...UI_LABELS]) {
     add(t, 'phrase', PHRASE_RATE);
   }
   return clips;

@@ -9,6 +9,8 @@ import * as THREE from 'three';
 import { Effects } from './effects.js';
 import { makeKidMesh, applyLook, currentLook } from './player.js';
 import * as store from './store.js';
+import { getItem } from './housedata.js';
+import { speak, sfxFireworks, sfxCorrect } from './audio.js';
 
 const boxGeo = new THREE.BoxGeometry(1, 1, 1);
 const cylGeo = new THREE.CylinderGeometry(0.5, 0.5, 1, 10);
@@ -89,6 +91,12 @@ export class House {
       cat: [1.6, GRASS_Y, 2.2],
       dog: [-1.6, GRASS_Y, 4.4],
       rocket: [-7.8, GRASS_Y, 8.2],
+      // boss prizes
+      golemstatue: [4.6, GRASS_Y, 2.6],
+      serpentstatue: [-4.8, GRASS_Y, 6.6],
+      yetisnowman: [9.2, GRASS_Y, 6.0],
+      crystallamp: [1.4, FLOOR_Y, -5.0],
+      dragonkite: [10.2, GRASS_Y, 10.4],
     };
 
     this.buildIsland();
@@ -573,6 +581,143 @@ export class House {
     return g;
   }
 
+  // ---------- boss-prize builders ----------
+
+  makeGolemStatue() {
+    // Mini Grass Golem on a stone pedestal, mossy and proud.
+    const g = new THREE.Group();
+    g.add(box(lambert(0x9c9c8a), 0, 0.15, 0, 1.1, 0.3, 1.1)); // pedestal
+    const moss = lambert(0x4cb545);
+    g.add(box(moss, 0, 0.75, 0, 0.7, 0.9, 0.5)); // body
+    g.add(box(moss, 0, 1.45, 0, 0.5, 0.45, 0.45)); // head
+    const dark = lambert(0x222222);
+    g.add(box(dark, -0.12, 1.5, 0.21, 0.09, 0.09, 0.06)); // eyes
+    g.add(box(dark, 0.12, 1.5, 0.21, 0.09, 0.09, 0.06));
+    g.add(box(moss, -0.5, 0.85, 0, 0.22, 0.6, 0.22)); // arms
+    g.add(box(moss, 0.5, 0.85, 0, 0.22, 0.6, 0.22));
+    g.add(box(lambert(0x69d06a), 0, 1.78, 0, 0.1, 0.24, 0.1)); // sprout
+    g.add(box(lambert(0x8fe08f), 0, 1.94, 0, 0.3, 0.1, 0.12));
+    g.rotation.y = 0.6; // faces the camera-ish
+    return g;
+  }
+
+  makeSerpentStatue() {
+    // Sandstone serpent rearing out of a sand mound in an S-curve.
+    const g = new THREE.Group();
+    const sand = lambert(0xdfb45e);
+    g.add(box(lambert(0xe8ca86), 0, 0.12, 0, 1.6, 0.24, 1.3)); // sand mound
+    g.add(box(sand, -0.35, 0.35, 0, 0.7, 0.35, 0.4)); // tail coil
+    g.add(box(sand, 0.15, 0.55, 0, 0.5, 0.4, 0.4));
+    g.add(box(sand, 0.35, 1.0, 0, 0.4, 0.7, 0.38)); // rising body
+    const head = box(sand, 0.35, 1.55, 0.05, 0.55, 0.4, 0.44);
+    g.add(head);
+    const dark = lambert(0x222222);
+    g.add(box(dark, 0.22, 1.62, 0.28, 0.08, 0.08, 0.05)); // eyes
+    g.add(box(dark, 0.48, 1.62, 0.28, 0.08, 0.08, 0.05));
+    g.add(box(lambert(0xe25b5b), 0.35, 1.42, 0.3, 0.08, 0.14, 0.06)); // tongue
+    g.rotation.y = 2.4;
+    return g;
+  }
+
+  makeYetiSnowman(anims) {
+    // Snowman version of the Frost Yeti, scarf and all.
+    const g = new THREE.Group();
+    const snow = lambert(0xeef6ff);
+    const base = new THREE.Mesh(sphereGeo, snow);
+    base.scale.set(1.3, 1.1, 1.3);
+    base.position.y = 0.5;
+    const belly = new THREE.Mesh(sphereGeo, snow);
+    belly.scale.setScalar(0.95);
+    belly.position.y = 1.35;
+    const head = new THREE.Mesh(sphereGeo, snow);
+    head.scale.setScalar(0.65);
+    head.position.y = 2.05;
+    g.add(base, belly, head);
+    g.add(box(lambert(0x5b8dd9), 0, 1.68, 0, 0.75, 0.16, 0.7)); // scarf wrap
+    g.add(box(lambert(0x5b8dd9), 0.25, 1.4, 0.3, 0.16, 0.45, 0.1)); // scarf tail
+    const dark = lambert(0x222222);
+    g.add(box(dark, -0.12, 2.12, 0.28, 0.08, 0.08, 0.05)); // coal eyes
+    g.add(box(dark, 0.12, 2.12, 0.28, 0.08, 0.08, 0.05));
+    const nose = new THREE.Mesh(coneGeo, lambert(0xff8c42)); // carrot
+    nose.scale.set(0.14, 0.4, 0.14);
+    nose.rotation.x = Math.PI / 2;
+    nose.position.set(0, 2.0, 0.45);
+    g.add(nose);
+    const armL = box(lambert(0x7a4f2a), -0.75, 1.5, 0, 0.6, 0.08, 0.08, 0);
+    armL.rotation.z = 0.5;
+    const armR = box(lambert(0x7a4f2a), 0.75, 1.5, 0, 0.6, 0.08, 0.08, 0);
+    armR.rotation.z = -0.5;
+    g.add(armL, armR);
+    anims.push((t) => { armR.rotation.z = -0.5 + Math.sin(t * 2.4) * 0.2; }); // waves hello
+    return g;
+  }
+
+  makeCrystalLamp(anims) {
+    // Glowing crystal cluster from the caves on a dark wood base.
+    const g = new THREE.Group();
+    g.add(box(lambert(0x5a4632), 0, 0.1, 0, 0.9, 0.2, 0.9));
+    const shards = [];
+    const defs = [
+      [0, 1.0, 0, 0, 0.34, 0],           // tall center
+      [-0.24, 0.6, 0.14, 0.35, 0.2, 0],  // leaners
+      [0.26, 0.55, -0.1, -0.3, 0.18, 0.2],
+      [0.1, 0.45, 0.24, 0.2, 0.14, -0.25],
+    ];
+    for (const [x, h, z, rz, s, rx] of defs) {
+      const shard = new THREE.Mesh(coneGeo, lambert(0x9f6fd4, 0x3a2260));
+      shard.scale.set(s, h, s);
+      shard.position.set(x, h / 2 + 0.2, z);
+      shard.rotation.set(rx, 0, rz);
+      g.add(shard);
+      shards.push(shard);
+    }
+    anims.push((t) => { // slow twinkle: shards breathe a touch
+      const k = 1 + Math.sin(t * 2.2) * 0.06;
+      shards.forEach((s, i) => { s.scale.x = s.scale.z = defs[i][4] * k; });
+    });
+    return g;
+  }
+
+  makeDragonKite(anims) {
+    // Cloud-dragon kite tugging at a stake, always flying in the yard corner.
+    const g = new THREE.Group();
+    g.add(box(lambert(0x8d5a2b), 0, 0.25, 0, 0.14, 0.5, 0.14)); // stake
+    const kite = new THREE.Group();
+    const sail = box(lambert(0xbfe4ff, 0x223244), 0, 0, 0, 1.1, 1.1, 0.08, 0);
+    sail.rotation.z = Math.PI / 4; // diamond
+    kite.add(sail);
+    kite.add(box(lambert(0x5b8dd9), 0, 0.1, 0.06, 0.34, 0.3, 0.06)); // dragon face
+    kite.add(box(lambert(0x222222), -0.07, 0.14, 0.1, 0.06, 0.06, 0.04));
+    kite.add(box(lambert(0x222222), 0.07, 0.14, 0.1, 0.06, 0.06, 0.04));
+    const tails = [];
+    for (let k = 0; k < 3; k++) { // ribbon tail
+      const bow = box(lambert([0xe25b5b, 0xffd54a, 0x69d06a][k]),
+        0, -0.95 - k * 0.35, 0, 0.3, 0.12, 0.05);
+      kite.add(bow);
+      tails.push(bow);
+    }
+    kite.position.set(0.5, 3.2, 0.3);
+    g.add(kite);
+    // string: a thin stretched box from stake to kite (close enough at
+    // this scale, re-aimed every frame as the kite bobs)
+    const string = box(lambert(0xffffff), 0, 0, 0, 0.03, 1, 0.03);
+    g.add(string);
+    const stakeTop = new THREE.Vector3(0, 0.5, 0);
+    anims.push((t) => {
+      kite.position.x = 0.5 + Math.sin(t * 0.9) * 0.5;
+      kite.position.y = 3.2 + Math.sin(t * 1.3) * 0.35;
+      kite.rotation.z = Math.sin(t * 1.1) * 0.18;
+      tails.forEach((b, i) => { b.position.x = Math.sin(t * 2.2 - i * 0.9) * 0.18; });
+      // stretch the string between stake top and kite
+      const mid = kite.position.clone().add(stakeTop).multiplyScalar(0.5);
+      string.position.copy(mid);
+      const d = kite.position.clone().sub(stakeTop);
+      string.scale.y = d.length();
+      string.rotation.z = Math.atan2(-d.x, d.y);
+    });
+    return g;
+  }
+
   makeTrophy(worldIdx) {
     // Small gold cup, tinted per world, standing on the shelf.
     const g = new THREE.Group();
@@ -612,6 +757,11 @@ export class House {
       telescope: () => this.makeTelescope(),
       robot: () => this.makeRobot(this.anims),
       rocket: () => this.makeRocket(this.anims),
+      golemstatue: () => this.makeGolemStatue(),
+      serpentstatue: () => this.makeSerpentStatue(),
+      yetisnowman: () => this.makeYetiSnowman(this.anims),
+      crystallamp: () => this.makeCrystalLamp(this.anims),
+      dragonkite: () => this.makeDragonKite(this.anims),
     };
     const make = builders[id];
     if (!make) return null;
@@ -627,16 +777,20 @@ export class House {
   }
 
   // Idempotent: adds newly-owned items and newly-beaten trophies exactly once.
+  // A running ceremony owns the reveal of its cup + decoration, so those two
+  // are skipped here and placed by the ceremony script instead.
   refresh() {
     const owned = (store.get().house || {}).owned || {};
     for (const id of Object.keys(owned)) {
       if (!owned[id] || this.built[id]) continue;
+      if (this.ceremony && this.ceremony.decorId === id) continue;
       const g = this.buildItem(id);
       if (!g) continue;
       this.built[id] = g;
       this.scene.add(g);
     }
     for (let w = 0; w < 5; w++) {
+      if (this.ceremony && this.ceremony.world === w) continue;
       if (!store.isBossBeaten(w) || this.trophies[w]) continue;
       const t = this.makeTrophy(w);
       t.position.set(-1.8 + w * 0.9, 0.08, 0); // left to right along the shelf
@@ -652,6 +806,98 @@ export class House {
     const p = new THREE.Vector3(pos[0], pos[1] + 1.2, pos[2]);
     this.effects.confetti(p);
     this.effects.sparkle(p);
+  }
+
+  // ---------- trophy ceremony (after a boss falls) ----------
+
+  // Short scripted payoff on a first boss win: the camera pulls in on the
+  // shelf, the new cup drops with fx, then the boss's decoration pops into
+  // its spot. decorId must already be awarded in the store. Leaving early
+  // (MAP button) is safe — exit() snaps everything to its final state.
+  beginCeremony(worldIdx, decorId, onDone = null) {
+    this.ceremony = { world: worldIdx, decorId, onDone, t: 0, stage: 'fall' };
+    this.enter();
+    // Spawn this world's cup above its slot; refresh() (via enter) skips it
+    // because this.trophies[worldIdx] is set before the next refresh call.
+    if (!this.trophies[worldIdx]) {
+      const cup = this.makeTrophy(worldIdx);
+      cup.position.set(-1.8 + worldIdx * 0.9, 1.7, 0);
+      this.shelf.add(cup);
+      this.trophies[worldIdx] = cup;
+    }
+    this.ceremony.trophy = this.trophies[worldIdx];
+    // Inside the room, looking slightly down so the cups sit proud of the
+    // shelf plank instead of hiding behind its front edge.
+    this.ceremonyCam = {
+      pos: new THREE.Vector3(2.0, 3.4, 0.4),
+      look: new THREE.Vector3(0.8, 2.45, -5.55),
+    };
+    speak('You beat the castle! Time for your trophy!', { rate: 1.0 });
+  }
+
+  updateCeremony(dt) {
+    const c = this.ceremony;
+    c.t += dt;
+    if (c.stage === 'fall') {
+      // Cup drops onto the shelf after a short beat for the intro line.
+      const k = Math.max(0, Math.min(1, (c.t - 1.2) / 0.8));
+      c.trophy.position.y = 1.7 - (1.7 - 0.08) * k * k;
+      if (k >= 1) {
+        c.stage = 'landed';
+        c.t = 0;
+        const p = new THREE.Vector3();
+        c.trophy.getWorldPosition(p);
+        this.effects.confetti(p);
+        this.effects.sparkle(p);
+        sfxFireworks();
+        speak('A new trophy for your shelf!', { rate: 1.0 });
+      }
+    } else if (c.stage === 'landed') {
+      c.trophy.rotation.y += dt * 3; // victory spin while the line plays
+      if (c.t > 2.4) {
+        c.trophy.rotation.y = 0;
+        c.t = 0;
+        const item = c.decorId && getItem(c.decorId);
+        if (item) {
+          c.stage = 'decor';
+          if (!this.built[c.decorId]) {
+            const g = this.buildItem(c.decorId);
+            if (g) {
+              this.built[c.decorId] = g;
+              this.scene.add(g);
+            }
+          }
+          this.celebrate(c.decorId);
+          sfxCorrect();
+          speak(`You won the ${item.name}! What a prize!`, { rate: 1.0 });
+          // Close offset shot of the new prize; stays inside the walls for
+          // the one interior prize (crystallamp) and in open air for the yard.
+          const pos = this.itemPos[c.decorId];
+          this.ceremonyCam = {
+            pos: new THREE.Vector3(pos[0] + 3.2, pos[1] + 3.4, pos[2] + 5.2),
+            look: new THREE.Vector3(pos[0], pos[1] + 1.0, pos[2]),
+          };
+        } else {
+          c.stage = 'end';
+        }
+      }
+    } else if (c.stage === 'decor') {
+      if (c.t > 3.2) c.stage = 'end';
+    } else {
+      this.endCeremony();
+    }
+  }
+
+  // Idempotent wrap-up: snap the cup home, hand the camera back to the
+  // normal drift, and fire onDone once.
+  endCeremony() {
+    const c = this.ceremony;
+    if (!c) return;
+    this.ceremony = null;
+    this.ceremonyCam = null;
+    c.trophy.position.y = 0.08;
+    c.trophy.rotation.y = 0;
+    if (c.onDone) c.onDone();
   }
 
   // ---------- tap-to-walk ----------
@@ -851,6 +1097,9 @@ export class House {
   }
 
   exit() {
+    // Leaving mid-ceremony (MAP button) finalizes it: cup snapped to its
+    // slot, and the skipped decoration appears on the next refresh().
+    this.endCeremony();
     this.active = false;
   }
 
@@ -875,13 +1124,24 @@ export class House {
       this.kid.rotation.y += dr * (1 - Math.exp(-dt * 8));
     }
 
-    // Very slow camera drift — just enough that the diorama feels alive.
-    this.camera.position.set(
-      this.camBase.x + Math.sin(t * 0.12) * 0.7,
-      this.camBase.y + Math.sin(t * 0.09) * 0.3,
-      this.camBase.z + Math.cos(t * 0.12) * 0.7
-    );
-    this.camera.lookAt(this.camLook);
+    if (this.ceremony) this.updateCeremony(dt);
+
+    if (this.ceremonyCam) {
+      // Ease toward the ceremony shot (shelf close-up, then the new prize).
+      const k = 1 - Math.exp(-dt * 3);
+      this.camera.position.lerp(this.ceremonyCam.pos, k);
+      this.camLerpLook = (this.camLerpLook || this.camLook.clone()).lerp(this.ceremonyCam.look, k);
+      this.camera.lookAt(this.camLerpLook);
+    } else {
+      // Very slow camera drift — just enough that the diorama feels alive.
+      this.camLerpLook = null;
+      this.camera.position.set(
+        this.camBase.x + Math.sin(t * 0.12) * 0.7,
+        this.camBase.y + Math.sin(t * 0.09) * 0.3,
+        this.camBase.z + Math.cos(t * 0.12) * 0.7
+      );
+      this.camera.lookAt(this.camLook);
+    }
 
     this.effects.update(dt);
   }

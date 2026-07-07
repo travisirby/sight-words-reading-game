@@ -58,6 +58,7 @@ export function init(h) {
   bindSpeak($('btn-house-back'), 'Back', () => h.onHouseBack());
   bindSpeak($('btn-house-shop'), 'Shop!', () => toggleShop(true));
   bindSpeak($('btn-shop-close'), 'Close', () => toggleShop(false));
+  bindSpeak($('btn-ceremony-map'), 'Map', () => h.onCeremonyDone());
   onBuyItem = h.onBuyItem;
 
   // Mic: press-and-hold.
@@ -389,6 +390,20 @@ export function showHouse() {
   showScreen('house');
   toggleShop(false);
   refreshWallet();
+  $('btn-house-back').classList.remove('hidden');
+  $('btn-house-shop').classList.remove('hidden');
+  $('ceremony-panel').classList.add('hidden');
+}
+
+// Trophy-ceremony chrome: same house scene, but the only way out is the
+// big MAP button — no shop or back to wander off through mid-fanfare.
+export function showCeremony() {
+  showScreen('house');
+  toggleShop(false);
+  refreshWallet();
+  $('btn-house-back').classList.add('hidden');
+  $('btn-house-shop').classList.add('hidden');
+  $('ceremony-panel').classList.remove('hidden');
 }
 
 export function refreshWallet() {
@@ -406,13 +421,16 @@ export function refreshShop() {
   list.innerHTML = '';
   for (const item of HOUSE_ITEMS) {
     const owned = store.ownsHouseItem(item.id);
+    const earned = item.earned !== undefined; // boss prize, never for sale
     const wallet = item.currency === 'gems' ? s.gems : s.coins;
     const btn = document.createElement('button');
-    btn.className = 'shop-item' + (owned ? ' owned' : wallet < item.cost ? ' cant-afford' : '');
+    btn.className = 'shop-item' +
+      (owned ? ' owned' : earned || wallet < item.cost ? ' cant-afford' : '');
     const coin = item.currency === 'gems' ? '💎' : '🪙';
+    const cost = owned ? '✅ Got it!' : earned ? '🏰 Castle prize!' : `${coin} ${item.cost}`;
     btn.innerHTML = `<span class="shop-emoji">${item.emoji}</span>
       <span class="shop-info"><span>${item.name}</span>
-      <span class="shop-cost">${owned ? '✅ Got it!' : `${coin} ${item.cost}`}</span></span>`;
+      <span class="shop-cost">${cost}</span></span>`;
     btn.addEventListener('click', () => onBuyItem && onBuyItem(item));
     list.appendChild(btn);
   }
