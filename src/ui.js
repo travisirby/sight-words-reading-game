@@ -11,7 +11,7 @@ import { renderLookThumbnails } from './thumbs.js';
 
 const $ = (id) => document.getElementById(id);
 
-const SCREENS = ['title', 'players', 'map', 'pause', 'complete', 'bonus', 'char', 'house', 'cutscene'];
+const SCREENS = ['title', 'players', 'map', 'pause', 'complete', 'gamecomplete', 'bonus', 'char', 'house', 'cutscene'];
 
 export function init(h) {
   fairy.mount();
@@ -48,6 +48,9 @@ export function init(h) {
   bindSpeak($('btn-play-again'), 'Play again!', () => h.onPlayAgain());
   bindSpeak($('btn-next-level'), 'Next level!', () => h.onNextLevel());
   bindSpeak($('btn-complete-map'), 'Map', () => h.onCompleteMap());
+
+  bindSpeak($('btn-final-map'), 'Map', () => h.onCompleteMap());
+  bindSpeak($('btn-final-house'), 'My house!', () => h.onHouse('complete'));
 
   bindSpeak($('btn-bonus-skip'), 'Skip', () => h.onBonusSkip());
 
@@ -358,6 +361,34 @@ export function showComplete({ stars, coins, gems, hasNext }) {
   for (let i = 0; i < stars; i++) {
     setTimeout(() => starEls[i].classList.add('earned'), 500 + i * 450);
   }
+}
+
+// ---------- game complete (finale stats) ----------
+
+function formatPlayTime(seconds) {
+  const m = Math.round(seconds / 60);
+  if (m < 1) return 'Just started!';
+  if (m < 60) return `${m}m`;
+  return `${Math.floor(m / 60)}h ${m % 60}m`;
+}
+
+// Fill and show the finale stats screen; rows cascade in one by one.
+export function showGameComplete(t, { firstTime = true } = {}) {
+  showScreen('gamecomplete');
+  $('gc-levels').textContent = t.levelsCompleted;
+  $('gc-stars').textContent = t.totalStars;
+  $('gc-words').textContent = t.wordsRead;
+  $('gc-accuracy').textContent = `${t.accuracy}%`;
+  $('gc-secrets').textContent = t.secretsFound;
+  $('gc-coins').textContent = t.coinsEarned;
+  $('gc-time').textContent = formatPlayTime(t.playSeconds);
+  // On replays the trophy is old news — skip the "new reward" banner.
+  $('gc-reward').classList.toggle('hidden', !firstTime);
+  const rows = $('gc-stats').querySelectorAll('.gc-row');
+  rows.forEach((r, i) => {
+    r.classList.remove('gc-in');
+    setTimeout(() => r.classList.add('gc-in'), 400 + i * 350);
+  });
 }
 
 // ---------- bonus round ----------

@@ -36,7 +36,9 @@ export function getItem(id) {
 }
 
 // Boss trophies aren't bought — one appears on the trophy shelf per castle
-// beaten. house.js renders these from store.isBossBeaten(w).
+// beaten. house.js renders these from store.isBossBeaten(w). Likewise the
+// 'herotrophy' yard trophy is granted by the game-complete finale (main.js
+// startFinale), never sold, so it lives outside HOUSE_ITEMS.
 export const TROPHY_NAMES = [
   'Grass Plains Trophy',
   'Sandy Desert Trophy',

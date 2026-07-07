@@ -106,3 +106,88 @@ describe('currencies', () => {
     expect(store.addGems(2)).toBe(3);
   });
 });
+
+describe('lifetime stats / totals', () => {
+  it('starts empty', () => {
+    expect(store.totals()).toEqual({
+      levelsCompleted: 0,
+      totalStars: 0,
+      secretsFound: 0,
+      wordsRead: 0,
+      accuracy: 100,
+      coinsEarned: 0,
+      playSeconds: 0,
+    });
+  });
+
+  it('counts words read and first-try accuracy', () => {
+    store.recordWordResult('red', true);
+    store.recordWordResult('blue', true);
+    store.recordWordResult('go', false);
+    store.recordWordMiss('up'); // failed outright: seen but not read
+    const t = store.totals();
+    expect(t.wordsRead).toBe(3);
+    expect(t.accuracy).toBe(50); // 2 first-try of 4 seen
+  });
+
+  it('sums stars and levels across regular + secret levels', () => {
+    store.setStars(0, 0, 3);
+    store.setStars(0, 1, 2);
+    store.setSecretStars(0, 1);
+    const t = store.totals();
+    expect(t.levelsCompleted).toBe(2);
+    expect(t.secretsFound).toBe(1);
+    expect(t.totalStars).toBe(6);
+  });
+
+  it('coinsEarned survives spending', () => {
+    store.addCoins(100);
+    store.grantHouseItem('rug'); // ownership without payment
+    expect(store.buyHouseItem('chair', 60, 'coins')).toBe(true);
+    const t = store.totals();
+    expect(store.get().coins).toBe(40);
+    expect(t.coinsEarned).toBe(100);
+  });
+
+  it('accumulates play seconds', () => {
+    store.addPlaySeconds(30);
+    store.addPlaySeconds(45);
+    expect(store.totals().playSeconds).toBe(75);
+  });
+
+  it('falls back to derived values for saves that predate the counters', async () => {
+    store.recordWordResult('red', true);
+    store.addCoins(50);
+    // Simulate an old blob: strip the stats field and reload.
+    const key = `wordRunner.v3:${store.activeProfileId()}`;
+    const blob = JSON.parse(localStorage.getItem(key));
+    delete blob.stats;
+    localStorage.setItem(key, JSON.stringify(blob));
+    vi.resetModules();
+    const fresh = await import('../src/store.js');
+    fresh.load();
+    const t = fresh.totals();
+    expect(t.wordsRead).toBe(1); // derived from per-word stats
+    expect(t.coinsEarned).toBe(50); // falls back to the balance
+  });
+});
+
+describe('game completion', () => {
+  it('marks completion once and persists it', async () => {
+    expect(store.isGameCompleted()).toBe(false);
+    store.markGameCompleted();
+    expect(store.isGameCompleted()).toBe(true);
+    vi.resetModules();
+    const fresh = await import('../src/store.js');
+    fresh.load();
+    expect(fresh.isGameCompleted()).toBe(true);
+  });
+
+  it('grantHouseItem owns without paying and is idempotent', () => {
+    store.grantHouseItem('herotrophy');
+    store.grantHouseItem('herotrophy');
+    expect(store.ownsHouseItem('herotrophy')).toBe(true);
+    expect(store.get().coins).toBe(0);
+    expect(store.houseItemCount()).toBe(1);
+  });
+});
