@@ -15,7 +15,7 @@ import { promisify } from 'node:util';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { DOLCH, WORLDS, PRAISE } from '../src/words.js';
+import { DOLCH, WORLDS, PRAISE, PRAISE_FIRST_TRY } from '../src/words.js';
 
 const run = promisify(execFile);
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
@@ -57,6 +57,7 @@ const SEGMENTS = [
 
 const FIXED = [
   ...PRAISE,
+  PRAISE_FIRST_TRY,
   'You found a secret key!',
   'Level complete! Amazing!',
   'Bonus round! Read the word out loud. Hold the microphone and say it!',

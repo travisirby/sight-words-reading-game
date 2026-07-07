@@ -220,6 +220,15 @@ export function recordWordResult(word, firstTry) {
   save();
 }
 
+// Called when a challenge is failed outright (out of tries): the word was
+// seen and missed, but never answered correctly.
+export function recordWordMiss(word) {
+  const s = ensureWord(word);
+  s.seen++;
+  s.missed++;
+  save();
+}
+
 export function isMastered(word) {
   const s = wordStats(word);
   return !!s && s.firstTryCorrect >= 3;

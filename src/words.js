@@ -134,3 +134,6 @@ export function getBossWords(worldIdx, statsFor) {
 }
 
 export const PRAISE = ['Great job!', 'You got it!', 'Awesome!', 'Super reading!'];
+
+// Extra celebration when a word challenge is nailed on the first try.
+export const PRAISE_FIRST_TRY = 'Wow! First try! Super reading!';

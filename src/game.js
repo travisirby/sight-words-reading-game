@@ -14,8 +14,8 @@ import {
   speak,
 } from './audio.js';
 import {
-  WORLDS, DOLCH, PRAISE, getLevelWords, getSecretWords, getBossWords,
-  buildRunQueue, pickDistractors, shuffle,
+  WORLDS, DOLCH, PRAISE, PRAISE_FIRST_TRY, getLevelWords, getSecretWords,
+  getBossWords, buildRunQueue, pickDistractors, shuffle,
 } from './words.js';
 import * as store from './store.js';
 
@@ -151,13 +151,17 @@ export class Game {
       praise: () => {
         speak(PRAISE[this.praiseIdx++ % PRAISE.length], { rate: 1.0 });
       },
+      praiseFirstTry: () => {
+        speak(PRAISE_FIRST_TRY, { rate: 1.0 });
+      },
       addCoins: (n) => this.addCoins(n),
       bounceBack: (toX) => this.bounceBack(toX),
       speakWord: () => this.repeatWord(),
       onCorrect: (firstTry) => this.onEventCorrect(firstTry),
+      onFail: () => this.onEventFail(),
       onWrong: () => {
-        // The wrong-answer line re-speaks the word, so a trying kid gets a
-        // fresh quiet spell before the auto-repeat nudges again.
+        // A miss re-teaches the word (listen beat + reshuffle), so restart
+        // the auto-repeat clock with a fresh budget.
         this.repeatTimer = REPEAT_AFTER;
         this.autoRepeats = 0;
         if (this.bossFight) this.bossFight.taunt();
@@ -432,6 +436,16 @@ export class Game {
     store.recordWordResult(word, firstTry);
     this.cb.onDot(this.results.length - 1, firstTry ? 'green' : 'yellow');
     if (this.bossFight) this.bossFight.hit(); // armor block pops off
+  }
+
+  // Out of tries on a word event: red dot, the miss counts against the
+  // word's lifetime stats, and the run moves on.
+  onEventFail() {
+    const word = this.activeEv ? this.activeEv.word : this.stars && this.stars.word;
+    this.results.push({ word, firstTry: false, failed: true });
+    store.recordWordMiss(word);
+    this.cb.onDot(this.results.length - 1, 'red');
+    if (this.bossFight) this.bossFight.hit(); // the fight still progresses
   }
 
   endIntro() {
