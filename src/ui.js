@@ -2,7 +2,7 @@
 // The level map itself is 3D (overworld.js) — here we only manage the
 // transparent map screen chrome + the slide-up level banner.
 
-import { speak } from './audio.js';
+import { speak, sfxClick, sfxStar } from './audio.js';
 import * as fairy from './fairy.js';
 import * as store from './store.js';
 import { PALETTES, STYLES, OUTFITS, lookFrom } from './character.js';
@@ -22,6 +22,7 @@ export function init(h) {
   bindSpeak($('btn-settings'), 'Settings', () => $('settings-panel').classList.toggle('hidden'));
   bindSpeak($('btn-settings-close'), 'Close', () => $('settings-panel').classList.add('hidden'));
   bindSpeak($('btn-toggle-sound'), 'Sound', () => h.onToggleSound());
+  bindSpeak($('btn-toggle-music'), 'Music', () => h.onToggleMusic());
   bindSpeak($('btn-toggle-mic'), 'Mic round', () => h.onToggleMic());
 
   bindSpeak($('btn-switch-player'), 'Switch player!', () => h.onSwitchPlayer());
@@ -79,9 +80,10 @@ export function init(h) {
   });
 }
 
-// Speak the label, then run the action.
+// Tap sound + speak the label, then run the action.
 function bindSpeak(el, label, fn) {
   el.addEventListener('click', () => {
+    sfxClick();
     speak(label, { rate: 1.0 });
     fn();
   });
@@ -115,6 +117,7 @@ export function showHUD(on) {
 export function updateSettingsLabels() {
   const s = store.get();
   $('btn-toggle-sound').textContent = s.sound ? '🔊 Sound: ON' : '🔇 Sound: OFF';
+  $('btn-toggle-music').textContent = s.music ? '🎵 Music: ON' : '🎵 Music: OFF';
   $('btn-toggle-mic').textContent = s.mic ? '🎤 Mic Round: ON' : '🎤 Mic Round: OFF';
 }
 
@@ -356,7 +359,10 @@ export function showComplete({ stars, coins, gems, hasNext }) {
   const starEls = $('star-row').querySelectorAll('.star');
   starEls.forEach((s) => s.classList.remove('earned'));
   for (let i = 0; i < stars; i++) {
-    setTimeout(() => starEls[i].classList.add('earned'), 500 + i * 450);
+    setTimeout(() => {
+      starEls[i].classList.add('earned');
+      sfxStar(i);
+    }, 500 + i * 450);
   }
 }
 

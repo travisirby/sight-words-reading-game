@@ -11,7 +11,7 @@ import { Effects } from './effects.js';
 import { createInput } from './input.js';
 import {
   sfxCoin, sfxWrong, sfxStomp, sfxBoing, sfxKeyJingle, sfxFireworks, sfxPlink,
-  speak,
+  sfxLand, speak,
 } from './audio.js';
 import {
   WORLDS, DOLCH, PRAISE, PRAISE_FIRST_TRY, getLevelWords, getSecretWords,
@@ -646,8 +646,9 @@ export class Game {
       const moveSpeed = this.choice ? this.moveDir * CHOICE_SPEED : this.speed;
       p.update(dt, moveSpeed, this.level, {
         onLand: (fall) => {
-          if (fall > 6) { // soft landing sparkle, never a penalty
+          if (fall > 6) { // soft landing sparkle + thud, never a penalty
             this.effects.sparkle(new THREE.Vector3(p.x, p.y + 0.2, 0));
+            sfxLand();
           }
         },
       });

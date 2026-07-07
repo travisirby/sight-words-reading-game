@@ -12,7 +12,11 @@ import { CUTSCENES } from './cutscenes.js';
 import * as ui from './ui.js';
 import * as store from './store.js';
 import * as speech from './speech.js';
-import { unlockAudio, setMuted, speak, sfxCorrect, sfxCoin } from './audio.js';
+import {
+  unlockAudio, setMuted, speak, sfxCorrect, sfxCoin, sfxGem,
+  sfxLevelStart, sfxPause, sfxResume, audioGraph,
+} from './audio.js';
+import * as music from './music.js';
 import { WORLDS, shuffle, PRAISE } from './words.js';
 
 // Testing cheats via URL: ?unlock opens every level/castle/secret,
@@ -22,6 +26,7 @@ if (cheats.has('reset')) store.reset();
 store.load();
 if (cheats.has('unlock')) store.devUnlockAll(WORLDS.length);
 setMuted(!store.get().sound);
+music.setMusicEnabled(store.get().music);
 
 const LEVEL_COUNTS = WORLDS.map((w) => w.levels.length);
 
@@ -92,7 +97,7 @@ const cutscene = new CutsceneScene();
 
 // Debug handle for automated testing (headless tabs freeze rAF, so tests
 // step the sim manually via game.updateRun(dt) and game.debugResolve()).
-window.__wr = { game, store, map, charScene, house, cutscene };
+window.__wr = { game, store, map, charScene, house, cutscene, music, audio: { audioGraph, unlockAudio } };
 
 const clock = new THREE.Clock();
 renderer.setAnimationLoop(() => {
@@ -129,6 +134,8 @@ window.addEventListener('orientationchange', onResize);
 
 function showMap() {
   mode = 'map';
+  music.play('map');
+  music.setDimmed(false);
   map.enter();
   ui.showHUD(false);
   ui.showScreen('map');
@@ -141,6 +148,7 @@ function showMap() {
 function playCutscene(script, onDone) {
   if (mode === 'map') map.exit();
   mode = 'cutscene';
+  music.play(null); // cutscenes carry their own speech + sfx
   ui.showHUD(false);
   ui.showScreen('cutscene');
   cutscene.play(script, onDone);
@@ -153,6 +161,7 @@ function playCutscene(script, onDone) {
 function showTitle() {
   if (mode === 'map') map.exit();
   mode = 'char';
+  music.play('title');
   charScene.setLook(currentLook());
   ui.setPlayerName(store.activeProfileName());
   ui.showScreen('title');
@@ -163,6 +172,7 @@ function showTitle() {
 function onProfileSwitched() {
   const s = store.get();
   setMuted(!s.sound);
+  music.setMusicEnabled(s.music);
   const look = currentLook();
   applyLook(game.player.group, look);
   applyLook(map.token, look);
@@ -239,6 +249,7 @@ function showHouse(from) {
   houseReturn = from;
   if (mode === 'map') map.exit();
   mode = 'house';
+  music.play('house');
   house.enter();
   ui.showHUD(false);
   ui.showHouse();
@@ -279,6 +290,9 @@ function startLevel(worldIdx, levelIdx, secret = false) {
   current = { world: worldIdx, level: levelIdx, secret, boss };
   map.exit();
   mode = 'game';
+  music.play(boss ? 'boss' : 'level');
+  music.setDimmed(false);
+  sfxLevelStart();
   game.startRun(worldIdx, levelIdx, { secret, boss });
   ui.showScreen(null);
   ui.showHUD(true);
@@ -343,6 +357,7 @@ function onRunComplete(res) {
 }
 
 function showSummary() {
+  music.play('victory');
   const next = current.secret ? null : nextLevelOf(current.world, current.level);
   ui.showComplete({
     stars: lastRun.stars,
@@ -368,6 +383,7 @@ function startBonusRound(res) {
       heard: [],
       advancing: false,
     };
+    music.play(null); // quiet for the mic round
     ui.showScreen('bonus');
     speak('Bonus round! Read the word out loud. Hold the microphone and say it!', { rate: 1.0 });
     showBonusWord();
@@ -419,7 +435,7 @@ function bonusMicDown() {
         bonus.heard = [];
         lastRun.gems += 5;
         store.addGems(5);
-        sfxCorrect();
+        sfxGem();
         ui.setBonusFeedback('⭐ +5 💎');
         speak(PRAISE[(Math.random() * PRAISE.length) | 0], { rate: 1.0 });
         advanceBonus();
@@ -463,6 +479,12 @@ ui.init({
     ui.updateSettingsLabels();
     if (on) sfxCoin();
   },
+  onToggleMusic: () => {
+    const on = !store.get().music;
+    store.setMusic(on);
+    music.setMusicEnabled(on);
+    ui.updateSettingsLabels();
+  },
   onToggleMic: () => {
     store.setMic(!store.get().mic);
     ui.updateSettingsLabels();
@@ -471,10 +493,14 @@ ui.init({
   onBannerPlay: () => playSelected(),
   onPause: () => {
     game.pause();
+    sfxPause();
+    music.setDimmed(true);
     ui.showScreen('pause');
   },
   onResume: () => {
     ui.showScreen(null);
+    sfxResume();
+    music.setDimmed(false);
     game.resume();
   },
   onPauseMap: () => {
@@ -528,6 +554,7 @@ if (cheats.has('cutscene')) {
 document.addEventListener('visibilitychange', () => {
   if (document.hidden && game.running && !game.paused) {
     game.pause();
+    music.setDimmed(true);
     ui.showScreen('pause');
   }
 });

@@ -9,7 +9,8 @@
     "preview": "vite preview",
     "dev:ipad": "HTTPS=1 vite --host",
     "test": "vitest run",
-    "gen:tts": "node scripts/generate-tts.mjs"
+    "gen:tts": "node scripts/generate-tts.mjs",
+    "gen:audio": "node scripts/generate-audio.mjs"
   },
   "keywords": [],
   "author": "",

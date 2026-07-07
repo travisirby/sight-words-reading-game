@@ -1,9 +1,12 @@
-// WebAudio sfx (all synthesized) + speech playback.
-// Speech prefers pre-generated neural TTS clips (public/tts/, see
-// scripts/generate-tts.mjs) and falls back to speechSynthesis for any
-// text without a clip.
+// WebAudio sfx + speech playback.
+// Sfx prefer pre-generated ElevenLabs samples (public/audio/, see
+// scripts/generate-audio.mjs) and fall back to the synthesized versions
+// below for any sound without a file. Speech prefers pre-generated neural
+// TTS clips (public/tts/, see scripts/generate-tts.mjs) and falls back to
+// speechSynthesis for any text without a clip.
 
 import TTS from './tts-manifest.js';
+import AUDIO from './audio-manifest.js';
 
 let ctx = null;
 let master = null;
@@ -23,6 +26,13 @@ function ensureCtx() {
   return ctx;
 }
 
+// Shared audio graph for music.js: the same context + master gain, so the
+// global mute covers music too. Null until WebAudio is available.
+export function audioGraph() {
+  const c = ensureCtx();
+  return c ? { ctx: c, master } : null;
+}
+
 // Must be called from a user gesture (iOS): resumes the AudioContext and
 // primes speechSynthesis with a blank utterance.
 export function unlockAudio() {
@@ -30,6 +40,12 @@ export function unlockAudio() {
   unlocked = true;
   const c = ensureCtx();
   if (c && c.state === 'suspended') c.resume();
+  // Warm the sfx sample cache so the first coin/jump isn't late.
+  if (c) {
+    for (const file of Object.values(AUDIO.sfx)) {
+      loadAudioBuffer(`audio/${file}`).catch(() => {});
+    }
+  }
   try {
     if ('speechSynthesis' in window) {
       const u = new SpeechSynthesisUtterance(' ');
@@ -77,14 +93,64 @@ function getNoise(c) {
   return noiseBuf;
 }
 
+// ---- samples (pre-generated files, synth fallback) ----
+
+const bufCache = new Map(); // url -> Promise<{buf, offset, dur}>
+
+// Fetch + decode + silence-trim any audio file, cached. Shared with
+// music.js (tracks loop the trimmed region for cleaner seams).
+export function loadAudioBuffer(url) {
+  if (!bufCache.has(url)) {
+    const p = fetch(url)
+      .then((r) => {
+        if (!r.ok) throw new Error(`audio fetch ${r.status}`);
+        return r.arrayBuffer();
+      })
+      .then((ab) => ctx.decodeAudioData(ab))
+      .then(trimBounds);
+    p.catch(() => bufCache.delete(url)); // allow retry after a failed load
+    bufCache.set(url, p);
+  }
+  return bufCache.get(url);
+}
+
+// Play a pre-generated sfx sample by manifest name. Returns false when the
+// manifest has no such file, so callers fall through to their synth
+// version. rate pitch-shifts (1 = as recorded).
+function sample(name, { rate = 1, vol = 1, at = 0 } = {}) {
+  const file = AUDIO.sfx[name];
+  if (!file) return false;
+  const c = ensureCtx();
+  if (!c) return false;
+  if (muted) return true; // consumed: stay silent, no synth fallback
+  loadAudioBuffer(`audio/${file}`).then(
+    ({ buf, offset, dur }) => {
+      const t0 = c.currentTime + at;
+      const src = c.createBufferSource();
+      src.buffer = buf;
+      src.playbackRate.value = rate;
+      const g = c.createGain();
+      g.gain.value = vol;
+      src.connect(g).connect(master);
+      src.start(t0, offset, dur / rate + 0.05);
+    },
+    () => {
+      delete AUDIO.sfx[name]; // dead file: use the synth from now on
+    }
+  );
+  return true;
+}
+
 // ---- sfx ----
 
 export function sfxCoin() {
+  if (sample('coin')) return;
   tone({ type: 'square', from: 988, dur: 0.07, vol: 0.25 });
   tone({ type: 'square', from: 1319, dur: 0.18, at: 0.07, vol: 0.25 });
 }
 
 export function sfxCorrect() {
+  if (sample('correct')) return;
   const notes = [523.25, 659.25, 783.99, 1046.5]; // C5 E5 G5 C6
   notes.forEach((f, i) => {
     tone({ type: 'triangle', from: f, dur: 0.22, at: i * 0.09, vol: 0.4 });
@@ -93,10 +159,12 @@ export function sfxCorrect() {
 }
 
 export function sfxWrong() {
+  if (sample('wrong')) return;
   tone({ type: 'sine', from: 220, to: 110, dur: 0.3, vol: 0.4 });
 }
 
 export function sfxJump() {
+  if (sample('jump', { rate: 0.95 + Math.random() * 0.1 })) return;
   const c = ensureCtx();
   if (!c || muted) return;
   const t0 = c.currentTime;
@@ -116,6 +184,7 @@ export function sfxJump() {
 }
 
 export function sfxPop() {
+  if (sample('pop', { rate: 0.85 + Math.random() * 0.3 })) return;
   tone({ type: 'square', from: 200 + Math.random() * 500, to: 60, dur: 0.12, vol: 0.3 });
 }
 
@@ -127,32 +196,38 @@ export function sfxFireworks() {
 
 // Rising plink for the map path reveal: pass the tile index for pitch.
 export function sfxPlink(i = 0) {
+  if (sample('plink', { rate: Math.pow(2, (i % 16) / 12) })) return;
   const f = 587 * Math.pow(2, (i % 16) / 12);
   tone({ type: 'triangle', from: f, dur: 0.12, vol: 0.25 });
   tone({ type: 'sine', from: f * 2, dur: 0.09, vol: 0.08 });
 }
 
 export function sfxBonk() {
+  if (sample('bonk')) return;
   tone({ type: 'square', from: 150, to: 70, dur: 0.14, vol: 0.35 });
 }
 
 export function sfxStomp() {
+  if (sample('stomp')) return;
   tone({ type: 'square', from: 320, to: 60, dur: 0.16, vol: 0.35 });
   tone({ type: 'sine', from: 90, dur: 0.1, at: 0.02, vol: 0.3 });
 }
 
 export function sfxBoing() {
+  if (sample('boing')) return;
   tone({ type: 'sine', from: 180, to: 720, dur: 0.28, vol: 0.35 });
   tone({ type: 'sine', from: 195, to: 750, dur: 0.28, at: 0.03, vol: 0.18 });
 }
 
 export function sfxDoorOpen() {
+  if (sample('dooropen')) return;
   tone({ type: 'sawtooth', from: 110, to: 330, dur: 0.35, vol: 0.16 });
   tone({ type: 'triangle', from: 523, dur: 0.18, at: 0.28, vol: 0.3 });
   tone({ type: 'triangle', from: 784, dur: 0.24, at: 0.38, vol: 0.3 });
 }
 
 export function sfxKeyJingle() {
+  if (sample('keyjingle')) return;
   const notes = [1047, 1319, 1568, 2093, 1568, 2093];
   notes.forEach((f, i) => {
     tone({ type: 'triangle', from: f, dur: 0.14, at: i * 0.08, vol: 0.3 });
@@ -161,6 +236,7 @@ export function sfxKeyJingle() {
 
 // Silly cartoon roar: a descending sawtooth wobble, more raspberry than scary.
 export function sfxRoar() {
+  if (sample('roar')) return;
   tone({ type: 'sawtooth', from: 300, to: 90, dur: 0.7, vol: 0.3 });
   tone({ type: 'square', from: 150, to: 60, dur: 0.5, at: 0.15, vol: 0.18 });
   tone({ type: 'sawtooth', from: 500, to: 200, dur: 0.4, at: 0.05, vol: 0.12 });
@@ -168,6 +244,7 @@ export function sfxRoar() {
 
 // Boss giggle-taunt after a wrong answer.
 export function sfxGiggle() {
+  if (sample('giggle')) return;
   [880, 1100, 880, 1320].forEach((f, i) => {
     tone({ type: 'triangle', from: f, to: f * 1.2, dur: 0.09, at: i * 0.09, vol: 0.22 });
   });
@@ -175,12 +252,60 @@ export function sfxGiggle() {
 
 // Armor block pops off: crunch + rising chime.
 export function sfxArmorPop() {
+  if (sample('armorpop')) return;
   tone({ type: 'square', from: 180, to: 60, dur: 0.12, vol: 0.35 });
   tone({ type: 'triangle', from: 784, dur: 0.15, at: 0.08, vol: 0.3 });
   tone({ type: 'triangle', from: 1047, dur: 0.2, at: 0.16, vol: 0.3 });
 }
 
+// Soft UI tap for buttons, quiet enough to sit under the spoken label.
+export function sfxClick() {
+  if (sample('click', { vol: 0.5 })) return;
+  tone({ type: 'triangle', from: 660, to: 880, dur: 0.06, vol: 0.12 });
+}
+
+// Landing thud after a real fall.
+export function sfxLand() {
+  if (sample('land')) return;
+  tone({ type: 'sine', from: 140, to: 70, dur: 0.12, vol: 0.25 });
+}
+
+// Gem reward: brighter, glassier cousin of the coin.
+export function sfxGem() {
+  if (sample('gem')) return;
+  tone({ type: 'sine', from: 1319, dur: 0.1, vol: 0.25 });
+  tone({ type: 'sine', from: 1760, dur: 0.12, at: 0.08, vol: 0.25 });
+  tone({ type: 'sine', from: 2637, dur: 0.22, at: 0.16, vol: 0.2 });
+}
+
+// "Ready... go!" rising whistle at the start of a run.
+export function sfxLevelStart() {
+  if (sample('levelstart')) return;
+  tone({ type: 'square', from: 392, dur: 0.12, vol: 0.2 });
+  tone({ type: 'square', from: 523, dur: 0.12, at: 0.16, vol: 0.2 });
+  tone({ type: 'square', from: 659, to: 784, dur: 0.3, at: 0.32, vol: 0.25 });
+}
+
+export function sfxPause() {
+  if (sample('pause')) return;
+  tone({ type: 'triangle', from: 587, to: 392, dur: 0.16, vol: 0.25 });
+}
+
+export function sfxResume() {
+  if (sample('resume')) return;
+  tone({ type: 'triangle', from: 392, to: 587, dur: 0.16, vol: 0.25 });
+}
+
+// Star ding on the summary screen; i = 0..2 rises with each star.
+export function sfxStar(i = 0) {
+  if (sample('star', { rate: [1, 1.26, 1.68][i % 3] })) return;
+  const f = [784, 988, 1319][i % 3];
+  tone({ type: 'triangle', from: f, dur: 0.3, vol: 0.35 });
+  tone({ type: 'sine', from: f * 2, dur: 0.24, at: 0.03, vol: 0.15 });
+}
+
 export function sfxStarGrab() {
+  if (sample('stargrab')) return;
   tone({ type: 'sine', from: 600, to: 1800, dur: 0.3, vol: 0.35 });
   tone({ type: 'triangle', from: 1200, dur: 0.2, at: 0.14, vol: 0.25 });
 }
