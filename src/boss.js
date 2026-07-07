@@ -26,141 +26,66 @@ export const BOSSES = [
 
 export function buildBoss(wi) {
   const g = new THREE.Group();
-  const M = (c, e = 0) => new THREE.MeshLambertMaterial({ color: c, emissive: e });
-  const box = (parent, m, sx, sy, sz, x, y, z, rz = 0) => {
-    const mesh = new THREE.Mesh(boxGeo, m);
-    mesh.scale.set(sx, sy, sz);
-    mesh.position.set(x, y, z);
-    mesh.rotation.z = rz;
-    parent.add(mesh);
-    return mesh;
-  };
-  // Big friendly eyes + smile on the +z (camera) side. Returns the pupils
-  // (for blinking) and a pair of hidden angry brows (shown while hurt).
-  const face = (parent, y, z, s = 1) => {
-    const white = M(0xffffff);
-    const dark = M(0x222222);
-    const pupils = [];
-    const brows = [];
-    for (const sx of [-0.32, 0.32]) {
-      box(parent, white, 0.34 * s, 0.34 * s, 0.1, sx * s, y + 0.1 * s, z);
-      pupils.push(box(parent, dark, 0.16 * s, 0.16 * s, 0.1, sx * s, y + 0.08 * s, z + 0.07));
-      // Angry brow: a dark bar slanting in over each eye, hidden by default.
-      const brow = box(parent, dark, 0.36 * s, 0.1 * s, 0.09,
-        sx * s, y + 0.32 * s, z + 0.05, sx > 0 ? 0.45 : -0.45);
-      brow.visible = false;
-      brows.push(brow);
-    }
-    box(parent, dark, 0.5 * s, 0.12, 0.08, 0, y - 0.34 * s, z);
-    return { pupils, brows };
-  };
-  const limb = (x, y, m, sx, sy) => {
-    const p = new THREE.Group();
-    p.position.set(x, y, 0);
-    box(p, m, sx, sy, sx, 0, -sy / 2, 0);
-    g.add(p);
-    return p;
-  };
-
   const arms = []; // pivots; arms[0] doubles as the throw telegraph
   let armor = []; // [x, y, z] anchors for the 5 armor blocks
   let top = 5;
   let faceRefs = null; // { pupils, brows } for blinks and angry looks
   let ready = null; // resolves once async (baked voxel) geometry is attached
 
+  // Every boss is a baked voxel model (scripts/vox/models/boss-*.mjs). The
+  // mesh arrives async; the contract arrays/refs are filled in place, and
+  // every animation path iterates them, so pre-load frames are safe.
+  // armParts names the pivoted meshes that drive the throw telegraph/sway
+  // (arms, a flicking head, wings); onParts allows per-boss extras.
+  const voxBoss = (name, armParts, onParts = null) => {
+    faceRefs = { pupils: [], brows: [] };
+    return loadVoxModel(`${import.meta.env.BASE_URL}models/${name}.json`)
+      .then((model) => {
+        const { group, parts } = buildVoxMesh(model);
+        g.add(group);
+        arms.push(...armParts.map((p) => parts[p]));
+        parts.browL.visible = parts.browR.visible = false;
+        faceRefs.pupils.push(parts.pupilL, parts.pupilR);
+        faceRefs.brows.push(parts.browL, parts.browR);
+        if (onParts) onParts(parts);
+      })
+      .catch((err) => console.error('boss model failed to load:', err));
+  };
+
   if (wi === 0) { // Meatball Monster: saucy meatball giant with spaghetti hair
-    const brown = M(0x8a4b2d);
-    box(g, M(0x6e3a20), 0.9, 1.0, 0.9, -0.65, 0.5, 0);
-    box(g, M(0x6e3a20), 0.9, 1.0, 0.9, 0.65, 0.5, 0);
-    box(g, brown, 2.6, 2.2, 1.6, 0, 2.1, 0);
-    box(g, M(0xc0392b), 2.9, 0.45, 1.8, 0, 3.25, 0); // tomato sauce drizzle
-    box(g, M(0x9c5a36), 1.6, 1.2, 1.4, 0, 4.15, 0);
-    box(g, M(0xf5deb3), 0.55, 0.4, 0.55, 0.45, 4.9, 0, 0.3); // spaghetti tuft
-    box(g, M(0xf5deb3), 0.4, 0.35, 0.4, -0.05, 5.0, 0.1, -0.4); // more noodles
-    box(g, M(0xe74c3c), 0.28, 0.28, 0.28, -0.5, 4.9, 0.25); // cherry tomato
-    box(g, M(0xfff8e1), 0.2, 0.14, 0.2, 0.9, 3.55, 0.6); // parmesan sprinkle
-    box(g, M(0xfff8e1), 0.16, 0.12, 0.16, -0.85, 3.5, 0.55);
-    arms.push(limb(-1.65, 3.2, brown, 0.7, 1.9), limb(1.65, 3.2, brown, 0.7, 1.9));
-    faceRefs = face(g, 4.25, 0.75, 1.1);
+    ready = voxBoss('boss-meatball', ['armL', 'armR']);
     armor = [[-1.04, 1.55, 0.85], [-0.52, 1.55, 0.88], [0, 1.55, 0.9],
       [0.52, 1.55, 0.88], [1.04, 1.55, 0.85]];
     top = 5.0;
   } else if (wi === 1) { // Syrup Serpent: drizzly syrup tower with a waffle hood
-    const syrup = M(0x8a4a1a);
-    const syrup2 = M(0x7a3f14);
-    box(g, syrup2, 2.5, 1.1, 1.9, 0, 0.55, 0);
-    box(g, syrup, 2.0, 1.05, 1.5, 0.25, 1.55, 0);
-    box(g, syrup2, 1.7, 1.05, 1.3, -0.2, 2.55, 0);
-    box(g, syrup, 1.4, 1.05, 1.1, 0.15, 3.55, 0);
-    const headP = new THREE.Group();
-    headP.position.set(0, 4.1, 0);
-    box(headP, M(0xc98a3b), 2.1, 1.3, 0.6, 0, 0.55, -0.35); // waffle hood
-    box(headP, M(0xb87a2e), 0.3, 1.1, 0.08, -0.55, 0.55, -0.02); // waffle grooves
-    box(headP, M(0xb87a2e), 0.3, 1.1, 0.08, 0.55, 0.55, -0.02);
-    box(headP, M(0xf0c96b), 1.3, 1.05, 1.1, 0, 0.5, 0.15);
-    box(headP, M(0xffe082), 0.5, 0.18, 0.5, 0, 1.3, 0.1); // butter pat
-    box(headP, M(0xef5350), 0.12, 0.08, 0.5, 0, 0.15, 0.82); // tongue
-    faceRefs = face(headP, 0.6, 0.74, 0.9);
-    g.add(headP);
-    arms.push(headP); // "throws" with a head flick
+    // The neck-pivoted head is the single "arm" (throws with a head flick),
+    // so the face must ride along: re-parent the face meshes under the head,
+    // converting their assembly offsets into head-local ones.
+    ready = voxBoss('boss-serpent', ['head'], (parts) => {
+      for (const p of [parts.pupilL, parts.pupilR, parts.browL, parts.browR]) {
+        parts.head.add(p);
+        p.position.sub(parts.head.position);
+      }
+    });
     armor = [[0, 0.7, 1.05], [0.25, 1.55, 0.85], [-0.2, 2.55, 0.75],
       [0.15, 3.55, 0.68], [0, 4.6, 0.85]];
     top = 5.2;
-  } else if (wi === 2) { // Frost Yeti: baked voxel model (scripts/vox/models/boss-yeti.mjs)
-    // The mesh arrives async; the contract arrays/refs are filled in place,
-    // and every animation path iterates them, so pre-load frames are safe.
-    faceRefs = { pupils: [], brows: [] };
-    ready = loadVoxModel(`${import.meta.env.BASE_URL}models/boss-yeti.json`)
-      .then((model) => {
-        const { group, parts } = buildVoxMesh(model);
-        g.add(group);
-        arms.push(parts.armL, parts.armR); // shoulder-pivoted meshes
-        parts.browL.visible = parts.browR.visible = false;
-        faceRefs.pupils.push(parts.pupilL, parts.pupilR);
-        faceRefs.brows.push(parts.browL, parts.browR);
-      })
-      .catch((err) => console.error('boss model failed to load:', err));
+  } else if (wi === 2) { // Frost Yeti: shaggy snowball with huge arms
+    ready = voxBoss('boss-yeti', ['armL', 'armR']);
     armor = [[-1.0, 1.5, 1.0], [-0.5, 1.5, 1.02], [0, 1.5, 1.05],
       [0.5, 1.5, 1.02], [1.0, 1.5, 1.0]];
     top = 5.1;
   } else if (wi === 3) { // Crystal Golem: slate body, glowing shards
-    const slate = M(0x5e5e6c);
-    box(g, M(0x54545f), 0.85, 1.0, 0.85, -0.6, 0.5, 0);
-    box(g, M(0x54545f), 0.85, 1.0, 0.85, 0.6, 0.5, 0);
-    box(g, slate, 2.4, 2.0, 1.5, 0, 2.0, 0);
-    box(g, M(0x6e6e7c), 1.4, 1.1, 1.2, 0, 3.75, 0);
-    box(g, M(0x7ef0ff, 0x1b5f73), 0.4, 1.4, 0.4, -1.25, 3.3, 0, 0.5);
-    box(g, M(0xd07eff, 0x531b73), 0.4, 1.4, 0.4, 1.25, 3.3, 0, -0.5);
-    box(g, M(0xff8ad8, 0x731b53), 0.32, 1.0, 0.32, 0, 4.75, 0);
-    box(g, M(0x7ef0ff, 0x1b5f73), 0.28, 0.8, 0.28, -0.5, 4.6, 0, 0.3);
-    box(g, M(0xd07eff, 0x531b73), 0.28, 0.8, 0.28, 0.5, 4.6, 0, -0.3);
-    arms.push(limb(-1.5, 2.9, slate, 0.7, 1.8), limb(1.5, 2.9, slate, 0.7, 1.8));
-    faceRefs = face(g, 3.85, 0.64, 1.0);
+    ready = voxBoss('boss-golem', ['armL', 'armR'], (parts) => {
+      // One shared glow for all shards (average of the three per-shard
+      // emissives the hand-built version used; diffuse colors still differ).
+      parts.shards.material.emissive.setHex(0x4b3268);
+    });
     armor = [[-0.96, 1.45, 0.8], [-0.48, 1.45, 0.83], [0, 1.45, 0.86],
       [0.48, 1.45, 0.83], [0.96, 1.45, 0.8]];
     top = 5.2;
   } else { // Cloud Dragon: sky-blue dragon riding a cloud puff
-    const cloud = M(0xffffff);
-    const sky = M(0xbfe4ff);
-    box(g, cloud, 2.8, 0.7, 1.9, 0, 0.5, 0);
-    box(g, M(0xf2f8ff), 1.2, 0.6, 1.2, -1.1, 0.75, 0.3);
-    box(g, M(0xf2f8ff), 1.0, 0.55, 1.0, 1.15, 0.7, -0.2);
-    box(g, sky, 1.9, 1.7, 1.4, 0, 2.0, 0);
-    box(g, M(0x9fd2ff), 0.8, 1.0, 0.8, 0, 3.3, 0.1);
-    box(g, sky, 1.35, 1.0, 1.2, 0, 4.2, 0.2);
-    box(g, M(0x9fd2ff), 0.7, 0.5, 0.7, 0, 4.0, 0.9); // snout
-    box(g, M(0xffd54a), 0.22, 0.5, 0.22, -0.35, 4.9, 0);
-    box(g, M(0xffd54a), 0.22, 0.5, 0.22, 0.35, 4.9, 0);
-    box(g, sky, 0.9, 0.5, 0.9, -1.25, 1.6, -0.3); // tail puff
-    const wing = (side) => {
-      const p = new THREE.Group();
-      p.position.set(side * 1.05, 2.6, 0);
-      box(p, cloud, 1.9, 0.18, 1.0, side * 1.0, 0, 0);
-      g.add(p);
-      return p;
-    };
-    arms.push(wing(-1), wing(1));
-    faceRefs = face(g, 4.4, 0.82, 0.9);
+    ready = voxBoss('boss-dragon', ['wingL', 'wingR']);
     armor = [[-0.76, 2.0, 0.75], [-0.38, 2.0, 0.78], [0, 2.0, 0.8],
       [0.38, 2.0, 0.78], [0.76, 2.0, 0.75]];
     top = 5.2;

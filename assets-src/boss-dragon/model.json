@@ -1,0 +1,55 @@
+{
+  "name": "boss-dragon",
+  "voxelSize": 0.1,
+  "anchor": "bottom-center",
+  "parts": [
+    {
+      "name": "body",
+      "file": "body.vox"
+    },
+    {
+      "name": "wingL",
+      "file": "wingL.vox",
+      "pivot": [
+        19.5,
+        26,
+        -12
+      ]
+    },
+    {
+      "name": "wingR",
+      "file": "wingR.vox",
+      "pivot": [
+        40.5,
+        26,
+        -12
+      ]
+    },
+    {
+      "name": "pupilL",
+      "file": "pupilL.vox",
+      "pivot": [
+        27,
+        45,
+        -2.5
+      ]
+    },
+    {
+      "name": "pupilR",
+      "file": "pupilR.vox",
+      "pivot": [
+        33,
+        45,
+        -2.5
+      ]
+    },
+    {
+      "name": "browL",
+      "file": "browL.vox"
+    },
+    {
+      "name": "browR",
+      "file": "browR.vox"
+    }
+  ]
+}
