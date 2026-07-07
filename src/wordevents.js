@@ -19,9 +19,11 @@ function drawSign(canvas, word, style = 'normal') {
   g.fillStyle = style === 'gray' ? '#b9b9b9' : '#ffffff';
   g.fillRect(0, 0, W, H);
   g.lineWidth = 10;
-  g.strokeStyle = style === 'check' ? '#2f9e42' : '#000000';
+  // 'reveal' shows the missed answer: the word itself, in green.
+  const green = style === 'check' || style === 'reveal';
+  g.strokeStyle = green ? '#2f9e42' : '#000000';
   g.strokeRect(6, 6, W - 12, H - 12);
-  g.fillStyle = style === 'check' ? '#2f9e42' : style === 'gray' ? '#7c7c7c' : '#000000';
+  g.fillStyle = green ? '#2f9e42' : style === 'gray' ? '#7c7c7c' : '#000000';
   const text = style === 'check' ? '✓' : word;
   let size = style === 'check' ? H * 0.8 : H * 0.62;
   const font = (s) => `bold ${s}px 'Arial Rounded MT Bold', 'Comic Sans MS', Arial, sans-serif`;
@@ -79,6 +81,7 @@ export function disposeGroup(group) {
 // can't reach the next block before the lock expires.
 const MISS_LOCK = 1.5;
 const SPIN_DUR = 0.7; // full-turn shuffle spin; words swap while facing away
+const MAX_TRIES = 3; // wrong bonks before the event fails and the run moves on
 
 export class BlocksEvent {
   constructor(scene, level, { x, word, distractors }) {
@@ -249,17 +252,44 @@ export class BlocksEvent {
   }
 
   // A miss never eliminates a block (that would let a kid brute-force by
-  // bonking all three): instead the words visibly shuffle to new blocks
-  // and a short listen beat replays the target word.
+  // bonking all three): instead the kid takes a stumble, the words visibly
+  // shuffle to new blocks, and a short listen beat replays the target word.
+  // The third miss fails the event: the answer is revealed and the run
+  // moves on with a red dot.
   resolveWrong(b, api) {
     this.attempts++;
     b.shakeT = 0.4;
     sfxBonk();
+    api.stumble(); // hurt: ouch animation + a coin drops
     if (api.onWrong) api.onWrong(); // boss taunt + fresh auto-repeat window
+    if (this.attempts >= MAX_TRIES) {
+      this.resolveFail(api);
+      return;
+    }
     speak(`Almost! The word is: ${this.word}. Try again!`, { rate: 0.9 });
     this.lockT = MISS_LOCK;
     this.swapPending = true;
     for (const k of this.blocks) k.spinT = SPIN_DUR;
+  }
+
+  // Out of tries: reveal the answer (target word in green, the rest gray),
+  // report the miss, and let the run continue.
+  resolveFail(api) {
+    this.done = true;
+    this.lockT = 0;
+    this.swapPending = false;
+    for (const k of this.blocks) {
+      if (k.word === this.word) {
+        k.bounceT = 0.3;
+        setSign(k.sign, k.word, 'reveal');
+      } else {
+        k.cube.material.color.setHex(0x8a8a8a);
+        setSign(k.sign, k.word, 'gray');
+      }
+    }
+    speak(`Almost! The word is: ${this.word}.`, { rate: 0.9 });
+    if (api.onFail) api.onFail();
+    this.explodeT = 2.6; // let the reveal sit a moment, then burst all boxes
   }
 
   clampX() {

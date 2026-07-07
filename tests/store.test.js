@@ -53,6 +53,17 @@ describe('recordWordResult', () => {
     );
   });
 
+  it('recordWordMiss counts seen + missed but never correct', () => {
+    store.recordWordMiss('jump');
+    expect(store.wordStats('jump')).toEqual(
+      { seen: 1, correct: 0, firstTryCorrect: 0, missed: 1 }
+    );
+    store.recordWordResult('jump', true);
+    expect(store.wordStats('jump')).toEqual(
+      { seen: 2, correct: 1, firstTryCorrect: 1, missed: 1 }
+    );
+  });
+
   it('persists to localStorage across a module reload', async () => {
     store.recordWordResult('blue', false);
     vi.resetModules();
