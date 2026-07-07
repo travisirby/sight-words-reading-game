@@ -4,35 +4,48 @@
 // postcard built from the same visual vocabulary as level.js: gradient
 // skydome + voxel sun, drifting bottom-heavy puff clouds, grass voxel
 // meadow, stepped hills with ridge trees, spaghetti-tree props, floating
-// coins, and alphabet toy blocks spelling W-O-R-D around the pedestal.
+// coins, sight-word toy blocks around the pedestal, and the world-1 boss
+// castle with the Grass Golem waiting off in the distance.
 // DOM chrome (title stack / swatches) overlays this via screen-title/char.
 
 import * as THREE from 'three';
 import { makeKidMesh, applyLook } from './player.js';
 import { PALETTES, mulberry32 } from './level.js';
+import { buildBoss } from './boss.js';
 
 const P = PALETTES[0]; // Pasta Plains — the game's opening world
 const boxGeo = new THREE.BoxGeometry(1, 1, 1);
 const css = (hex) => '#' + hex.toString(16).padStart(6, '0');
 
-// Classic toy block: colored cube, pale inset panel, big navy letter on
-// every face (they sit at odd angles, so all sides read).
-function makeLetterBlock(letter, bgHex) {
-  const c = document.createElement('canvas');
-  c.width = 128;
-  c.height = 128;
-  const g = c.getContext('2d');
-  g.fillStyle = css(bgHex);
-  g.fillRect(0, 0, 128, 128);
-  g.fillStyle = 'rgba(255,255,255,0.85)';
-  g.fillRect(12, 12, 104, 104);
-  g.fillStyle = '#2c3e75';
-  g.font = 'bold 78px sans-serif';
-  g.textAlign = 'center';
-  g.textBaseline = 'middle';
-  g.fillText(letter, 64, 70);
-  const tex = new THREE.CanvasTexture(c);
-  return new THREE.Mesh(boxGeo, new THREE.MeshLambertMaterial({ map: tex }));
+// Classic toy block: colored cube with a pale inset panel on every face
+// and a sight word in big navy letters on the front/back only — a word on
+// all six faces reads as an accidental stutter ("and and") when two faces
+// show at once.
+function makeWordBlock(word, bgHex) {
+  const panel = (text) => {
+    const c = document.createElement('canvas');
+    c.width = 128;
+    c.height = 128;
+    const g = c.getContext('2d');
+    g.fillStyle = css(bgHex);
+    g.fillRect(0, 0, 128, 128);
+    g.fillStyle = 'rgba(255,255,255,0.85)';
+    g.fillRect(12, 12, 104, 104);
+    if (text) {
+      g.fillStyle = '#2c3e75';
+      g.font = 'bold 64px sans-serif';
+      const size = Math.min(52, Math.floor(64 * 94 / g.measureText(text).width));
+      g.font = `bold ${size}px sans-serif`;
+      g.textAlign = 'center';
+      g.textBaseline = 'middle';
+      g.fillText(text, 64, 68);
+    }
+    return new THREE.MeshLambertMaterial({ map: new THREE.CanvasTexture(c) });
+  };
+  const wordMat = panel(word);
+  const blank = panel('');
+  // BoxGeometry face order: +x, -x, +y, -y, +z, -z.
+  return new THREE.Mesh(boxGeo, [blank, blank, blank, blank, wordMat, wordMat]);
 }
 
 export class CharScene {
@@ -230,29 +243,62 @@ export class CharScene {
           (i & 1) ? 0xfff2cc : 0xf7e8b8);
       }
 
+      // The world-1 boss castle (the overworld's castle recipe, scaled up)
+      // as a landmark on the far-left ridge — its towers rise above the
+      // hill line while the base tucks behind it.
+      {
+        const s = 1.7;
+        const cx = -5.5, cz = -23.5, gy = -0.52;
+        const wall = 0xc9b8a2, roof = 0xd45757;
+        put(cx, gy + 0.6 * s, cz, 1.7 * s, 1.2 * s, 1.5 * s, wall);
+        put(cx, gy + 1.5 * s, cz, 1.0 * s, 0.8 * s, 0.9 * s, wall, 0.03);
+        for (const [sx, sz] of [[-0.8, -0.7], [0.8, -0.7], [-0.8, 0.7], [0.8, 0.7]]) {
+          put(cx + sx * s, gy + 0.95 * s, cz + sz * s, 0.45 * s, 1.9 * s, 0.45 * s, wall, -0.02);
+          put(cx + sx * s, gy + 2.05 * s, cz + sz * s, 0.6 * s, 0.4 * s, 0.6 * s, roof);
+        }
+      }
+
       blocks.count = n;
       blocks.instanceMatrix.needsUpdate = true;
       if (blocks.instanceColor) blocks.instanceColor.needsUpdate = true;
       this.scene.add(blocks);
     }
 
-    // Alphabet toy blocks spelling W-O-R-D in the UI letter colors, laid as
-    // a trail receding to the kid's left (screen-left stays clear of the
-    // button stack on the right).
+    // Sight-word toy blocks (pre-primer Dolch words the kid meets first)
+    // in the UI letter colors, scattered around the pedestal like toys.
+    // Screen-left stays clear of the button stack on the right.
     {
       const defs = [
-        ['W', 0xffd93d, -2.2, -3.0, 0.6, 0.35],
-        ['O', 0xff6b6b, -3.5, -5.0, 0.55, -0.5],
-        ['R', 0x6bffb8, 2.4, -3.5, 0.55, 0.25],
-        ['D', 0x74b9ff, -2.6, -8.0, 0.5, -0.3],
+        ['the', 0xffd93d, -2.2, -3.0, 0.6, 0.35],
+        ['and', 0xff6b6b, -3.5, -5.0, 0.55, -0.5],
+        ['see', 0x6bffb8, 2.4, -3.5, 0.55, 0.25],
+        ['play', 0x74b9ff, -2.6, -8.0, 0.5, -0.3],
       ];
-      for (const [ch, hex, x, z, s, ry] of defs) {
-        const block = makeLetterBlock(ch, hex);
+      for (const [word, hex, x, z, s, ry] of defs) {
+        const block = makeWordBlock(word, hex);
         block.scale.setScalar(s);
         block.position.set(x, -0.22 + s / 2, z);
         block.rotation.y = ry;
         this.scene.add(block);
       }
+    }
+
+    // The Grass Golem waits outside his castle, full armor on — the same
+    // buildBoss() mesh the boss fight uses, complete with his 5 gold armor
+    // blocks, shrunk into the distance.
+    {
+      const { group, armor } = buildBoss(0);
+      for (const [ax, ay, az] of armor) {
+        const gold = new THREE.Mesh(boxGeo, new THREE.MeshLambertMaterial({
+          color: 0xffd54a, emissive: 0x664d00,
+        }));
+        gold.scale.setScalar(0.5);
+        gold.position.set(ax, ay, az);
+        group.add(gold);
+      }
+      group.scale.setScalar(0.6);
+      group.position.set(-0.2, -0.22, -22);
+      this.scene.add(group);
     }
 
     // A few slowly spinning coins floating over the meadow, same gold as
