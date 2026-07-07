@@ -73,6 +73,13 @@ export function disposeGroup(group) {
 
 // ---------- ? BLOCKS ----------
 
+// Listen beat after a miss: blocks are inert this long while the narrator
+// re-says the word and the words spin to new blocks. Also guarantees at
+// most one bonk per jump arc: blocks sit 5 apart, so even a double jump
+// can't reach the next block before the lock expires.
+const MISS_LOCK = 1.5;
+const SPIN_DUR = 0.7; // full-turn shuffle spin; words swap while facing away
+
 export class BlocksEvent {
   constructor(scene, level, { x, word, distractors }) {
     this.type = 'blocks';
@@ -83,6 +90,8 @@ export class BlocksEvent {
     this.respawns = 0;
     this.level = level;
     this.explodeT = -1; // countdown from correct answer to the box burst
+    this.lockT = 0; // listen-beat countdown; bonks are ignored while > 0
+    this.swapPending = false; // reshuffle words at the spin's halfway point
 
     this.group = new THREE.Group();
     scene.add(this.group);
@@ -96,7 +105,7 @@ export class BlocksEvent {
       sign.position.z = 0.78;
       bg.add(cube, sign);
       this.group.add(bg);
-      this.blocks.push({ g: bg, cube, sign, word: '', dead: false, bounceT: 0, shakeT: 0, baseY: 0 });
+      this.blocks.push({ g: bg, cube, sign, word: '', dead: false, bounceT: 0, shakeT: 0, spinT: 0, baseY: 0 });
     }
     this.pool = [word, ...distractors];
     this.place(x + 6);
@@ -113,15 +122,36 @@ export class BlocksEvent {
       b.dead = false;
       b.bounceT = 0;
       b.shakeT = 0;
+      b.spinT = 0;
+      b.g.rotation.set(0, 0, 0);
       b.cube.material.color.setHex(0xffb300);
       setSign(b.sign, b.word, 'normal');
     }
     this.firstX = bx;
     this.lastX = bx + 10;
+    this.lockT = 0;
+    this.swapPending = false;
+  }
+
+  // Move the words to new blocks (called mid-spin, while the signs face
+  // away). Always lands on a different arrangement, so bonking blocks in
+  // sequence without reading never converges on the target.
+  reshuffleWords() {
+    const current = this.blocks.map((b) => b.word);
+    let words = shuffle(this.pool);
+    for (let t = 0; t < 8 && words.every((w, i) => w === current[i]); t++) {
+      words = shuffle(this.pool);
+    }
+    for (let i = 0; i < 3; i++) {
+      const b = this.blocks[i];
+      b.word = words[i];
+      setSign(b.sign, b.word, 'normal');
+    }
   }
 
   update(dt, player, api) {
     const t = performance.now() / 1000;
+    if (this.lockT > 0) this.lockT -= dt;
     for (const b of this.blocks) {
       let y = b.baseY + Math.sin(t * 2 + b.g.position.x) * 0.08;
       if (b.bounceT > 0) {
@@ -132,6 +162,23 @@ export class BlocksEvent {
         b.shakeT -= dt;
         b.g.position.x += Math.sin(b.shakeT * 50) * 0.05;
       }
+      if (b.spinT > 0) {
+        // Shuffle spin: one full turn; words move at the halfway point
+        // (signs face away from the camera right then).
+        b.spinT -= dt;
+        const p = 1 - Math.max(0, b.spinT) / SPIN_DUR;
+        b.g.rotation.y = (1 - Math.pow(1 - p, 2)) * Math.PI * 2;
+        if (this.swapPending && p >= 0.5) {
+          this.swapPending = false;
+          this.reshuffleWords();
+        }
+        if (b.spinT <= 0) b.g.rotation.y = 0;
+      } else if (this.lockT > 0) {
+        // Listen-beat wobble: a gentle no-no waggle while inert.
+        b.g.rotation.z = Math.sin(this.lockT * 14) * 0.09 * Math.min(1, this.lockT);
+      } else if (b.g.rotation.z !== 0) {
+        b.g.rotation.z = 0;
+      }
       b.g.position.y = y;
     }
     if (this.explodeT > 0) {
@@ -140,8 +187,8 @@ export class BlocksEvent {
     }
     if (this.done) return;
 
-    // Bonk from below.
-    if (player.vy > 0) {
+    // Bonk from below (inert during the post-miss listen beat).
+    if (this.lockT <= 0 && player.vy > 0) {
       const head = player.y + KID_H;
       const prevHead = head - player.vy * dt;
       for (const b of this.blocks) {
@@ -172,6 +219,8 @@ export class BlocksEvent {
 
   resolveCorrect(b, api) {
     this.done = true;
+    this.lockT = 0;
+    this.swapPending = false; // never overwrite the ✓ with a late reshuffle
     b.bounceT = 0.3;
     setSign(b.sign, '', 'check');
     sfxCorrect();
@@ -180,10 +229,13 @@ export class BlocksEvent {
     for (let i = 0; i < 3; i++) {
       api.effects.sparkle(new THREE.Vector3(pos.x + (i - 1) * 0.5, pos.y + 1, 0));
     }
-    api.effects.floatText(new THREE.Vector3(pos.x, pos.y + 1.6, 0), '+3');
-    api.addCoins(3);
-    api.praise();
-    api.onCorrect(this.attempts === 0);
+    // First-try carrot: a bonus coin and an extra-special praise line.
+    const firstTry = this.attempts === 0;
+    api.effects.floatText(new THREE.Vector3(pos.x, pos.y + 1.6, 0), firstTry ? '+4' : '+3');
+    api.addCoins(firstTry ? 4 : 3);
+    if (firstTry && api.praiseFirstTry) api.praiseFirstTry();
+    else api.praise();
+    api.onCorrect(firstTry);
     this.explodeT = 2.2; // let the ✓ sit a moment, then burst all boxes
   }
 
@@ -196,15 +248,18 @@ export class BlocksEvent {
     }
   }
 
+  // A miss never eliminates a block (that would let a kid brute-force by
+  // bonking all three): instead the words visibly shuffle to new blocks
+  // and a short listen beat replays the target word.
   resolveWrong(b, api) {
     this.attempts++;
-    b.dead = true;
     b.shakeT = 0.4;
-    b.cube.material.color.setHex(0x8a8a8a);
-    setSign(b.sign, b.word, 'gray');
     sfxBonk();
-    if (api.onWrong) api.onWrong(); // boss levels: silly taunt
+    if (api.onWrong) api.onWrong(); // boss taunt + fresh auto-repeat window
     speak(`Almost! The word is: ${this.word}. Try again!`, { rate: 0.9 });
+    this.lockT = MISS_LOCK;
+    this.swapPending = true;
+    for (const k of this.blocks) k.spinT = SPIN_DUR;
   }
 
   clampX() {

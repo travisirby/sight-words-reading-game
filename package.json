@@ -8,6 +8,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "dev:ipad": "HTTPS=1 vite --host",
+    "test": "vitest run",
     "gen:tts": "node scripts/generate-tts.mjs"
   },
   "keywords": [],
@@ -19,6 +20,7 @@
   },
   "devDependencies": {
     "@vitejs/plugin-basic-ssl": "^2.3.0",
-    "vite": "^8.1.3"
+    "vite": "^8.1.3",
+    "vitest": "^4.1.10"
   }
 }
