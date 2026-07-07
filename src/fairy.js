@@ -6,6 +6,7 @@
 // Purely cosmetic: she listens for 'wr-speech' events and never blocks taps.
 
 import * as THREE from 'three';
+import { voxelGeo } from './voxelgeo.js';
 
 // Perch per screen, in % of the viewport. 'game' is the during-run perch
 // (under the 🔊 repeat button, since she's the one saying the words).
@@ -65,7 +66,7 @@ function makeFaceTexture(open) {
 // parts the animation loop wiggles.
 function buildFairy() {
   const group = new THREE.Group();
-  const box = new THREE.BoxGeometry(1, 1, 1);
+  const box = voxelGeo;
   const skin = new THREE.MeshLambertMaterial({ color: SKIN });
   const hair = new THREE.MeshLambertMaterial({ color: HAIR });
   const dress = new THREE.MeshLambertMaterial({ color: DRESS });

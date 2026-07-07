@@ -6,13 +6,14 @@
 // The camera is a fixed 3/4 view with a very slow drift for life.
 
 import * as THREE from 'three';
+import { voxelGeo } from './voxelgeo.js';
 import { Effects } from './effects.js';
 import { makeKidMesh, applyLook, currentLook } from './player.js';
 import * as store from './store.js';
 import { getItem } from './housedata.js';
 import { speak, sfxFireworks, sfxCorrect } from './audio.js';
 
-const boxGeo = new THREE.BoxGeometry(1, 1, 1);
+const boxGeo = voxelGeo;
 const cylGeo = new THREE.CylinderGeometry(0.5, 0.5, 1, 10);
 const coneGeo = new THREE.ConeGeometry(0.5, 1, 10);
 const sphereGeo = new THREE.SphereGeometry(0.5, 10, 8);

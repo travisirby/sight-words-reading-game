@@ -4,13 +4,14 @@
 // textures are alive at a time. All signs face +z (the camera).
 
 import * as THREE from 'three';
+import { voxelGeo } from './voxelgeo.js';
 import { KID_H } from './player.js';
 import { shuffle } from './words.js';
 import {
   sfxCorrect, sfxWrong, sfxBonk, sfxDoorOpen, sfxStarGrab, sfxPop, speak,
 } from './audio.js';
 
-const boxGeo = new THREE.BoxGeometry(1, 1, 1);
+const boxGeo = voxelGeo;
 
 function drawSign(canvas, word, style = 'normal') {
   const g = canvas.getContext('2d');

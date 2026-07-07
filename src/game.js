@@ -3,6 +3,7 @@
 // with the overworld and owned by main.js; main calls tick(dt) + renders.
 
 import * as THREE from 'three';
+import { voxelGeo } from './voxelgeo.js';
 import { LevelScene, generateLevel, generateBossArena } from './level.js';
 import { Player, KID_H } from './player.js';
 import { BlocksEvent, DoorsEvent, StarsEvent } from './wordevents.js';
@@ -28,7 +29,7 @@ const FORWARD_BOOST = 1.9; // holding forward during auto-run speeds him up
 const REPEAT_AFTER = 6; // seconds of no answer before the word auto-repeats
 const CRITTER_COLORS = [0xff7f50, 0xba68c8, 0x4dd0e1, 0x9fa8da, 0xffb74d];
 
-const boxGeo = new THREE.BoxGeometry(1, 1, 1);
+const boxGeo = voxelGeo;
 
 function makeCritter() {
   const g = new THREE.Group();
