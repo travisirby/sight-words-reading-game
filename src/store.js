@@ -49,7 +49,17 @@ const defaults = () => ({
   gameCompleted: false,
 });
 
-let state = defaults();
+// Dev builds always start silent (regardless of what the save says) so
+// reloads don't blare audio; the options toggles still work in-session.
+function applyDevAudioDefaults(s) {
+  if (import.meta.env.DEV) {
+    s.sound = false;
+    s.music = false;
+  }
+  return s;
+}
+
+let state = applyDevAudioDefaults(defaults());
 
 // ---------- profiles ----------
 
@@ -140,7 +150,7 @@ export function createProfile(name = '') {
   const id = newId();
   profiles.list.push({ id, name: name || '' });
   profiles.active = id;
-  state = defaults();
+  state = applyDevAudioDefaults(defaults());
   save();
   saveProfiles();
   return id;
@@ -163,7 +173,7 @@ export function deleteProfile(id) {
   if (!profiles.list.some((e) => e.id === id)) return;
   try { localStorage.removeItem(blobKey(id)); } catch (e) { /* ignore */ }
   if (profiles.list.length <= 1) {
-    state = defaults();
+    state = applyDevAudioDefaults(defaults());
     save();
     return;
   }
@@ -193,7 +203,7 @@ export function load() {
   } catch (e) {
     state = defaults();
   }
-  return state;
+  return applyDevAudioDefaults(state);
 }
 
 export function save() {
