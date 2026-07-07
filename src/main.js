@@ -547,7 +547,6 @@ ui.init({
     showMap();
   },
   onRepeatWord: () => game.repeatWord(),
-  onPlayAgain: () => startLevel(current.world, current.level, current.secret),
   onNextLevel: () => {
     const next = nextLevelOf(current.world, current.level);
     if (next) startLevel(next.world, next.level);
