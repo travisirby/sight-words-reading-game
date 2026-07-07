@@ -5,6 +5,7 @@
 // layers and a gradient skydome with voxel sun/moon. Forward is +x.
 
 import * as THREE from 'three';
+import { voxelGeo, roundedBox } from './voxelgeo.js';
 
 // skyTop/skyBot drive the gradient skydome; hemiGround tints the hemisphere
 // light's ground bounce; sun/cloud tint the celestial voxels; night themes
@@ -259,7 +260,7 @@ const MAX_BLOCKS = 24000;
 const MAX_COINS = 260;
 const CLOUD_COUNT = 6;
 
-const boxGeo = new THREE.BoxGeometry(1, 1, 1);
+const boxGeo = voxelGeo;
 
 // Cheap deterministic per-block hash -> [0,1). Used for the subtle HSL
 // jitter that makes ground voxels read handcrafted instead of tiled.
@@ -354,7 +355,7 @@ export class LevelScene {
     scene.add(this.blocks);
 
     this.coinMesh = new THREE.InstancedMesh(
-      new THREE.BoxGeometry(0.55, 0.55, 0.12),
+      roundedBox(0.55, 0.55, 0.12, 0.04),
       new THREE.MeshLambertMaterial({ color: 0xffd54a, emissive: 0x664d00 }),
       MAX_COINS
     );

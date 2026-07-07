@@ -5,6 +5,7 @@
 // Boxes only, canvas face texture, walk/jump/stomp/stumble animations.
 
 import * as THREE from 'three';
+import { voxelGeo } from './voxelgeo.js';
 import { sfxJump } from './audio.js';
 import * as store from './store.js';
 import { lookFrom } from './character.js';
@@ -66,7 +67,7 @@ const hasFringe = (style) => style <= 2;
 function buildHairExtras(style, hairMat) {
   const g = new THREE.Group();
   if (style >= 3) return g;
-  const box = new THREE.BoxGeometry(1, 1, 1);
+  const box = voxelGeo;
   // Cap: head is 0.5 wide with its top at y=1.6; hair reaches down to ~1.27.
   // The kid faces +x, so its front stops just behind the face (+x) so the
   // eyes stay visible and the texture's fringe reads as the hair's front.
@@ -99,7 +100,7 @@ function buildHairExtras(style, hairMat) {
 // straps up the chest.
 function buildOutfitExtras(outfit, shirtMat, pantsMat) {
   const g = new THREE.Group();
-  const box = new THREE.BoxGeometry(1, 1, 1);
+  const box = voxelGeo;
   if (outfit === 1) {
     const skirt = new THREE.Mesh(box, shirtMat);
     skirt.scale.set(0.56, 0.32, 0.44);
@@ -160,7 +161,7 @@ export function applyLook(group, look) {
 export function makeKidMesh(scale = 1, look = null) {
   look = look || currentLook();
   const group = new THREE.Group();
-  const box = new THREE.BoxGeometry(1, 1, 1);
+  const box = voxelGeo;
   const skin = new THREE.MeshLambertMaterial({ color: look.skin });
   const hair = new THREE.MeshLambertMaterial({ color: look.hair });
   const shirt = new THREE.MeshLambertMaterial({ color: look.shirt });

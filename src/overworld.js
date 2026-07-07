@@ -5,6 +5,7 @@
 // dark desaturated tint and colorize when their first node unlocks.
 
 import * as THREE from 'three';
+import { voxelGeo, makeVoxelGeo } from './voxelgeo.js';
 import { buildMapData, secretSegment } from './mapdata.js';
 import { PALETTES, mulberry32 } from './level.js';
 import { makeKidMesh } from './player.js';
@@ -16,7 +17,7 @@ import { WORLDS } from './words.js';
 import { HOUSE_ITEMS } from './housedata.js';
 import * as store from './store.js';
 
-const boxGeo = new THREE.BoxGeometry(1, 1, 1);
+const boxGeo = voxelGeo;
 
 // Deterministic 0..1 hash from a 2D cell + salt: per-tile jitter that stays
 // stable frame to frame without burning RNG state.
@@ -28,7 +29,7 @@ function hash2(x, z, s = 0) {
 // Ground boxes tint their side faces toward earth tones via vertex colors
 // (multiplied with each instance's top color) so islands read as chunky
 // voxel terrain instead of flat-sided extrusions.
-const groundGeo = new THREE.BoxGeometry(1, 1, 1);
+const groundGeo = makeVoxelGeo();
 {
   const tints = [
     [0.72, 0.58, 0.46], [0.72, 0.58, 0.46], // ±x sides: dry earth
@@ -36,10 +37,13 @@ const groundGeo = new THREE.BoxGeometry(1, 1, 1);
     [0.4, 0.34, 0.3],                        // bottom: deep soil shadow
     [0.8, 0.65, 0.51], [0.8, 0.65, 0.51],    // ±z sides: lit earth
   ];
-  const cols = new Float32Array(24 * 3);
-  tints.forEach((t, f) => {
-    for (let v = 0; v < 4; v++) cols.set(t, (f * 4 + v) * 3);
-  });
+  // Fill per face via the geometry's groups (RoundedBoxGeometry keeps
+  // BoxGeometry's 6 face groups, in the same ±x/±y/±z order).
+  const cols = new Float32Array(groundGeo.attributes.position.count * 3);
+  for (const g of groundGeo.groups) {
+    const t = tints[g.materialIndex];
+    for (let v = g.start; v < g.start + g.count; v++) cols.set(t, v * 3);
+  }
   groundGeo.setAttribute('color', new THREE.BufferAttribute(cols, 3));
 }
 

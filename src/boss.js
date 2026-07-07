@@ -5,13 +5,14 @@
 // giggle-taunt — losing is impossible.
 
 import * as THREE from 'three';
+import { voxelGeo } from './voxelgeo.js';
 import { KID_H } from './player.js';
 import { disposeGroup } from './wordevents.js';
 import {
   sfxStomp, sfxRoar, sfxGiggle, sfxArmorPop, sfxCoin, sfxFireworks,
 } from './audio.js';
 
-const boxGeo = new THREE.BoxGeometry(1, 1, 1);
+const boxGeo = voxelGeo;
 const LEAD = 10.5; // how far ahead of the player the boss keeps itself
 
 export const BOSSES = [

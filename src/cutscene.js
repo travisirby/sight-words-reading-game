@@ -8,6 +8,7 @@
 // fast-forward the current step; SKIP ends the whole scene.
 
 import * as THREE from 'three';
+import { voxelGeo } from './voxelgeo.js';
 import { makeKidMesh, currentLook } from './player.js';
 import { buildBoss, BOSSES } from './boss.js';
 import * as audio from './audio.js';
@@ -411,7 +412,7 @@ export class CutsceneScene {
 
 const propBox = (hex, x, y, z, sx, sy, sz) => {
   const m = new THREE.Mesh(
-    new THREE.BoxGeometry(1, 1, 1),
+    voxelGeo,
     new THREE.MeshLambertMaterial({ color: hex })
   );
   m.position.set(x, y, z);
