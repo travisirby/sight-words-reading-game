@@ -633,6 +633,14 @@ if (cheats.has('cutscene')) {
   playCutscene(script, () => showTitle());
 }
 
+// Dev harness: ?goto=<world>,<level> boots straight into a level (0-based;
+// a level index past the last is the castle, 's' is the secret level).
+if (cheats.has('goto')) {
+  const [w, l] = (cheats.get('goto') || '0,0').split(',');
+  const wi = Math.max(0, Math.min(WORLDS.length - 1, parseInt(w, 10) || 0));
+  startLevel(wi, l === 's' ? 0 : Math.max(0, parseInt(l, 10) || 0), l === 's');
+}
+
 // Auto-pause when the tab is hidden.
 document.addEventListener('visibilitychange', () => {
   if (document.hidden && game.running && !game.paused) {

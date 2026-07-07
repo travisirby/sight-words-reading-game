@@ -54,8 +54,8 @@ export function decorForWorld(worldIdx) {
 // 'herotrophy' yard trophy is granted by the game-complete finale (main.js
 // startFinale), never sold, so it lives outside HOUSE_ITEMS.
 export const TROPHY_NAMES = [
-  'Grass Plains Trophy',
-  'Sandy Desert Trophy',
+  'Pasta Plains Trophy',
+  'Waffle Desert Trophy',
   'Snowy Peaks Trophy',
   'Crystal Caves Trophy',
   'Sky Islands Trophy',
