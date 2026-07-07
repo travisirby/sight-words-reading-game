@@ -273,7 +273,8 @@ export class BlocksEvent {
   }
 
   // Out of tries: reveal the answer (target word in green, the rest gray),
-  // report the miss, and let the run continue.
+  // report the miss, and let the run continue. No voiceover — the word was
+  // already said on each miss; after the third the reveal stays visual.
   resolveFail(api) {
     this.done = true;
     this.lockT = 0;
@@ -287,7 +288,6 @@ export class BlocksEvent {
         setSign(k.sign, k.word, 'gray');
       }
     }
-    speak(`Almost! The word is: ${this.word}.`, { rate: 0.9 });
     if (api.onFail) api.onFail();
     this.explodeT = 2.6; // let the reveal sit a moment, then burst all boxes
   }
