@@ -252,9 +252,27 @@ export class Overworld {
         });
       }
     }
-    this.waterMesh = new THREE.InstancedMesh(
-      boxGeo, new THREE.MeshLambertMaterial(), this.waterTiles.length
-    );
+    // The shimmer runs in the vertex shader (time uniform + per-instance
+    // phase/amp attribute) so no instance buffer re-uploads per frame.
+    const waterGeo = boxGeo.clone();
+    const phaseAmp = new Float32Array(this.waterTiles.length * 2);
+    this.waterTiles.forEach((w, i) => {
+      phaseAmp[i * 2] = w.phase;
+      phaseAmp[i * 2 + 1] = w.amp;
+    });
+    waterGeo.setAttribute('waterPhaseAmp', new THREE.InstancedBufferAttribute(phaseAmp, 2));
+    const waterMat = new THREE.MeshLambertMaterial();
+    waterMat.onBeforeCompile = (shader) => {
+      shader.uniforms.uTime = this.waterTime = { value: 0 };
+      shader.vertexShader = shader.vertexShader
+        .replace('#include <common>',
+          '#include <common>\nattribute vec2 waterPhaseAmp;\nuniform float uTime;')
+        .replace('#include <color_vertex>', `#include <color_vertex>
+          float waterK = 1.0 + sin(uTime * 1.3 + waterPhaseAmp.x
+            + instanceMatrix[3][0] * 0.35 + instanceMatrix[3][2] * 0.21) * waterPhaseAmp.y;
+          vColor.rgb *= waterK;`);
+    };
+    this.waterMesh = new THREE.InstancedMesh(waterGeo, waterMat, this.waterTiles.length);
     this.waterMesh.frustumCulled = false;
     this.waterDummy = new THREE.Object3D();
     this.waterTiles.forEach((w, i) => {
@@ -293,7 +311,9 @@ export class Overworld {
         color: 0xf4fbff, transparent: true, opacity: 0.85,
       }), this.foam.length
     );
+    this.foamMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     this.foamMesh.frustumCulled = false;
+    this.lastFoamT = -1;
     this.scene.add(this.foamMesh);
 
     // Occasional sun-glints out on the open sea: bright pinpricks that
@@ -310,20 +330,20 @@ export class Overworld {
     this.glintMesh = new THREE.InstancedMesh(
       boxGeo, new THREE.MeshBasicMaterial({ color: 0xffffff }), this.glints.length
     );
+    this.glintMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     this.glintMesh.frustumCulled = false;
     this.scene.add(this.glintMesh);
   }
 
   // Animated water: tile shimmer, coast foam bob, open-sea glints.
+  // Tile shimmer runs on the GPU (see the water material's onBeforeCompile);
+  // here we only tick its time uniform. Foam and glint matrices still upload,
+  // so they refresh at ~20Hz — plenty for a slow bob.
   updateWater(t) {
-    const col = new THREE.Color();
-    for (let i = 0; i < this.waterTiles.length; i++) {
-      const w = this.waterTiles[i];
-      const k = 1 + Math.sin(t * 1.3 + w.phase + w.x * 0.35 + w.z * 0.21) * w.amp;
-      col.copy(w.color).multiplyScalar(k);
-      this.waterMesh.setColorAt(i, col);
-    }
-    this.waterMesh.instanceColor.needsUpdate = true;
+    if (this.waterTime) this.waterTime.value = t;
+
+    if (t - this.lastFoamT < 0.05) return;
+    this.lastFoamT = t;
 
     const dummy = this.waterDummy;
     for (let i = 0; i < this.foam.length; i++) {
