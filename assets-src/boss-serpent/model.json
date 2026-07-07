@@ -1,0 +1,46 @@
+{
+  "name": "boss-serpent",
+  "voxelSize": 0.1,
+  "anchor": "bottom-center",
+  "parts": [
+    {
+      "name": "body",
+      "file": "body.vox"
+    },
+    {
+      "name": "head",
+      "file": "head.vox",
+      "pivot": [
+        12,
+        41,
+        -10
+      ]
+    },
+    {
+      "name": "pupilL",
+      "file": "pupilL.vox",
+      "pivot": [
+        9,
+        48,
+        -1.5
+      ]
+    },
+    {
+      "name": "pupilR",
+      "file": "pupilR.vox",
+      "pivot": [
+        16,
+        48,
+        -1.5
+      ]
+    },
+    {
+      "name": "browL",
+      "file": "browL.vox"
+    },
+    {
+      "name": "browR",
+      "file": "browR.vox"
+    }
+  ]
+}

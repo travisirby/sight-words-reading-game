@@ -9,6 +9,7 @@
 
 import * as THREE from 'three';
 import { voxelGeo } from './voxelgeo.js';
+import { toneBoost, toneBoostSky } from './level.js';
 import { makeKidMesh, currentLook } from './player.js';
 import { buildBoss, BOSSES } from './boss.js';
 import * as audio from './audio.js';
@@ -24,8 +25,10 @@ const CAPTION_MIN = 1.2; // captions never flash away faster than this
 export class CutsceneScene {
   constructor() {
     this.scene = new THREE.Scene();
-    this.scene.background = new THREE.Color(0x87ceeb);
-    this.scene.fog = new THREE.Fog(0x87ceeb, 30, 80);
+    // Same ACES compensation as the level palettes, so this default sky
+    // matches Pasta Plains' in-level sky instead of rendering greyer.
+    this.scene.background = new THREE.Color(toneBoostSky(0x87ceeb));
+    this.scene.fog = new THREE.Fog(toneBoostSky(0x87ceeb), 30, 80);
 
     this.camera = new THREE.PerspectiveCamera(
       50, window.innerWidth / window.innerHeight, 0.1, 200
@@ -41,7 +44,7 @@ export class CutsceneScene {
 
     this.ground = new THREE.Mesh(
       new THREE.CircleGeometry(50, 40),
-      new THREE.MeshLambertMaterial({ color: 0x7ec850 })
+      new THREE.MeshLambertMaterial({ color: toneBoost(0x7ec850) })
     );
     this.ground.rotation.x = -Math.PI / 2;
     this.scene.add(this.ground);
@@ -172,9 +175,10 @@ export class CutsceneScene {
   }
 
   doSetting({ sky = 0x87ceeb, ground = 0x7ec850 }) {
-    this.scene.background.setHex(sky);
-    this.scene.fog.color.setHex(sky);
-    this.ground.material.color.setHex(ground);
+    // Cutscene data authors raw colors; compensate for ACES like PALETTES.
+    this.scene.background.setHex(toneBoostSky(sky));
+    this.scene.fog.color.setHex(toneBoostSky(sky));
+    this.ground.material.color.setHex(toneBoost(ground));
     return null;
   }
 

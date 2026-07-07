@@ -52,9 +52,14 @@ Conventions:
   The writer converts to MagicaVoxel's z-up grid on save and the baker
   converts back — you never think about it.
 - **All parts share one coordinate frame**, so multi-part models stay
-  aligned. Give animated characters one part per limb and re-parent each
-  part's Mesh under a pivot `Group` at runtime (same pivot-animation style
-  as `makeKidMesh` in `src/player.js`).
+  aligned.
+- **Animated parts get a `pivot`** (authoring voxel coords, floats fine):
+  `s.part('armL', { pivot: [-18, 34, 0] })`. The baker bakes the part's
+  vertices relative to the pivot and gives the mesh a compensating
+  `position`, so the assembled model is unchanged but `mesh.rotation` /
+  `mesh.scale` move the part about its pivot — limb swings, pupil blinks.
+  See `boss-yeti.mjs` + the `wi === 2` branch of `src/boss.js` for the
+  reference: shoulder-pivoted arms, center-pivoted pupils, hidden brows.
 - **Anchor**: default `bottom-center` — x/z centered on the model's bounding
   box, y = 0 at the lowest voxel. Pass `anchor: 'center'` to center fully.
 - **Tinting**: mark a part `{ tintable: true }` and author it white/near-white;

@@ -36,9 +36,7 @@ const boxGeo = voxelGeo;
 // shape per world, cycled. Every variant has a near-white "body" part that
 // takes the per-world tint through userData.mat — exactly like the old
 // hand-boxed critter — plus a fixed-color "trim" part (eyes/feet/etc).
-const CRITTER_VARIANTS = ['critter', 'critter-snail', 'critter-beetle'].map(
-  (name) => loadVoxModel(`${import.meta.env.BASE_URL}models/${name}.json`)
-);
+const CRITTER_VARIANTS = ['critter', 'critter-snail', 'critter-beetle'];
 
 function makeCritter() {
   const g = new THREE.Group();
@@ -48,7 +46,9 @@ function makeCritter() {
   g.userData.setVariant = (worldIdx) => {
     const idx = worldIdx % CRITTER_VARIANTS.length;
     g.userData.variant = idx;
-    CRITTER_VARIANTS[idx].then((model) => {
+    // loadVoxModel caches success and forgets failures, so loading here (each
+    // run start) retries a fetch that once failed instead of staying broken.
+    loadVoxModel(`${import.meta.env.BASE_URL}models/${CRITTER_VARIANTS[idx]}.json`).then((model) => {
       if (g.userData.variant !== idx) return; // world changed while loading
       if (!built.has(idx)) {
         const mesh = buildVoxMesh(model, { materials: { body: mat } }).group;
@@ -569,8 +569,9 @@ export class Game {
       c.g.rotation.y = c.dir > 0 ? 0.25 : -0.25;
       c.g.rotation.z = Math.sin(this.elapsed * 8 + c.x) * 0.08;
 
-      // Player interaction.
-      if (c.state !== 'pace') continue;
+      // Player interaction. A critter whose model hasn't attached yet is
+      // invisible — it must not stomp-bounce or trip the kid.
+      if (c.state !== 'pace' || !c.g.children.length) continue;
       const dx = Math.abs(p.x - c.x);
       if (dx > 0.8) continue;
       const cy = c.g.position.y;

@@ -485,6 +485,13 @@ export function reset() {
   state = defaults();
 }
 
+// Settings toggle. Unlike devUnlockAll it leaves bossBeaten alone, so
+// turning it back off restores the real progression frontier.
+export function setDevUnlocked(on) {
+  state.devUnlocked = !!on;
+  save();
+}
+
 export function devUnlockAll(worldCount = 5) {
   state.devUnlocked = true; // also unlocks secrets via isSecretUnlocked
   for (let w = 0; w < worldCount; w++) state.bossBeaten[w] = true;

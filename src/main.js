@@ -2,6 +2,7 @@
 // loop, dispatching to the platformer (game) or the 3D overworld (map).
 
 import * as THREE from 'three';
+import { configureRenderer } from './rendercfg.js';
 import { Game } from './game.js';
 import { Overworld } from './overworld.js';
 import { CharScene } from './charscene.js';
@@ -51,12 +52,7 @@ const container = document.getElementById('game-container');
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.setSize(window.innerWidth, window.innerHeight);
-renderer.outputColorSpace = THREE.SRGBColorSpace;
-// Filmic tone mapping: soft highlight rolloff instead of clipping. Exposure
-// lifted past 1 because ACES darkens mids; fairy.js/thumbs.js mirror these
-// settings so their renderers match the main scene's color response.
-renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.15;
+configureRenderer(renderer); // shared color pipeline — see rendercfg.js
 container.appendChild(renderer.domElement);
 
 const game = new Game(renderer, {
@@ -327,6 +323,7 @@ function buyItem(item) {
 function startLevel(worldIdx, levelIdx, secret = false) {
   const boss = !secret && levelIdx === LEVEL_COUNTS[worldIdx]; // castle slot
   current = { world: worldIdx, level: levelIdx, secret, boss };
+  lastRun = null; // the summary's delayed 3-star line checks this to stand down
   map.exit();
   mode = 'game';
   music.play(boss ? 'boss' : 'level');
@@ -585,6 +582,13 @@ ui.init({
   onToggleMic: () => {
     store.setMic(!store.get().mic);
     ui.updateSettingsLabels();
+  },
+  onToggleUnlock: () => {
+    const on = !store.get().devUnlocked;
+    store.setDevUnlocked(on);
+    ui.updateSettingsLabels();
+    speak(on ? 'All levels unlocked!' : 'Levels locked again.', { rate: 1.0 });
+    map.refresh(); // locks/paths on the warm map scene reflect the change
   },
   onMapBack: () => showTitle(),
   onBannerPlay: () => playSelected(),

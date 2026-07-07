@@ -19,7 +19,7 @@ const cache = new Map(); // url -> Promise<model>
 // geometries are built once per model and reused by every buildVoxMesh call.
 export function loadVoxModel(url) {
   if (!cache.has(url)) {
-    cache.set(url, fetch(url)
+    const p = fetch(url)
       .then((r) => {
         if (!r.ok) throw new Error(`vox model ${url}: HTTP ${r.status}`);
         return r.json();
@@ -29,9 +29,12 @@ export function loadVoxModel(url) {
         parts: data.parts.map((p) => ({
           name: p.name,
           tintable: !!p.tintable,
-          geometry: buildGeometry(p, data.origin, data.voxelSize),
+          offset: p.offset,
+          geometry: buildGeometry(p, p.origin, data.voxelSize),
         })),
-      })));
+      }));
+    p.catch(() => cache.delete(url)); // allow retry after a failed load
+    cache.set(url, p);
   }
   return cache.get(url);
 }
@@ -69,6 +72,10 @@ export function buildVoxMesh(model, { materials = {} } = {}) {
     mat.vertexColors = true;
     const mesh = new THREE.Mesh(p.geometry, mat);
     mesh.name = p.name;
+    // Pivoted parts bake their vertices about the pivot and carry the
+    // assembly position here; rotating/scaling the mesh moves it about
+    // its authored pivot (limb swings, pupil blinks).
+    mesh.position.fromArray(p.offset);
     group.add(mesh);
     parts[p.name] = mesh;
   }

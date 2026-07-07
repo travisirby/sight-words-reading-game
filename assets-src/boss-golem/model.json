@@ -1,0 +1,59 @@
+{
+  "name": "boss-golem",
+  "voxelSize": 0.1,
+  "anchor": "bottom-center",
+  "parts": [
+    {
+      "name": "body",
+      "file": "body.vox"
+    },
+    {
+      "name": "shards",
+      "file": "shards.vox"
+    },
+    {
+      "name": "armL",
+      "file": "armL.vox",
+      "pivot": [
+        3,
+        29,
+        -7
+      ]
+    },
+    {
+      "name": "armR",
+      "file": "armR.vox",
+      "pivot": [
+        33,
+        29,
+        -7
+      ]
+    },
+    {
+      "name": "pupilL",
+      "file": "pupilL.vox",
+      "pivot": [
+        15,
+        40,
+        0.5
+      ]
+    },
+    {
+      "name": "pupilR",
+      "file": "pupilR.vox",
+      "pivot": [
+        22,
+        40,
+        0.5
+      ]
+    },
+    {
+      "name": "browL",
+      "file": "browL.vox"
+    },
+    {
+      "name": "browR",
+      "file": "browR.vox"
+    }
+  ]
+}

@@ -4,6 +4,8 @@
 
 import * as THREE from 'three';
 import { makeKidMesh, applyLook } from './player.js';
+import { voxelGeo } from './voxelgeo.js';
+import { configureRenderer } from './rendercfg.js';
 
 const SIZE = 200; // square canvas; crisp enough at ~100px CSS on retina
 
@@ -16,15 +18,13 @@ export function renderLookThumbnails(looks) {
     preserveDrawingBuffer: true, // needed for toDataURL
   });
   renderer.setSize(SIZE, SIZE);
-  renderer.outputColorSpace = THREE.SRGBColorSpace;
-  // Match the main renderer's tone mapping (main.js) so portraits match
-  // the in-game character colors.
-  renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.15;
+  configureRenderer(renderer); // match the main scene's color response
 
+  // Same warm-key/cool-fill rig as the character editor (charscene.js), so a
+  // portrait shows the exact colors the kid just saw while customizing.
   const scene = new THREE.Scene();
-  scene.add(new THREE.AmbientLight(0xffffff, 0.8));
-  const sun = new THREE.DirectionalLight(0xffffff, 0.9);
+  scene.add(new THREE.AmbientLight(0xe4edf7, 0.8));
+  const sun = new THREE.DirectionalLight(0xffeccc, 1.0);
   sun.position.set(2, 4, 3);
   scene.add(sun);
 
@@ -46,7 +46,9 @@ export function renderLookThumbnails(looks) {
   const p = kid.userData.parts;
   if (p.face.map) p.face.map.dispose();
   for (const m of [...p.mats, p.face]) m.dispose();
-  kid.traverse((o) => o.geometry && o.geometry.dispose());
+  // voxelGeo is the app-wide shared unit voxel — disposing it here would
+  // evict the main renderer's GPU copy too (same guard as wordevents.js).
+  kid.traverse((o) => o.geometry && o.geometry !== voxelGeo && o.geometry.dispose());
   renderer.dispose();
   renderer.forceContextLoss();
   return urls;

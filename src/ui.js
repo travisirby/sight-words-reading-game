@@ -24,6 +24,7 @@ export function init(h) {
   bindSpeak($('btn-toggle-sound'), 'Sound', () => h.onToggleSound());
   bindSpeak($('btn-toggle-music'), 'Music', () => h.onToggleMusic());
   bindSpeak($('btn-toggle-mic'), 'Mic round', () => h.onToggleMic());
+  bindSpeak($('btn-toggle-unlock'), 'All levels', () => h.onToggleUnlock());
 
   bindSpeak($('btn-switch-player'), 'Switch player!', () => h.onSwitchPlayer());
   bindSpeak($('btn-players-back'), 'Back', () => h.onPlayersBack());
@@ -123,6 +124,7 @@ export function updateSettingsLabels() {
   $('btn-toggle-sound').textContent = s.sound ? '🔊 Sound: ON' : '🔇 Sound: OFF';
   $('btn-toggle-music').textContent = s.music ? '🎵 Music: ON' : '🎵 Music: OFF';
   $('btn-toggle-mic').textContent = s.mic ? '🎤 Mic Round: ON' : '🎤 Mic Round: OFF';
+  $('btn-toggle-unlock').textContent = s.devUnlocked ? '🔓 All Levels: ON' : '🔒 All Levels: OFF';
 }
 
 // ---------- level banner (overworld node tapped) ----------
