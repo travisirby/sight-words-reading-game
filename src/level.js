@@ -588,7 +588,14 @@ export class LevelScene {
 
     const rand = mulberry32((data.theme + 1) * 7919);
     let n = 0;
-    const put = (x, y, z, sx, sy, sz, color, emissive = 0, jitter = 0) => {
+    // Baked fake ambient occlusion: near-unit voxels on the track/apron
+    // register their grid cell as they're placed; one pass after all put()
+    // calls darkens hemmed-in blocks and lightens open tops. Build-time
+    // only — nothing here runs per frame.
+    const occ = new Set();
+    const okey = (x, y, z) => x + ',' + y + ',' + z;
+    const aoBlocks = [];
+    const put = (x, y, z, sx, sy, sz, color, emissive = 0, jitter = 0, hue = 0) => {
       if (n >= MAX_BLOCKS) return;
       this.dummy.position.set(x, y, z);
       this.dummy.scale.set(sx, sy, sz);
@@ -597,8 +604,19 @@ export class LevelScene {
       this.blocks.setMatrixAt(n, this.dummy.matrix);
       this.color.setHex(color);
       if (emissive) this.color.offsetHSL(0, 0.1, 0.08);
-      if (jitter) this.color.offsetHSL(0, 0, jitter);
+      if (jitter || hue) this.color.offsetHSL(hue, 0, jitter);
       this.blocks.setColorAt(n, this.color);
+      // Only grid-aligned, roughly 1x1 footprint voxels participate in AO;
+      // hills (huge slabs) and small decor sprinkles are excluded by size,
+      // parallax-depth scenery by z.
+      if (sx >= 0.9 && sx <= 1.1 && sz >= 0.9 && sz <= 1.1 && sy >= 0.4 &&
+          z > -6 && z < 2) {
+        const cx = Math.round(x);
+        const cy = Math.floor(y);
+        const cz = Math.round(z);
+        occ.add(okey(cx, cy, cz));
+        aoBlocks.push({ n, cx, cy, cz });
+      }
       n++;
     };
 
@@ -612,20 +630,22 @@ export class LevelScene {
       const g = data.groundY[col];
       const patch = h01(col * 31 + 5);
       for (let zi = -1; zi <= 1; zi++) {
-        const j = (h01(col * 7 + zi * 13) - 0.5) * 0.08;
+        const j = (h01(col * 7 + zi * 13) - 0.5) * 0.1;
+        const hu = (h01(col * 13 + zi * 29 + 3) - 0.5) * 0.024;
         const capJ = j + (patch < 0.05 ? 0.06 : patch > 0.96 ? -0.05 : 0);
-        put(col, g - 0.225, zi, 1, 0.45, 1, p.top[(col + zi) & 1], 0, capJ);
-        put(col, g - 0.725, zi, 1, 0.55, 1, p.dirt[(col + zi + 1) & 1], 0, j - 0.05);
+        put(col, g - 0.225, zi, 1, 0.45, 1, p.top[(col + zi) & 1], 0, capJ, hu);
+        put(col, g - 0.725, zi, 1, 0.55, 1, p.dirt[(col + zi + 1) & 1], 0, j - 0.05, hu * 0.6);
         for (let d = 1; d < 4; d++) {
-          const j2 = (h01(col * 7 + zi * 13 + d * 101) - 0.5) * 0.08;
-          put(col, g - 0.5 - d, zi, 1, 1, 1, p.dirt[(col + zi + d) & 1], 0, j2);
+          const j2 = (h01(col * 7 + zi * 13 + d * 101) - 0.5) * 0.1;
+          put(col, g - 0.5 - d, zi, 1, 1, 1, p.dirt[(col + zi + d) & 1], 0, j2, hu * 0.6);
         }
       }
       // Darker grass lip along the front edge, slightly proud of the face.
       put(col, g - 0.55, 1.03, 1, 0.16, 1.02, p.top[1], 0, -0.1);
       for (let zi = -5; zi <= -2; zi++) {
-        const j = (h01(col * 11 + zi * 17) - 0.5) * 0.07;
-        put(col, g - 0.5, zi, 1, 1.001, 1, p.top[(col + zi) & 1], 0, j + zi * 0.012);
+        const j = (h01(col * 11 + zi * 17) - 0.5) * 0.09;
+        const hu = (h01(col * 19 + zi * 23 + 7) - 0.5) * 0.024;
+        put(col, g - 0.5, zi, 1, 1.001, 1, p.top[(col + zi) & 1], 0, j + zi * 0.012, hu);
       }
     }
 
@@ -635,7 +655,8 @@ export class LevelScene {
       const th = plat.thin ? 0.35 : 1;
       for (let cx = plat.x0; cx <= plat.x1; cx++) {
         for (let zi = 0; zi <= 1; zi++) {
-          put(cx, plat.y - th / 2, zi - 0.5, 1, th, 1, p.plat[(cx + zi) & 1]);
+          const j = (h01(cx * 5 + zi * 3 + plat.y * 41) - 0.5) * 0.06;
+          put(cx, plat.y - th / 2, zi - 0.5, 1, th, 1, p.plat[(cx + zi) & 1], 0, j);
         }
       }
     }
@@ -717,6 +738,25 @@ export class LevelScene {
     };
     for (let cx = 3; cx < len - 3; cx += 3 + ((rand() * 5) | 0)) {
       decor(cx + rand() - 0.5, data.groundY[cx]);
+    }
+
+    // AO pass: buried blocks (occupied cell above) darken hard; blocks
+    // shadowed by taller neighbor columns darken per side; fully open tops
+    // pick up a touch of extra light.
+    for (const b of aoBlocks) {
+      let f;
+      if (occ.has(okey(b.cx, b.cy + 1, b.cz))) {
+        f = 0.8;
+      } else {
+        let s = 0;
+        if (occ.has(okey(b.cx + 1, b.cy + 1, b.cz))) s++;
+        if (occ.has(okey(b.cx - 1, b.cy + 1, b.cz))) s++;
+        if (occ.has(okey(b.cx, b.cy + 1, b.cz + 1))) s++;
+        if (occ.has(okey(b.cx, b.cy + 1, b.cz - 1))) s++;
+        f = s ? 1 - s * 0.06 : 1.05;
+      }
+      this.blocks.getColorAt(b.n, this.color);
+      this.blocks.setColorAt(b.n, this.color.multiplyScalar(f));
     }
 
     this.blocks.count = n;
