@@ -6,8 +6,8 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <title>Word Runner</title>
-  <script type="module" crossorigin src="./assets/index-plTMc2YW.js"></script>
-  <link rel="stylesheet" crossorigin href="./assets/index-L-x0k25b.css">
+  <script type="module" crossorigin src="./assets/index-DpWpSjIh.js"></script>
+  <link rel="stylesheet" crossorigin href="./assets/index-CpT7Q3Kx.css">
 </head>
 <body>
   <!-- 3D canvas mounts here -->
@@ -113,7 +113,6 @@
       <h2>🎉 Level Complete!</h2>
       <div id="star-row"><span class="star">⭐</span><span class="star">⭐</span><span class="star">⭐</span></div>
       <div id="complete-totals">🪙 <span id="complete-coins">0</span> &nbsp; 💎 <span id="complete-gems">0</span></div>
-      <button id="btn-play-again" class="btn btn-wide">🔁 Play again</button>
       <button id="btn-next-level" class="btn btn-wide">➡️ Next level</button>
       <button id="btn-complete-map" class="btn btn-wide">🗺️ Map</button>
       <button id="btn-complete-house" class="btn btn-wide">🏠 My House</button>
@@ -153,6 +152,11 @@
       <div id="shop-list"></div>
     </div>
     <div id="house-toast" class="hidden"></div>
+    <!-- Post-boss trophy ceremony chrome: title + the one button out -->
+    <div id="ceremony-panel" class="hidden">
+      <div id="ceremony-title">🏆 You won a trophy!</div>
+      <button id="btn-ceremony-map" class="btn btn-huge">🗺️ MAP</button>
+    </div>
   </div>
 
   <!-- ============ CUTSCENE (3D; letterbox + captions) ============ -->
