@@ -45,7 +45,6 @@ export function init(h) {
     h.onRepeatWord();
   });
 
-  bindSpeak($('btn-play-again'), 'Play again!', () => h.onPlayAgain());
   bindSpeak($('btn-next-level'), 'Next level!', () => h.onNextLevel());
   bindSpeak($('btn-complete-map'), 'Map', () => h.onCompleteMap());
 
