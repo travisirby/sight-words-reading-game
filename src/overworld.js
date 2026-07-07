@@ -11,8 +11,9 @@ import { makeKidMesh } from './player.js';
 import { makeKeyMesh } from './game.js';
 import { BOSSES } from './boss.js';
 import { Effects } from './effects.js';
-import { sfxPlink, sfxBoing, speak } from './audio.js';
+import { sfxPlink, sfxBoing, speakLine } from './audio.js';
 import { WORLDS } from './words.js';
+import { HOUSE_ITEMS } from './housedata.js';
 import * as store from './store.js';
 
 const boxGeo = new THREE.BoxGeometry(1, 1, 1);
@@ -539,23 +540,36 @@ export class Overworld {
     };
 
     const emitters = [
-      (put, s, rand, i) => { // Grass Plains: trees, flowers, a pond
-        if (i < 5) tree(put, s.x, s.y, s.z, 0x3f9e3a, 0x4cb545);
-        else if (i === 5) {
-          put(s.x, s.y + 0.04, s.z, 2.6, 0.1, 1.9, 0x58a7e8);
-          put(s.x + 1.5, s.y + 0.15, s.z + 0.8, 0.5, 0.3, 0.5, 0x9c9c8a);
-        } else flower(put, s.x, s.y, s.z, i);
+      (put, s, rand, i) => { // Pasta Plains: meatball trees, marinara pond, tomatoes
+        if (i < 5) { // spaghetti tree: noodle trunk, meatball top, marinara splat
+          put(s.x, s.y + 0.6, s.z, 0.3, 1.2, 0.3, 0xf5d778);
+          put(s.x, s.y + 1.6, s.z, 1.4, 1.0, 1.4, 0x8a4b2d);
+          put(s.x, s.y + 2.3, s.z, 0.8, 0.4, 0.8, 0xd2422a);
+        } else if (i === 5) { // marinara pond with a parmesan boulder
+          put(s.x, s.y + 0.04, s.z, 2.6, 0.1, 1.9, 0xd2422a);
+          put(s.x + 1.5, s.y + 0.15, s.z + 0.8, 0.5, 0.3, 0.5, 0xfff2cc);
+        } else if (i & 1) { // cherry tomato on a stem
+          put(s.x, s.y + 0.22, s.z, 0.08, 0.45, 0.08, 0x3f9e3a);
+          put(s.x, s.y + 0.52, s.z, 0.26, 0.26, 0.26, 0xe23b2e);
+        } else { // farfalle bow-tie
+          put(s.x - 0.16, s.y + 0.16, s.z, 0.26, 0.3, 0.2, 0xf0c060, 0, 0.5);
+          put(s.x + 0.16, s.y + 0.16, s.z, 0.26, 0.3, 0.2, 0xf0c060, 0, -0.5);
+          put(s.x, s.y + 0.16, s.z, 0.12, 0.2, 0.22, 0xe2ad4d);
+        }
       },
-      (put, s, rand, i) => { // Sandy Desert: cacti, dunes, a palm
-        if (i < 5) {
-          put(s.x, s.y + 0.8, s.z, 0.45, 1.6, 0.45, 0x4da34c);
-          put(s.x + 0.5, s.y + 1.0, s.z, 0.8, 0.3, 0.3, 0x4da34c);
-          put(s.x + 0.75, s.y + 1.35, s.z, 0.3, 0.6, 0.3, 0x4da34c);
-        } else if (i < 10) {
-          put(s.x, s.y + 0.25, s.z, 2.6, 0.6, 1.8, 0xf2dc9c, rand() * 0.6);
-          put(s.x + 0.8, s.y + 0.45, s.z + 0.3, 1.4, 0.5, 1.1, 0xe8ce8a);
-        } else if (i === 10) palm(put, s.x, s.y, s.z);
-        else rock(put, s.x, s.y, s.z, 0xcf9b62);
+      (put, s, rand, i) => { // Waffle Desert: waffle stacks, syrup dunes, a strawberry
+        if (i < 5) { // waffle stack with a butter pat
+          put(s.x, s.y + 0.25, s.z, 1.5, 0.45, 1.5, 0xcf8c3c, rand() * 0.4);
+          put(s.x + 0.1, s.y + 0.65, s.z, 1.4, 0.4, 1.4, 0xdd9c4a);
+          put(s.x, s.y + 1.0, s.z, 0.5, 0.28, 0.5, 0xffe36a);
+        } else if (i < 10) { // syrup-drizzled dune
+          put(s.x, s.y + 0.25, s.z, 2.6, 0.6, 1.8, 0xe0a850, rand() * 0.6);
+          put(s.x + 0.5, s.y + 0.55, s.z + 0.2, 1.2, 0.25, 0.9, 0x8a4a1a);
+        } else if (i === 10) { // one giant strawberry landmark
+          put(s.x, s.y + 0.55, s.z, 1.1, 1.1, 1.1, 0xe23b2e);
+          put(s.x, s.y + 1.2, s.z, 0.7, 0.3, 0.7, 0x3f9e3a);
+          put(s.x + 0.2, s.y + 1.45, s.z, 0.14, 0.3, 0.14, 0x3f9e3a);
+        } else rock(put, s.x, s.y, s.z, 0x5a3520); // chocolate chunk
       },
       (put, s, rand, i) => { // Snowy Peaks: snowy trees, snowman, ice
         if (i < 5) {
@@ -1055,6 +1069,21 @@ export class Overworld {
     this.houseIcon.position.set(0, 4.3, 0);
     g.add(this.houseIcon);
 
+    // ❗ badge beside the gold marker: something new is waiting inside
+    // (fresh trophy/decoration, or a newly affordable shop item). refresh()
+    // shows/hides it from store.hasHouseNews(); pulses in tick().
+    const bangMat = new THREE.MeshLambertMaterial({ color: 0xe53935, emissive: 0x661111 });
+    this.houseBadge = new THREE.Group();
+    const bangBar = new THREE.Mesh(boxGeo, bangMat);
+    bangBar.scale.set(0.4, 0.95, 0.4);
+    bangBar.position.y = 0.85;
+    const bangDot = new THREE.Mesh(boxGeo, bangMat);
+    bangDot.scale.set(0.42, 0.34, 0.42);
+    this.houseBadge.add(bangBar, bangDot);
+    this.houseBadge.position.set(1.7, 4.6, 0.4);
+    this.houseBadge.visible = false;
+    g.add(this.houseBadge);
+
     // Fat invisible touch target, same trick as the level nodes.
     this.houseHit = new THREE.Mesh(boxGeo, new THREE.MeshBasicMaterial({ visible: false }));
     this.houseHit.scale.set(4, 4, 4);
@@ -1187,6 +1216,7 @@ export class Overworld {
       }
     });
     this.tokenNav = Math.min(this.tokenNav, this.navList.length - 1);
+    this.houseBadge.visible = store.hasHouseNews(HOUSE_ITEMS);
     this.refreshLocks();
     this.updateTiles();
   }
@@ -1402,6 +1432,8 @@ export class Overworld {
       tileDelay: Math.min(0.11, 1.5 / Math.max(1, seg.count)),
       nodeT: -1,
       secret: r.kind === 'secret',
+      // A level-0 node only reveals when a castle fell: a new world opened.
+      newWorld: r.kind === 'node' && r.level === 0,
     };
   }
 
@@ -1429,7 +1461,9 @@ export class Overworld {
           this.effects.sparkle(new THREE.Vector3(
             r.view.group.position.x, 1.5, r.view.group.position.z
           ));
-          speak('A secret path appeared!', { rate: 1.0 });
+          speakLine('secretPath');
+        } else if (r.newWorld) {
+          speakLine('worldUnlock');
         }
       }
       if (r.nodeT > 1.3) {
@@ -1516,6 +1550,12 @@ export class Overworld {
     // Floating house marker: slow spin + bob, like the key icons.
     this.houseIcon.rotation.y = t * 1.2;
     this.houseIcon.position.y = 4.3 + Math.sin(t * 2) * 0.15;
+
+    // ❗ house badge: eager bounce + pulse so it outshines the gold marker.
+    if (this.houseBadge.visible) {
+      this.houseBadge.position.y = 4.6 + Math.abs(Math.sin(t * 3)) * 0.5;
+      this.houseBadge.scale.setScalar(1 + Math.sin(t * 6) * 0.1);
+    }
 
     // Dress-up marker over the token: counter-rotate so it spins in world
     // space no matter which way the kid is facing.

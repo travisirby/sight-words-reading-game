@@ -15,7 +15,9 @@ import { promisify } from 'node:util';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { DOLCH, WORLDS, PRAISE, PRAISE_FIRST_TRY } from '../src/words.js';
+import { DOLCH, WORLDS } from '../src/words.js';
+import { LINES, BOSS_WIN_LINES } from '../src/lines.js';
+import { HOUSE_ITEMS } from '../src/housedata.js';
 
 const run = promisify(execFile);
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
@@ -39,8 +41,15 @@ function bossNames() {
 
 // Keep in sync with the bindSpeak() labels in src/ui.js.
 const UI_LABELS = [
-  'Play!', 'Settings', 'Close', 'Sound', 'Mic round', 'Back', 'Here we go!',
-  'Pause', 'Resume', 'Map', 'Play again!', 'Next level!', 'Skip',
+  'Play!', 'Settings', 'Close', 'Sound', 'Music', 'Mic round', 'Back',
+  'Here we go!', 'Pause', 'Resume', 'Map', 'Play again!', 'Next level!',
+  'Skip', 'Shop!', 'Make your character!', 'Looking good!',
+  // (no 'No' label: the delete-confirm button resolves to the w-no word
+  // clip, and a 'No' phrase would shadow it in clipsFor's phrase-first lookup)
+  "Let's go!", 'Goodbye!', 'Switch player!', "Who's playing?",
+  'New player! What is your name?',
+  'Delete this player? All their progress will be lost.',
+  ...Array.from({ length: 6 }, (_, i) => `Player ${i + 1}`),
 ];
 
 // Sentence prefixes spoken before a word clip (must end with ':' — the
@@ -56,14 +65,15 @@ const SEGMENTS = [
 ];
 
 const FIXED = [
-  ...PRAISE,
-  PRAISE_FIRST_TRY,
-  'You found a secret key!',
-  'Level complete! Amazing!',
-  'Bonus round! Read the word out loud. Hold the microphone and say it!',
+  // every narrator variety bank (src/lines.js) — praise, streaks, shop, etc.
+  ...Object.values(LINES).flat(),
   'If you forget your word, tap the blue speaker button to hear it again!',
   'All levels unlocked!',
-  'A secret path appeared!',
+  // house / trophy ceremony (main.js + house.js)
+  'You beat the castle! Time for your trophy!',
+  'A new trophy for your shelf!',
+  'Beat the castle boss to win that prize!',
+  'Something new at your house!',
   // game-complete finale (cutscenes.js finale script + stats screen)
   'You did it! You beat every single world!',
   'Look! Five shiny trophies for five worlds!',
@@ -71,10 +81,27 @@ const FIXED = [
   'Hero!',
 ];
 
+// Boss-prize reveal lines, one per earned decoration (house.js ceremony).
+function decorLines() {
+  return HOUSE_ITEMS.filter((it) => it.earned !== undefined).map(
+    (it) => `You won the ${it.name}! What a prize!`
+  );
+}
+
 function bossLines() {
   return bossNames().flatMap((name) => [
     `The ${name} wants to hear you read!`,
-    `You did it! The ${name} is amazed by your reading! Here comes your crown!`,
+    ...BOSS_WIN_LINES(name),
+  ]);
+}
+
+// Shop reading: item names spoken on tap, plus the purchase / already-owned
+// sentences built around each name (full clips — names aren't sight words).
+function shopLines() {
+  return HOUSE_ITEMS.flatMap(({ name }) => [
+    `${name}!`,
+    `You got the ${name}!`,
+    `You already have the ${name}!`,
   ]);
 }
 
@@ -103,7 +130,7 @@ function buildClips() {
   for (const list of Object.values(DOLCH)) {
     for (const w of list) add(w, 'word', WORD_RATE);
   }
-  for (const t of [...SEGMENTS, ...FIXED, ...bossLines(), ...nodeNames(), ...UI_LABELS]) {
+  for (const t of [...SEGMENTS, ...FIXED, ...bossLines(), ...decorLines(), ...shopLines(), ...nodeNames(), ...UI_LABELS]) {
     add(t, 'phrase', PHRASE_RATE);
   }
   return clips;

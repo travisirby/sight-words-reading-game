@@ -65,7 +65,7 @@ export class CutsceneScene {
     skipBtn.addEventListener('pointerdown', (e) => e.stopPropagation());
     skipBtn.addEventListener('click', (e) => {
       e.stopPropagation();
-      speak('Skip!', { rate: 1.0 });
+      speak('Skip', { rate: 1.0 });
       this.finish();
     });
   }

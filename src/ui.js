@@ -2,7 +2,7 @@
 // The level map itself is 3D (overworld.js) — here we only manage the
 // transparent map screen chrome + the slide-up level banner.
 
-import { speak, sfxClick, sfxStar } from './audio.js';
+import { speak, speakLine, sfxClick, sfxStar } from './audio.js';
 import * as fairy from './fairy.js';
 import * as store from './store.js';
 import { PALETTES, STYLES, OUTFITS, lookFrom } from './character.js';
@@ -46,22 +46,23 @@ export function init(h) {
     h.onRepeatWord();
   });
 
-  bindSpeak($('btn-play-again'), 'Play again!', () => h.onPlayAgain());
   bindSpeak($('btn-next-level'), 'Next level!', () => h.onNextLevel());
   bindSpeak($('btn-complete-map'), 'Map', () => h.onCompleteMap());
 
   bindSpeak($('btn-final-map'), 'Map', () => h.onCompleteMap());
-  bindSpeak($('btn-final-house'), 'My house!', () => h.onHouse('complete'));
+  bindSpeak($('btn-final-house'), null, () => h.onHouse('complete'));
 
   bindSpeak($('btn-bonus-skip'), 'Skip', () => h.onBonusSkip());
 
   // On the map the house is a real building in the world (overworld.js
   // raycasts it) — only title/complete need chrome buttons.
-  bindSpeak($('btn-title-house'), 'My house!', () => h.onHouse('title'));
-  bindSpeak($('btn-complete-house'), 'My house!', () => h.onHouse('complete'));
+  // House buttons stay silent — showHouse speaks a "welcome home" line.
+  bindSpeak($('btn-title-house'), null, () => h.onHouse('title'));
+  bindSpeak($('btn-complete-house'), null, () => h.onHouse('complete'));
   bindSpeak($('btn-house-back'), 'Back', () => h.onHouseBack());
   bindSpeak($('btn-house-shop'), 'Shop!', () => toggleShop(true));
   bindSpeak($('btn-shop-close'), 'Close', () => toggleShop(false));
+  bindSpeak($('btn-ceremony-map'), 'Map', () => h.onCeremonyDone());
   onBuyItem = h.onBuyItem;
 
   // Mic: press-and-hold.
@@ -83,11 +84,11 @@ export function init(h) {
   });
 }
 
-// Tap sound + speak the label, then run the action.
+// Tap sound + speak the label (null = silent tap), then run the action.
 function bindSpeak(el, label, fn) {
   el.addEventListener('click', () => {
     sfxClick();
-    speak(label, { rate: 1.0 });
+    if (label) speak(label, { rate: 1.0 });
     fn();
   });
 }
@@ -416,16 +417,71 @@ export function setMicListening(on) {
 
 let onBuyItem = null;
 let toastTimer = null;
+let pendingItem = null; // item awaiting the yes/no read in the confirm bar
 
 function toggleShop(open) {
   $('shop-panel').classList.toggle('hidden', !open);
+  closeShopConfirm();
   if (open) refreshShop();
+}
+
+function closeShopConfirm() {
+  pendingItem = null;
+  $('shop-confirm').classList.add('hidden');
+}
+
+// Tapping an item speaks its name, then asks to buy — the kid answers by
+// reading "yes" or "no" (early Dolch words, spoken back on tap). Sides are
+// shuffled each time so he reads the words instead of memorizing positions.
+function openShopConfirm(item) {
+  pendingItem = item;
+  $('shop-confirm-emoji').textContent = item.emoji;
+  $('shop-confirm-name').textContent = item.name;
+  const wordsEl = $('shop-confirm-words');
+  wordsEl.innerHTML = '';
+  const pair = Math.random() < 0.5 ? ['yes', 'no'] : ['no', 'yes'];
+  for (const w of pair) {
+    const b = document.createElement('button');
+    b.className = 'shop-word-btn';
+    b.textContent = w;
+    b.addEventListener('click', () => {
+      if (!pendingItem) return;
+      const it = pendingItem;
+      closeShopConfirm();
+      sfxClick();
+      if (w === 'yes') {
+        // The word clip first, then the purchase (which speaks the payoff).
+        speak('yes', { onend: () => onBuyItem && onBuyItem(it) });
+      } else {
+        speak('no', { onend: () => speakLine('shopNo') });
+      }
+    });
+    wordsEl.appendChild(b);
+  }
+  $('shop-confirm').classList.remove('hidden');
+  speak(`${item.name}!`, { rate: 1.0, onend: () => {
+    if (pendingItem === item) speakLine('shopConfirm');
+  } });
 }
 
 export function showHouse() {
   showScreen('house');
   toggleShop(false);
   refreshWallet();
+  $('btn-house-back').classList.remove('hidden');
+  $('btn-house-shop').classList.remove('hidden');
+  $('ceremony-panel').classList.add('hidden');
+}
+
+// Trophy-ceremony chrome: same house scene, but the only way out is the
+// big MAP button — no shop or back to wander off through mid-fanfare.
+export function showCeremony() {
+  showScreen('house');
+  toggleShop(false);
+  refreshWallet();
+  $('btn-house-back').classList.add('hidden');
+  $('btn-house-shop').classList.add('hidden');
+  $('ceremony-panel').classList.remove('hidden');
 }
 
 export function refreshWallet() {
@@ -443,14 +499,30 @@ export function refreshShop() {
   list.innerHTML = '';
   for (const item of HOUSE_ITEMS) {
     const owned = store.ownsHouseItem(item.id);
+    const earned = item.earned !== undefined; // boss prize, never for sale
     const wallet = item.currency === 'gems' ? s.gems : s.coins;
     const btn = document.createElement('button');
-    btn.className = 'shop-item' + (owned ? ' owned' : wallet < item.cost ? ' cant-afford' : '');
+    btn.className = 'shop-item' +
+      (owned ? ' owned' : earned || wallet < item.cost ? ' cant-afford' : '');
     const coin = item.currency === 'gems' ? '💎' : '🪙';
+    const cost = owned ? '✅ Got it!' : earned ? '🏰 Castle prize!' : `${coin} ${item.cost}`;
     btn.innerHTML = `<span class="shop-emoji">${item.emoji}</span>
       <span class="shop-info"><span>${item.name}</span>
-      <span class="shop-cost">${owned ? '✅ Got it!' : `${coin} ${item.cost}`}</span></span>`;
-    btn.addEventListener('click', () => onBuyItem && onBuyItem(item));
+      <span class="shop-cost">${cost}</span></span>`;
+    btn.addEventListener('click', () => {
+      sfxClick();
+      if (owned) {
+        // Still speaks so tapping owned stuff is a mini reading moment.
+        closeShopConfirm();
+        speak(`You already have the ${item.name}!`, { rate: 1.0 });
+      } else if (earned) {
+        // Boss prize, never for sale: buyItem speaks the castle nudge.
+        closeShopConfirm();
+        onBuyItem && onBuyItem(item);
+      } else {
+        openShopConfirm(item);
+      }
+    });
     list.appendChild(btn);
   }
 }

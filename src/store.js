@@ -35,8 +35,10 @@ const defaults = () => ({
   character: { skin: 0, hair: 0, style: 0, shirt: 0, pants: 0, outfit: 0 },
   // bossBeaten[world] = true once that world's castle boss fell
   bossBeaten: {},
-  // house.owned[itemId] = true for every furniture/pet purchase
-  house: { owned: {} },
+  // house.owned[itemId] = true for every furniture/pet purchase and every
+  // boss-dropped decoration; unseen[id] = true for prizes not yet visited;
+  // seenCoins/seenGems = wallet at the last house visit (for the ❗ nudge)
+  house: { owned: {}, unseen: {}, seenCoins: 0, seenGems: 0 },
   // one-time 🔊 repeat-button tutorial shown at the first word event
   seenRepeatTip: false,
   // lifetime totals for the finale stats screen. playSeconds counts only
@@ -386,8 +388,8 @@ export function buyHouseItem(id, cost, currency) {
   return true;
 }
 
-// Own an item without paying — completion rewards (e.g. the hero trophy,
-// which isn't in the shop catalog). Idempotent.
+// Own an item without paying — completion rewards (the hero trophy and the
+// boss-dropped decorations). Idempotent.
 export function grantHouseItem(id) {
   if (!state.house) state.house = { owned: {} };
   state.house.owned[id] = true;
@@ -396,6 +398,40 @@ export function grantHouseItem(id) {
 
 export function houseItemCount() {
   return state.house ? Object.keys(state.house.owned || {}).length : 0;
+}
+
+// ---------- house ❗ nudge ----------
+// "News" = a trophy/decoration earned since the last house visit, or a shop
+// item that became affordable since then. Visiting the house clears both.
+
+export function markHouseNews(id) {
+  if (!state.house) state.house = { owned: {} };
+  if (!state.house.unseen) state.house.unseen = {};
+  state.house.unseen[id] = true;
+  save();
+}
+
+export function clearHouseNews() {
+  if (!state.house) state.house = { owned: {} };
+  state.house.unseen = {};
+  state.house.seenCoins = state.coins;
+  state.house.seenGems = state.gems;
+  save();
+}
+
+export function hasHouseNews(items = []) {
+  const h = state.house || {};
+  if (h.unseen && Object.keys(h.unseen).length) return true;
+  // Saves from before this field existed treat everything affordable as new,
+  // which doubles as the first-visit nudge.
+  const seenCoins = h.seenCoins || 0;
+  const seenGems = h.seenGems || 0;
+  return items.some((it) => {
+    if (it.earned !== undefined || ownsHouseItem(it.id)) return false;
+    const wallet = it.currency === 'gems' ? state.gems : state.coins;
+    const seen = it.currency === 'gems' ? seenGems : seenCoins;
+    return wallet >= it.cost && seen < it.cost;
+  });
 }
 
 // ---------- bosses ----------

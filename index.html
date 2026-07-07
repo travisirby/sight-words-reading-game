@@ -64,7 +64,7 @@
   <div id="screen-map" class="screen map-screen hidden">
     <button id="btn-map-back" class="btn btn-round corner-top-left">⬅️</button>
     <div id="level-banner" class="hidden">
-      <div id="banner-name">Grass Plains 1</div>
+      <div id="banner-name">Pasta Plains 1</div>
       <div id="banner-stars">· · ·</div>
       <button id="btn-banner-play" class="btn btn-huge">▶️ PLAY</button>
     </div>
@@ -112,7 +112,6 @@
       <h2>🎉 Level Complete!</h2>
       <div id="star-row"><span class="star">⭐</span><span class="star">⭐</span><span class="star">⭐</span></div>
       <div id="complete-totals">🪙 <span id="complete-coins">0</span> &nbsp; 💎 <span id="complete-gems">0</span></div>
-      <button id="btn-play-again" class="btn btn-wide">🔁 Play again</button>
       <button id="btn-next-level" class="btn btn-wide">➡️ Next level</button>
       <button id="btn-complete-map" class="btn btn-wide">🗺️ Map</button>
       <button id="btn-complete-house" class="btn btn-wide">🏠 My House</button>
@@ -150,8 +149,21 @@
         <button id="btn-shop-close" class="btn btn-round">✖️</button>
       </div>
       <div id="shop-list"></div>
+      <!-- Buy confirm: the kid answers by reading the words "yes" / "no". -->
+      <div id="shop-confirm" class="hidden">
+        <div id="shop-confirm-item">
+          <span id="shop-confirm-emoji"></span>
+          <span id="shop-confirm-name"></span>
+        </div>
+        <div id="shop-confirm-words"></div>
+      </div>
     </div>
     <div id="house-toast" class="hidden"></div>
+    <!-- Post-boss trophy ceremony chrome: title + the one button out -->
+    <div id="ceremony-panel" class="hidden">
+      <div id="ceremony-title">🏆 You won a trophy!</div>
+      <button id="btn-ceremony-map" class="btn btn-huge">🗺️ MAP</button>
+    </div>
   </div>
 
   <!-- ============ CUTSCENE (3D; letterbox + captions) ============ -->
