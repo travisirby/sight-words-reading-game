@@ -21,6 +21,7 @@ import {
   getNextTierWords, getRunTierList, buildDistractorPool,
 } from './words.js';
 import * as store from './store.js';
+import { loadVoxModel, buildVoxMesh } from './voxmodel.js';
 
 const WALK_SPEED = 4.5;
 const STARS_SPEED = 2.5;
@@ -31,34 +32,18 @@ const CRITTER_COLORS = [0xff7f50, 0xba68c8, 0x4dd0e1, 0x9fa8da, 0xffb74d];
 
 const boxGeo = voxelGeo;
 
+// Baked voxel critter (authored in scripts/vox/models/critter.mjs). The
+// near-white "body" part takes the per-world tint through userData.mat,
+// exactly like the old hand-boxed critter; "trim" (eyes/feet) stays fixed.
+const critterModel = loadVoxModel(`${import.meta.env.BASE_URL}models/critter.json`);
+
 function makeCritter() {
   const g = new THREE.Group();
-  const mat = new THREE.MeshLambertMaterial({ color: 0xff7f50 });
-  const body = new THREE.Mesh(boxGeo, mat);
-  body.scale.set(0.95, 0.6, 0.7);
-  body.position.y = 0.45;
-  const top = new THREE.Mesh(boxGeo, mat);
-  top.scale.set(0.65, 0.3, 0.55);
-  top.position.y = 0.85;
-  const white = new THREE.MeshLambertMaterial({ color: 0xffffff });
-  const dark = new THREE.MeshLambertMaterial({ color: 0x222222 });
-  for (const s of [-0.18, 0.18]) {
-    const eye = new THREE.Mesh(boxGeo, white);
-    eye.scale.setScalar(0.18);
-    eye.position.set(s + 0.25, 0.62, 0.36);
-    const pupil = new THREE.Mesh(boxGeo, dark);
-    pupil.scale.setScalar(0.09);
-    pupil.position.set(s + 0.28, 0.62, 0.46);
-    g.add(eye, pupil);
-  }
-  for (const s of [-0.25, 0.25]) {
-    const foot = new THREE.Mesh(boxGeo, dark);
-    foot.scale.set(0.22, 0.18, 0.3);
-    foot.position.set(s, 0.09, 0);
-    g.add(foot);
-  }
-  g.add(body, top);
-  g.userData.mat = mat;
+  const mat = new THREE.MeshLambertMaterial({ color: 0xff7f50, vertexColors: true });
+  g.userData.mat = mat; // tinted synchronously by build(); mesh attaches when loaded
+  critterModel.then((model) => {
+    g.add(buildVoxMesh(model, { materials: { body: mat } }).group);
+  }).catch((err) => console.error('critter model failed to load:', err));
   return g;
 }
 

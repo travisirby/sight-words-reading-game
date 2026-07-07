@@ -9,6 +9,7 @@
     "preview": "vite preview",
     "dev:ipad": "HTTPS=1 vite --host",
     "test": "vitest run",
+    "gen:vox": "node scripts/vox/build-models.mjs && node scripts/bake-vox.mjs",
     "gen:tts": "node scripts/generate-tts.mjs",
     "gen:audio": "node scripts/generate-audio.mjs"
   },
