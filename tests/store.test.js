@@ -159,7 +159,7 @@ describe('lifetime stats / totals', () => {
     store.recordWordResult('red', true);
     store.addCoins(50);
     // Simulate an old blob: strip the stats field and reload.
-    const key = `wordRunner.v3:${store.activeProfileId()}`;
+    const key = `superKidsSightWords.v1:${store.activeProfileId()}`;
     const blob = JSON.parse(localStorage.getItem(key));
     delete blob.stats;
     localStorage.setItem(key, JSON.stringify(blob));

@@ -90,18 +90,33 @@ html, body {
 
 /* ---------- title ---------- */
 .game-title {
-  font-size: clamp(52px, 12vw, 110px);
-  line-height: 1.05;
+  font-size: clamp(30px, 5.5vw, 58px);
+  line-height: 1.12;
   text-align: center;
-  letter-spacing: 4px;
+  letter-spacing: 3px;
   color: #fff;
-  text-shadow: 4px 4px 0 #2c3e75, 8px 8px 0 rgba(0,0,0,0.18);
+  text-shadow: 3px 3px 0 #2c3e75, 6px 6px 0 rgba(0,0,0,0.18);
 }
-.game-title span { display: inline-block; }
+.game-title span { display: inline-block; animation: title-bob 2.6s ease-in-out infinite; }
 .game-title span:nth-child(4n+1) { color: #ffd93d; }
-.game-title span:nth-child(4n+2) { color: #ff6b6b; }
-.game-title span:nth-child(4n+3) { color: #6bffb8; }
-.game-title span:nth-child(4n+4) { color: #74b9ff; }
+.game-title span:nth-child(4n+2) { color: #ff6b6b; animation-delay: -0.4s; }
+.game-title span:nth-child(4n+3) { color: #6bffb8; animation-delay: -0.8s; }
+.game-title span:nth-child(4n+4) { color: #74b9ff; animation-delay: -1.2s; }
+@keyframes title-bob {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-7px); }
+}
+/* PLAY breathes gently to draw the eye; :active kills the animation so the
+   press-down transform on .btn still lands. */
+#btn-play { animation: play-pulse 2s ease-in-out infinite; }
+#btn-play:active { animation: none; }
+@keyframes play-pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.04); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .game-title span, #btn-play { animation: none; }
+}
 
 #version-tag {
   position: absolute;

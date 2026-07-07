@@ -1,15 +1,15 @@
 // localStorage persistence. One JSON blob per player profile under
-// wordRunner.v3:<id>, plus a tiny profiles index under wordRunner.profiles.v1
-// so several kids can share a device. Migrates from the pre-profile
-// wordRunner.v3 (and v2/v1: same shapes; v3 adds bossBeaten). The unlock
-// frontier gains a virtual boss slot: u.level === levelCount means
-// "castle playable".
+// superKidsSightWords.v1:<id>, plus a tiny profiles index under
+// superKidsSightWords.profiles.v1 so several kids can share a device.
+// Migrates from the pre-profile Word Runner-era blobs (same shape; the
+// game was renamed). The unlock frontier gains a virtual boss slot:
+// u.level === levelCount means "castle playable".
 
 import { isMasteredStats } from './words.js';
 
-const KEY_BASE = 'wordRunner.v3';
-const OLD_KEYS = ['wordRunner.v2', 'wordRunner.v1'];
-const PROFILES_KEY = 'wordRunner.profiles.v1';
+const KEY_BASE = 'superKidsSightWords.v1';
+const OLD_KEYS = ['wordRunner.v3', 'wordRunner.v2', 'wordRunner.v1'];
+const PROFILES_KEY = 'superKidsSightWords.profiles.v1';
 export const MAX_PROFILES = 6;
 
 const defaults = () => ({

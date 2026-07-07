@@ -2,7 +2,7 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "word-runner",
+      "name": "super-kids-sight-words-adventure",
       "runtimeExecutable": "npm",
       "runtimeArgs": [
         "run",
