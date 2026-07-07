@@ -9,6 +9,7 @@ import { join } from 'node:path';
 import { VoxScene } from '../scripts/vox/voxwriter.mjs';
 import { parseVox } from '../scripts/vox/voxparse.mjs';
 import { meshPart, voxToCells, srgbToLinear } from '../scripts/vox/mesher.mjs';
+import { bakeModel } from '../scripts/bake-vox.mjs';
 
 let dir;
 beforeAll(() => { dir = mkdtempSync(join(tmpdir(), 'vox-test-')); });
@@ -110,6 +111,36 @@ describe('mesher', () => {
     expect(shaded.length).toBeGreaterThan(0);
     // Occlusion always uses the AO brightness ramp, never arbitrary values.
     for (const c of shaded) expect([Math.round(0.55 * 255), Math.round(0.72 * 255), Math.round(0.86 * 255)]).toContain(c);
+  });
+
+  it('pivoted parts reassemble to exactly the unpivoted world positions', () => {
+    // Same two-part model twice; one gives the "limb" part a pivot. After
+    // baking, (position + origin) * voxelSize + offset must agree vertex
+    // for vertex — the pivot may only move the part's local origin.
+    const author = (name, pivot) => {
+      const s = new VoxScene({ name, voxelSize: 0.1 });
+      const C = s.color('#88aaff');
+      s.part('torso').box(-2, 0, -1, 2, 4, 1, C);
+      const limb = s.part('limb', pivot ? { pivot } : {});
+      limb.box(3, 1, -1, 4, 4, 1, C);
+      return bakeModel(s.save(dir), dir);
+    };
+    const plain = author('pv-plain', null);
+    const pivoted = author('pv-pivot', [3.5, 4, 0]); // "shoulder" atop the limb
+    for (let pi = 0; pi < 2; pi++) {
+      const a = plain.parts[pi], b = pivoted.parts[pi];
+      expect(b.positions.length).toBe(a.positions.length);
+      for (let i = 0; i < a.positions.length; i++) {
+        const axis = i % 3;
+        const wa = (a.positions[i] + a.origin[axis]) * 0.1 + a.offset[axis];
+        const wb = (b.positions[i] + b.origin[axis]) * 0.1 + b.offset[axis];
+        expect(wb).toBeCloseTo(wa, 10);
+      }
+    }
+    // And the pivoted limb's local origin really sits at the shoulder:
+    // its offset is the shoulder's world position, not zero.
+    expect(pivoted.parts[1].offset).not.toEqual([0, 0, 0]);
+    expect(plain.parts[1].offset).toEqual([0, 0, 0]);
   });
 
   it('never merges across differing AO', () => {

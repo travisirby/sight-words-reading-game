@@ -8,6 +8,7 @@ import * as THREE from 'three';
 import { voxelGeo } from './voxelgeo.js';
 import { KID_H } from './player.js';
 import { disposeGroup } from './wordevents.js';
+import { loadVoxModel, buildVoxMesh } from './voxmodel.js';
 import {
   sfxStomp, sfxRoar, sfxGiggle, sfxArmorPop, sfxCoin, sfxFireworks,
 } from './audio.js';
@@ -65,6 +66,7 @@ export function buildBoss(wi) {
   let armor = []; // [x, y, z] anchors for the 5 armor blocks
   let top = 5;
   let faceRefs = null; // { pupils, brows } for blinks and angry looks
+  let ready = null; // resolves once async (baked voxel) geometry is attached
 
   if (wi === 0) { // Meatball Monster: saucy meatball giant with spaghetti hair
     const brown = M(0x8a4b2d);
@@ -104,18 +106,20 @@ export function buildBoss(wi) {
     armor = [[0, 0.7, 1.05], [0.25, 1.55, 0.85], [-0.2, 2.55, 0.75],
       [0.15, 3.55, 0.68], [0, 4.6, 0.85]];
     top = 5.2;
-  } else if (wi === 2) { // Frost Yeti: shaggy snowball with huge arms
-    const white = M(0xffffff);
-    box(g, M(0xeef6ff), 1.0, 0.9, 1.0, -0.7, 0.45, 0);
-    box(g, M(0xeef6ff), 1.0, 0.9, 1.0, 0.7, 0.45, 0);
-    box(g, white, 2.7, 2.4, 1.8, 0, 2.1, 0);
-    box(g, M(0xdbe9f7), 1.7, 1.3, 0.2, 0, 1.9, 0.88); // belly patch
-    box(g, white, 1.7, 1.3, 1.5, 0, 4.0, 0);
-    box(g, M(0xaac2d6), 1.3, 0.85, 0.15, 0, 4.05, 0.74); // face patch
-    box(g, M(0x9fc4e8), 0.3, 0.5, 0.3, -0.55, 4.85, 0);
-    box(g, M(0x9fc4e8), 0.3, 0.5, 0.3, 0.55, 4.85, 0);
-    arms.push(limb(-1.8, 3.4, white, 0.85, 2.3), limb(1.8, 3.4, white, 0.85, 2.3));
-    faceRefs = face(g, 4.1, 0.84, 1.0);
+  } else if (wi === 2) { // Frost Yeti: baked voxel model (scripts/vox/models/boss-yeti.mjs)
+    // The mesh arrives async; the contract arrays/refs are filled in place,
+    // and every animation path iterates them, so pre-load frames are safe.
+    faceRefs = { pupils: [], brows: [] };
+    ready = loadVoxModel(`${import.meta.env.BASE_URL}models/boss-yeti.json`)
+      .then((model) => {
+        const { group, parts } = buildVoxMesh(model);
+        g.add(group);
+        arms.push(parts.armL, parts.armR); // shoulder-pivoted meshes
+        parts.browL.visible = parts.browR.visible = false;
+        faceRefs.pupils.push(parts.pupilL, parts.pupilR);
+        faceRefs.brows.push(parts.browL, parts.browR);
+      })
+      .catch((err) => console.error('boss model failed to load:', err));
     armor = [[-1.0, 1.5, 1.0], [-0.5, 1.5, 1.02], [0, 1.5, 1.05],
       [0.5, 1.5, 1.02], [1.0, 1.5, 1.0]];
     top = 5.1;
@@ -163,7 +167,7 @@ export function buildBoss(wi) {
   }
 
   g.rotation.y = -0.42; // slight turn toward the incoming player
-  return { group: g, arms, armor, top, face: faceRefs };
+  return { group: g, arms, armor, top, face: faceRefs, ready };
 }
 
 function makeCrown() {
@@ -223,14 +227,20 @@ export class BossFight {
 
     // Every unique material on the boss (armor included), with its resting
     // emissive, so a hit can flash the whole body white and restore it.
-    this.flashMats = [];
-    const seen = new Set();
-    this.group.traverse((o) => {
-      if (o.isMesh && !seen.has(o.material)) {
-        seen.add(o.material);
-        this.flashMats.push({ mat: o.material, base: o.material.emissive.getHex() });
-      }
-    });
+    // Re-collected once async voxel geometry attaches, so those meshes
+    // flash too (a hit can't land before the intro finishes anyway).
+    const collectFlashMats = () => {
+      this.flashMats = [];
+      const seen = new Set();
+      this.group.traverse((o) => {
+        if (o.isMesh && !seen.has(o.material)) {
+          seen.add(o.material);
+          this.flashMats.push({ mat: o.material, base: o.material.emissive.getHex() });
+        }
+      });
+    };
+    collectFlashMats();
+    built.ready?.then(collectFlashMats);
 
     this.projectiles = [0, 1].map(() => {
       const m = new THREE.Mesh(
