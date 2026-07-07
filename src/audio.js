@@ -315,10 +315,10 @@ export function sfxStarGrab() {
 
 const CLIP_GAP = 0.12; // pause between concatenated clips, seconds
 
-// The answer word inside a prompt gets star treatment: slower, louder,
-// with a breath around it, and the music fully ducked while it plays
-// (wr-word events, see music.js).
-const WORD_RATE = 0.8;
+// The answer word inside a prompt gets star treatment: louder, with a
+// breath around it, and the music fully ducked while it plays (wr-word
+// events, see music.js). Kept at normal speed — playbackRate slowdown
+// lowers the pitch and sounds unnatural.
 const WORD_VOL = 1.6;
 const WORD_GAP = 0.2; // extra pause before/after the word
 const ECHO_GAP = 0.35; // pause before the word is repeated
@@ -534,17 +534,15 @@ export function speak(text, { rate = 1.0, onend = null, echoWord = false } = {})
           const src = c.createBufferSource();
           src.buffer = buf;
           if (clips[i].word) {
-            // The answer word: slower, louder, a breath around it, and a
-            // wr-word window so the music drops out underneath it.
-            src.playbackRate.value = WORD_RATE;
+            // The answer word: louder, a breath around it, and a wr-word
+            // window so the music drops out underneath it.
             const g = c.createGain();
             g.gain.value = WORD_VOL;
             src.connect(g).connect(master);
             t += p === 0 ? WORD_GAP : ECHO_GAP;
-            const wallDur = dur / WORD_RATE;
-            scheduleWordDuck(c, t, wallDur);
+            scheduleWordDuck(c, t, dur);
             src.start(t, offset, dur);
-            t += wallDur + WORD_GAP;
+            t += dur + WORD_GAP;
           } else {
             src.connect(master);
             src.start(t, offset, dur);
