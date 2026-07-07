@@ -1,4 +1,4 @@
-# Word Runner 🏃🪙
+# Super Kids Sight Words Adventure 🏃🪙
 
 **Play it now: https://travisirby.github.io/sight-words-reading-game/**
 (On the iPad: open that link in Safari → Share → **Add to Home Screen** for
