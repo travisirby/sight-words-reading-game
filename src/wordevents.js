@@ -329,6 +329,7 @@ export class DoorsEvent {
       d.shakeT = 0.4;
       setSign(d.sign, d.word, 'gray');
       sfxWrong();
+      if (api.onWrong) api.onWrong();
       this.cooldown = 1.4;
       api.bounceBack(this.wallX - 8);
       speak(`Almost! The word is: ${this.word}. Try again!`, { rate: 0.9 });
@@ -478,6 +479,7 @@ export class StarsEvent {
   grabWrong(s, api) {
     s.holder.visible = false;
     sfxWrong();
+    if (api.onWrong) api.onWrong();
     if (!this.warned) {
       this.warned = true;
       speak(`Almost! The word is: ${this.word}.`, { rate: 0.9 });
