@@ -138,7 +138,7 @@ export class CutsceneScene {
 
     // Idle life on every actor: gentle bob + breath.
     for (const a of this.actors.values()) {
-      if (!a.walking) {
+      if (!a.walking && !a.static) {
         a.group.position.y = a.baseY + Math.sin(this.t * 2.2 + a.bobSeed) * 0.04;
       }
       this.updateWalk(a, dt);
@@ -183,6 +183,12 @@ export class CutsceneScene {
     } else if (kind === 'boss') {
       group = buildBoss(world).group;
       group.scale.setScalar(scale);
+    } else if (kind === 'house') {
+      group = makeHouseProp();
+      group.scale.setScalar(scale);
+    } else if (kind === 'trophy') {
+      group = makeTrophyProp(world);
+      group.scale.setScalar(scale);
     } else {
       console.warn('cutscene: unknown actor kind', kind);
       return null;
@@ -193,6 +199,7 @@ export class CutsceneScene {
     this.actors.set(id, {
       group,
       kind,
+      static: kind === 'house', // buildings don't idle-bob
       baseY: 0,
       bobSeed: Math.random() * 6,
       walking: null,
@@ -396,6 +403,66 @@ export class CutsceneScene {
       fastForward: () => {},
     };
   }
+}
+
+// ---------- prop builders ----------
+// The real House owns a whole scene (house.js), so the finale stages a
+// matching-palette exterior prop instead. Feet at y=0, door faces +z.
+
+const propBox = (hex, x, y, z, sx, sy, sz) => {
+  const m = new THREE.Mesh(
+    new THREE.BoxGeometry(1, 1, 1),
+    new THREE.MeshLambertMaterial({ color: hex })
+  );
+  m.position.set(x, y, z);
+  m.scale.set(sx, sy, sz);
+  return m;
+};
+
+function makeHouseProp() {
+  const g = new THREE.Group();
+  g.add(propBox(0xf7e6c4, 0, 1.6, 0, 5.4, 3.2, 4.6)); // walls
+  g.add(propBox(0x9a6b3f, 0, 1.0, 2.32, 1.3, 2.0, 0.12)); // door
+  g.add(propBox(0xffe082, 0.45, 1.15, 2.4, 0.16, 0.16, 0.08)); // knob
+  for (const x of [-1.7, 1.7]) { // front windows
+    g.add(propBox(0xa8dcf5, x, 2.0, 2.32, 1.0, 0.9, 0.1));
+    g.add(propBox(0xffffff, x, 1.5, 2.36, 1.2, 0.14, 0.08)); // sill
+  }
+  const roofL = propBox(0xe25b4a, -1.5, 3.85, 0, 3.6, 0.3, 5.2);
+  roofL.rotation.z = 0.45;
+  const roofR = propBox(0xe25b4a, 1.5, 3.85, 0, 3.6, 0.3, 5.2);
+  roofR.rotation.z = -0.45;
+  g.add(roofL, roofR);
+  g.add(propBox(0xc94a3b, 0, 4.55, 0, 0.7, 0.35, 5.3)); // ridge cap
+  g.add(propBox(0xb0614a, 1.7, 4.4, -1.2, 0.7, 1.4, 0.7)); // chimney
+  g.add(propBox(0xe8e0d2, 1.7, 5.15, -1.2, 0.9, 0.2, 0.9));
+  return g;
+}
+
+// Gold cup matching the house trophy shelf, tinted per world.
+const PROP_TROPHY_TINTS = [0xffd54a, 0xffc233, 0xffe082, 0xf5b942, 0xffdb6e];
+
+function makeTrophyProp(worldIdx = 0) {
+  const g = new THREE.Group();
+  const tint = PROP_TROPHY_TINTS[worldIdx % PROP_TROPHY_TINTS.length];
+  const gold = new THREE.MeshLambertMaterial({ color: tint, emissive: 0x4a3800 });
+  const cyl = new THREE.CylinderGeometry(0.5, 0.5, 1, 10);
+  g.add(propBox(0x9a6b3f, 0, 0.15, 0, 0.7, 0.3, 0.7)); // pedestal
+  const base = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.12, 0.45), gold);
+  base.position.y = 0.36;
+  const stem = new THREE.Mesh(cyl, gold);
+  stem.scale.set(0.12, 0.24, 0.12);
+  stem.position.y = 0.53;
+  const cup = new THREE.Mesh(cyl, gold);
+  cup.scale.set(0.42, 0.4, 0.42);
+  cup.position.y = 0.85;
+  g.add(base, stem, cup);
+  for (const x of [-0.28, 0.28]) { // handles
+    const h = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.26, 0.1), gold);
+    h.position.set(x, 0.88, 0);
+    g.add(h);
+  }
+  return g;
 }
 
 // ---------- DOM helpers ----------

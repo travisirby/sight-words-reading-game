@@ -64,6 +64,11 @@ const FIXED = [
   'If you forget your word, tap the blue speaker button to hear it again!',
   'All levels unlocked!',
   'A secret path appeared!',
+  // game-complete finale (cutscenes.js finale script + stats screen)
+  'You did it! You beat every single world!',
+  'Look! Five shiny trophies for five worlds!',
+  "You're a sight word hero!",
+  'Hero!',
 ];
 
 function bossLines() {

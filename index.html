@@ -119,6 +119,26 @@
     </div>
   </div>
 
+  <!-- ============ GAME COMPLETE (finale stats, after the last boss) ============ -->
+  <div id="screen-gamecomplete" class="screen overlay hidden">
+    <div class="panel gc-panel">
+      <h2>🏆 YOU DID IT! 🏆</h2>
+      <div class="gc-sub">You're a Sight Word Hero!</div>
+      <div id="gc-stats">
+        <div class="gc-row"><span>🗺️ Levels beaten</span><span id="gc-levels">0</span></div>
+        <div class="gc-row"><span>⭐ Stars earned</span><span id="gc-stars">0</span></div>
+        <div class="gc-row"><span>📖 Words read</span><span id="gc-words">0</span></div>
+        <div class="gc-row"><span>🎯 First-try reading</span><span id="gc-accuracy">0%</span></div>
+        <div class="gc-row"><span>✨ Secrets found</span><span id="gc-secrets">0</span></div>
+        <div class="gc-row"><span>🪙 Coins collected</span><span id="gc-coins">0</span></div>
+        <div class="gc-row"><span>⏱️ Time playing</span><span id="gc-time">0m</span></div>
+      </div>
+      <div id="gc-reward">🏆 A golden Hero Trophy is waiting at your house!</div>
+      <button id="btn-final-house" class="btn btn-wide">🏠 See your trophy!</button>
+      <button id="btn-final-map" class="btn btn-wide">🗺️ Map</button>
+    </div>
+  </div>
+
   <!-- ============ MY HOUSE (3D; DOM chrome only) ============ -->
   <div id="screen-house" class="screen map-screen hidden">
     <button id="btn-house-back" class="btn btn-round corner-top-left">⬅️</button>

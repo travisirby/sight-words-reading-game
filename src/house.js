@@ -89,6 +89,8 @@ export class House {
       cat: [1.6, GRASS_Y, 2.2],
       dog: [-1.6, GRASS_Y, 4.4],
       rocket: [-7.8, GRASS_Y, 8.2],
+      // game-complete reward (granted, never sold) — front yard, can't-miss
+      herotrophy: [3.6, GRASS_Y, 3.0],
     };
 
     this.buildIsland();
@@ -573,6 +575,36 @@ export class House {
     return g;
   }
 
+  // Game-complete reward: a big golden hero cup with a star, on a stone
+  // pedestal in the front yard. Granted by the finale, never in the shop.
+  makeHeroTrophy(anims) {
+    const g = new THREE.Group();
+    const gold = lambert(0xffd54a, 0x6b5200);
+    g.add(box(lambert(0xb7bec9), 0, 0.3, 0, 1.1, 0.6, 1.1)); // pedestal
+    g.add(box(lambert(0x9aa2ad), 0, 0.66, 0, 0.85, 0.12, 0.85));
+    g.add(box(gold, 0, 0.82, 0, 0.6, 0.2, 0.6)); // cup base
+    const stem = new THREE.Mesh(cylGeo, gold);
+    stem.scale.set(0.18, 0.35, 0.18);
+    stem.position.y = 1.08;
+    const cup = new THREE.Mesh(cylGeo, gold);
+    cup.scale.set(0.62, 0.55, 0.62);
+    cup.position.y = 1.5;
+    g.add(stem, cup);
+    g.add(box(gold, -0.42, 1.55, 0, 0.12, 0.36, 0.12)); // handles
+    g.add(box(gold, 0.42, 1.55, 0, 0.12, 0.36, 0.12));
+    // Chunky star on top (two crossed slabs read as a star from the 3/4 cam).
+    const starA = box(gold, 0, 2.05, 0, 0.5, 0.5, 0.12);
+    starA.rotation.z = Math.PI / 4;
+    g.add(starA, box(gold, 0, 2.05, 0, 0.5, 0.5, 0.12));
+    const pos = this.itemPos.herotrophy;
+    anims.push((t, dt) => { // proud occasional sparkle
+      if (Math.random() < dt * 0.5) {
+        this.effects.sparkle(new THREE.Vector3(pos[0], 1.8, pos[2]));
+      }
+    });
+    return g;
+  }
+
   makeTrophy(worldIdx) {
     // Small gold cup, tinted per world, standing on the shelf.
     const g = new THREE.Group();
@@ -612,6 +644,7 @@ export class House {
       telescope: () => this.makeTelescope(),
       robot: () => this.makeRobot(this.anims),
       rocket: () => this.makeRocket(this.anims),
+      herotrophy: () => this.makeHeroTrophy(this.anims),
     };
     const make = builders[id];
     if (!make) return null;

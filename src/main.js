@@ -99,10 +99,23 @@ const cutscene = new CutsceneScene();
 // step the sim manually via game.updateRun(dt) and game.debugResolve()).
 window.__wr = { game, store, map, charScene, house, cutscene, music, audio: { audioGraph, unlockAudio } };
 
+// Lifetime play-time: count only live run time (not menus/map), flushed to
+// the store in coarse chunks so we're not writing localStorage every frame.
+let playTimeAcc = 0;
+function flushPlayTime() {
+  if (playTimeAcc < 1) return;
+  store.addPlaySeconds(Math.round(playTimeAcc));
+  playTimeAcc = 0;
+}
+
 const clock = new THREE.Clock();
 renderer.setAnimationLoop(() => {
   const dt = Math.min(clock.getDelta(), 0.05);
   if (mode === 'game') {
+    if (game.running && !game.paused) {
+      playTimeAcc += dt;
+      if (playTimeAcc >= 15) flushPlayTime();
+    }
     game.tick(dt);
     renderer.render(game.scene, game.camera);
   } else if (mode === 'char') {
@@ -324,6 +337,7 @@ function computeStars(results) {
 function onRunComplete(res) {
   lastRun = res;
   ui.showHUD(false);
+  flushPlayTime();
 
   const stars = computeStars(res.results);
   lastRun.stars = stars;
@@ -349,11 +363,35 @@ function onRunComplete(res) {
     }
   }
 
+  // The last world's castle falling is the game-complete finale, not a
+  // normal summary: cutscene home, then the big stats screen.
+  if (current.boss && current.world === WORLDS.length - 1) {
+    startFinale();
+    return;
+  }
+
   if (BONUS_ROUND_ENABLED && speech.isAvailable() && store.get().mic && res.results.length) {
     startBonusRound(res);
   } else {
     showSummary();
   }
+}
+
+// ---------- game-complete finale ----------
+
+// Replay-safe: the cutscene + stats screen play every time the final boss
+// falls, but the exclusive reward is granted (and announced) only once.
+function startFinale() {
+  const firstTime = !store.isGameCompleted();
+  if (firstTime) {
+    store.markGameCompleted();
+    store.grantHouseItem('herotrophy');
+    house.refresh(); // the trophy is standing there when he visits
+  }
+  playCutscene(CUTSCENES.finale, () => {
+    ui.showGameComplete(store.totals(), { firstTime });
+    speak("You're a sight word hero!", { rate: 1.0 });
+  });
 }
 
 function showSummary() {
@@ -504,6 +542,7 @@ ui.init({
     game.resume();
   },
   onPauseMap: () => {
+    flushPlayTime(); // abandoning the run still banks the time played
     game.stopRun();
     showMap();
   },
