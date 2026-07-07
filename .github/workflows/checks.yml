@@ -1,0 +1,29 @@
+name: Checks
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - run: npm test
+
+      - name: Verify baked vox assets match their sources
+        run: |
+          npm run gen:vox
+          if ! git diff --exit-code -- assets-src public/models; then
+            echo "::error::assets-src/ or public/models/ is out of sync with scripts/vox/models/ — run 'npm run gen:vox' and commit the result."
+            exit 1
+          fi

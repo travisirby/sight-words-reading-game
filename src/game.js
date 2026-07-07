@@ -32,18 +32,33 @@ const CRITTER_COLORS = [0xff7f50, 0xba68c8, 0x4dd0e1, 0x9fa8da, 0xffb74d];
 
 const boxGeo = voxelGeo;
 
-// Baked voxel critter (authored in scripts/vox/models/critter.mjs). The
-// near-white "body" part takes the per-world tint through userData.mat,
-// exactly like the old hand-boxed critter; "trim" (eyes/feet) stays fixed.
-const critterModel = loadVoxModel(`${import.meta.env.BASE_URL}models/critter.json`);
+// Baked voxel critters (authored in scripts/vox/models/critter*.mjs), one
+// shape per world, cycled. Every variant has a near-white "body" part that
+// takes the per-world tint through userData.mat — exactly like the old
+// hand-boxed critter — plus a fixed-color "trim" part (eyes/feet/etc).
+const CRITTER_VARIANTS = ['critter', 'critter-snail', 'critter-beetle'].map(
+  (name) => loadVoxModel(`${import.meta.env.BASE_URL}models/${name}.json`)
+);
 
 function makeCritter() {
   const g = new THREE.Group();
   const mat = new THREE.MeshLambertMaterial({ color: 0xff7f50, vertexColors: true });
-  g.userData.mat = mat; // tinted synchronously by build(); mesh attaches when loaded
-  critterModel.then((model) => {
-    g.add(buildVoxMesh(model, { materials: { body: mat } }).group);
-  }).catch((err) => console.error('critter model failed to load:', err));
+  g.userData.mat = mat; // tinted synchronously by build(); meshes attach when loaded
+  const built = new Map(); // variant index -> mesh group, built once per slot
+  g.userData.setVariant = (worldIdx) => {
+    const idx = worldIdx % CRITTER_VARIANTS.length;
+    g.userData.variant = idx;
+    CRITTER_VARIANTS[idx].then((model) => {
+      if (g.userData.variant !== idx) return; // world changed while loading
+      if (!built.has(idx)) {
+        const mesh = buildVoxMesh(model, { materials: { body: mat } }).group;
+        built.set(idx, mesh);
+        g.add(mesh);
+      }
+      for (const [i, mesh] of built) mesh.visible = i === idx;
+    }).catch((err) => console.error('critter model failed to load:', err));
+  };
+  g.userData.setVariant(0);
   return g;
 }
 
@@ -236,6 +251,7 @@ export class Game {
         c.g.visible = true;
         c.g.scale.setScalar(1);
         c.g.userData.mat.color.setHex(CRITTER_COLORS[worldIdx]);
+        c.g.userData.setVariant(worldIdx);
       } else {
         c.state = 'off';
         c.g.visible = false;
