@@ -816,6 +816,42 @@ html, body {
 }
 .shop-item.cant-afford { opacity: 0.55; }
 .shop-item:active:not(.owned) { transform: scale(0.97); }
+#shop-confirm {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 14px 20px calc(16px + env(safe-area-inset-bottom));
+  border-top: 4px solid #e8dfb8;
+  background: #fff4c9;
+  border-radius: 0 0 0 0;
+  animation: banner-up 0.22s cubic-bezier(0.34, 1.5, 0.5, 1);
+}
+#shop-confirm.hidden { display: none; }
+#shop-confirm-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 26px;
+  font-weight: bold;
+  color: #2c3e75;
+}
+#shop-confirm-emoji { font-size: 44px; }
+#shop-confirm-words { display: flex; gap: 14px; }
+.shop-word-btn {
+  border: 4px solid #2c3e75;
+  border-radius: 20px;
+  background: #fff;
+  min-width: 108px;
+  min-height: 64px;
+  padding: 8px 22px;
+  font-family: inherit;
+  font-size: 34px;
+  font-weight: bold;
+  color: #2c3e75;
+  cursor: pointer;
+}
+.shop-word-btn:active { transform: scale(0.95); }
 #house-toast {
   position: absolute;
   top: 30%;

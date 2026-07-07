@@ -11,10 +11,11 @@ import { Effects } from './effects.js';
 import { createInput } from './input.js';
 import {
   sfxCoin, sfxWrong, sfxStomp, sfxBoing, sfxKeyJingle, sfxFireworks, sfxPlink,
-  sfxLand, speak,
+  sfxLand, speak, speakLine, speakVariant,
 } from './audio.js';
+import { BOSS_WIN_LINES } from './lines.js';
 import {
-  WORLDS, DOLCH, PRAISE, PRAISE_FIRST_TRY, getLevelWords, getSecretWords,
+  WORLDS, DOLCH, getLevelWords, getSecretWords,
   getBossWords, buildRunQueue, pickDistractors, shuffle,
   getNextTierWords, getRunTierList, buildDistractorPool,
 } from './words.js';
@@ -149,11 +150,15 @@ export class Game {
     this.api = {
       effects: this.effects,
       level: this.level,
+      // Correct after at least one miss on this word: recovery praise, and
+      // the first-try streak restarts.
       praise: () => {
-        speak(PRAISE[this.praiseIdx++ % PRAISE.length], { rate: 1.0 });
+        this.firstTryStreak = 0;
+        speakLine('recover');
       },
       praiseFirstTry: () => {
-        speak(PRAISE_FIRST_TRY, { rate: 1.0 });
+        this.firstTryStreak++;
+        speakLine(this.firstTryStreak >= 3 ? 'streak' : 'firstTry');
       },
       addCoins: (n) => this.addCoins(n),
       bounceBack: (toX) => this.bounceBack(toX),
@@ -197,7 +202,7 @@ export class Game {
     this.tierList = getRunTierList(worldIdx, this.queue);
     this.distractorPool = buildDistractorPool(this.levelWords, this.queue);
     this.results = []; // { word, firstTry }
-    this.praiseIdx = 0;
+    this.firstTryStreak = 0;
     this.runCoins = 0;
     this.runGems = 0;
     this.keyFound = false;
@@ -447,6 +452,7 @@ export class Game {
   // Out of tries on a word event: red dot, the miss counts against the
   // word's lifetime stats, and the run moves on.
   onEventFail() {
+    this.firstTryStreak = 0;
     const word = this.activeEv ? this.activeEv.word : this.stars && this.stars.word;
     this.results.push({ word, firstTry: false, failed: true });
     store.recordWordMiss(word);
@@ -600,7 +606,7 @@ export class Game {
       sfxKeyJingle();
       this.effects.confetti(this.keyMesh.position.clone());
       this.effects.sparkle(this.keyMesh.position.clone());
-      speak('You found a secret key!', { rate: 1.0 });
+      speakLine('secretKey');
       this.cb.onKey(true);
     }
   }
@@ -711,7 +717,7 @@ export class Game {
         // Every armor block gone: the boss falls, no star review needed.
         this.phase = 'bossDefeat';
         this.bossFight.startDefeat(this.api, p);
-        speak(`You did it! The ${BOSSES[this.worldIdx].name} is amazed by your reading! Here comes your crown!`, { rate: 1.0 });
+        speakVariant('bossWin', BOSS_WIN_LINES(BOSSES[this.worldIdx].name));
       } else if (p.x > this.data.starX - 10) {
         this.startStars();
       }
@@ -725,7 +731,7 @@ export class Game {
         this.flagT = 0;
         p.x = this.data.flagX - 0.45;
         sfxFireworks();
-        speak('Level complete! Amazing!', { rate: 1.0 });
+        speakLine('levelComplete');
         this.effects.fireworks(new THREE.Vector3(p.x, 3, 0));
       }
     } else if (this.phase === 'flag') {
