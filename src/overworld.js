@@ -75,15 +75,17 @@ export class Overworld {
     this.active = false;
 
     this.scene = new THREE.Scene();
-    this.scene.background = new THREE.Color(0x79c4f0);
-    // Fade the far sea into the sky so the horizon reads soft, not banded.
-    this.scene.fog = new THREE.Fog(0x86c9ef, 34, 72);
+    this.scene.background = new THREE.Color(0x84c9f0);
+    // Fog matches the sky exactly so the far sea melts into it, not banded.
+    this.scene.fog = new THREE.Fog(0x84c9f0, 34, 72);
     this.camera = new THREE.PerspectiveCamera(
       45, window.innerWidth / window.innerHeight, 0.1, 200
     );
 
-    const hemi = new THREE.HemisphereLight(0xffffff, 0x88aa66, 1.1);
-    const sun = new THREE.DirectionalLight(0xfff2d9, 1.3);
+    // Warm key / cool fill: sun-tinted directional, warm hemisphere sky
+    // over a cool sea-blue ground bounce.
+    const hemi = new THREE.HemisphereLight(0xffeed8, 0x6d9cba, 1.1);
+    const sun = new THREE.DirectionalLight(0xffe3b0, 1.45);
     sun.position.set(6, 14, 8);
     this.scene.add(hemi, sun);
 

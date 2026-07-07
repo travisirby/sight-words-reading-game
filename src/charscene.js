@@ -19,8 +19,9 @@ export class CharScene {
     this.camera.position.set(1.1, 1.9, 6.4);
     this.camera.lookAt(1.1, 0.55, 0);
 
-    this.scene.add(new THREE.AmbientLight(0xffffff, 0.75));
-    const sun = new THREE.DirectionalLight(0xffffff, 0.9);
+    // Cool-tinted ambient fill under a warm sun key.
+    this.scene.add(new THREE.AmbientLight(0xe4edf7, 0.8));
+    const sun = new THREE.DirectionalLight(0xffeccc, 1.0);
     sun.position.set(3, 5, 4);
     this.scene.add(sun);
 

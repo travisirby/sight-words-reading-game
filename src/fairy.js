@@ -205,6 +205,9 @@ export function mount() {
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.setSize(96, 96);
   renderer.outputColorSpace = THREE.SRGBColorSpace;
+  // Match the main renderer's tone mapping (main.js) so she isn't off-color.
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.15;
   el.querySelector('.fairy-bob').prepend(renderer.domElement);
 
   const scene = new THREE.Scene();

@@ -33,8 +33,9 @@ export class CutsceneScene {
     this.camera.position.set(0, 4, 12);
     this.camera.lookAt(0, 1.5, 0);
 
-    this.scene.add(new THREE.AmbientLight(0xffffff, 0.75));
-    const sun = new THREE.DirectionalLight(0xffffff, 1.6);
+    // Cool-tinted ambient fill under a warm sun key.
+    this.scene.add(new THREE.AmbientLight(0xdfe9f5, 0.8));
+    const sun = new THREE.DirectionalLight(0xffe9c4, 1.7);
     sun.position.set(6, 12, 8);
     this.scene.add(sun);
 
