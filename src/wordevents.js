@@ -408,17 +408,22 @@ export class StarsEvent {
   present(sx) {
     const r = this.reviews[this.idx];
     const words = shuffle([r.word, r.distractor]);
-    const heights = shuffle([2.3, 3.5]);
+    // Both stars float at the same height, well above head reach: walking
+    // (or falling) past one can never touch it, so reaching the far star
+    // never means threading past the near one — the old mixed heights put
+    // the low star's hitbox a hair above a grounded head and squarely
+    // inside every jump arc.
     for (let i = 0; i < 2; i++) {
       const s = this.stars[i];
-      const px = sx + i * 5;
-      s.holder.position.set(px, this.level.groundTopAt(px) + heights[i], 0);
+      const px = sx + i * 6;
+      s.baseY = this.level.groundTopAt(px) + 3.1;
+      s.holder.position.set(px, s.baseY, 0);
       s.holder.visible = true;
       s.word = words[i];
       s.taken = false;
       setSign(s.sign, s.word, 'normal');
     }
-    this.lastX = sx + 5;
+    this.lastX = sx + 6;
     this.warned = false;
   }
 
@@ -426,7 +431,9 @@ export class StarsEvent {
     const t = performance.now() / 1000;
     for (const s of this.stars) {
       s.star.rotation.y += dt * 2;
-      s.holder.position.y += Math.sin(t * 3 + s.holder.position.x) * 0.003;
+      if (s.baseY !== undefined) {
+        s.holder.position.y = s.baseY + Math.sin(t * 3 + s.holder.position.x) * 0.12;
+      }
     }
     if (this.done) return;
 
@@ -439,12 +446,15 @@ export class StarsEvent {
       return;
     }
 
-    // Grab by touching (needs a jump — stars float above head height).
+    // Grab by jumping UP into a star — the same verb as bonking a ? block.
+    // Only a rising player right under it selects; walking or falling past
+    // never does, so choosing is always a deliberate jump.
     for (const s of this.stars) {
       if (s.taken || !s.holder.visible) continue;
       const dx = Math.abs(player.x - s.holder.position.x);
       const sy = s.holder.position.y;
-      if (dx < 0.85 && player.y + KID_H > sy - 0.5 && player.y < sy + 0.6) {
+      if (dx < 0.8 && player.vy > 0.5 &&
+          player.y + KID_H > sy - 0.7 && player.y < sy + 0.5) {
         s.taken = true;
         if (s.word === this.word) this.grabCorrect(s, api);
         else this.grabWrong(s, api);

@@ -49,7 +49,7 @@ const SEGMENTS = [
   'Find the word:',
   'Bonk the block with the word:',
   'Jump through the door with the word:',
-  'Star time! Grab the star with the word:',
+  'Star time! Jump under the star with the word:',
   'Almost! The word is:',
   'Nice try! The word is:',
   'Try again!',

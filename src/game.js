@@ -463,7 +463,7 @@ export class Game {
       onDone: () => { this.phase = 'flagrun'; },
     });
     if (reviews.length) {
-      speak(`Star time! Grab the star with the word: ${reviews[0].word}!`, { rate: 0.9 });
+      speak(`Star time! Jump under the star with the word: ${reviews[0].word}!`, { rate: 0.9 });
       this.repeatTimer = REPEAT_AFTER;
       this.autoRepeats = 0;
     }
