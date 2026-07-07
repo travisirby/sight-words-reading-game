@@ -91,7 +91,10 @@ export function generateLevel({ seed, wordCount, theme, secret = false, hasKey =
 
   const keyAt = hasKey ? wordCount >> 1 : -1;
   const caveAt = secret ? wordCount >> 1 : -1;
-  const typeOffset = seed % 2;
+  // Word-event gameplay varies: seeded-random pick per event, never the
+  // same type twice in a row.
+  const EVENT_TYPES = ['blocks', 'doors', 'holes', 'ladders'];
+  let lastType = null;
 
   for (let i = 0; i < wordCount; i++) {
     // ---- platforming filler ----
@@ -147,17 +150,41 @@ export function generateLevel({ seed, wordCount, theme, secret = false, hasKey =
     }
 
     // ---- word event zone (flat ground) ----
-    const type = (i + typeOffset) % 2 === 0 ? 'blocks' : 'doors';
+    let type = EVENT_TYPES[(rand() * EVENT_TYPES.length) | 0];
+    if (type === lastType) {
+      type = EVENT_TYPES[(EVENT_TYPES.indexOf(type) + 1) % EVENT_TYPES.length];
+    }
+    lastType = type;
     if (type === 'blocks') {
       events.push({ type, x: x(), groundY: g });
       flat(36);
-    } else {
+    } else if (type === 'doors') {
       const s = x();
       events.push({ type, x: s, wallX: s + 12, groundY: g });
       // Door step ledges are thin so they don't hang down over the face of
       // a player standing at the tier below (head tops out +1.6 above feet).
       platforms.push({ x0: s + 6, x1: s + 11, y: g + 2, thin: true }); // tier +2 ledge
       platforms.push({ x0: s + 9, x1: s + 11, y: g + 4, thin: true }); // tier +4 ledge
+      flat(19);
+    } else if (type === 'holes') {
+      // Three 3-wide pits with 3-wide bridges; the shelf is raised so pit
+      // floors never dig below y=0.
+      g = Math.max(g, 3);
+      const s = x();
+      events.push({ type, x: s, groundY: g, holeXs: [s + 9, s + 15, s + 21] });
+      flat(8);
+      for (let k = 0; k < 3; k++) {
+        for (let j = 0; j < 3; j++) groundY.push(g - 3); // pit
+        flat(3); // bridge / far rim
+      }
+      flat(10);
+    } else { // ladders
+      const s = x();
+      events.push({ type, x: s, wallX: s + 12, groundY: g, ladderXs: [s + 3, s + 7, s + 10.7] });
+      flat(12);
+      // Scaffold walkway shared by the ladder tops; it runs onto the cliff.
+      platforms.push({ x0: s + 2, x1: s + 12, y: g + 5, thin: true });
+      g += 5; // cliff: the track continues on top
       flat(19);
     }
   }
@@ -168,12 +195,14 @@ export function generateLevel({ seed, wordCount, theme, secret = false, hasKey =
   const flagX = x() + 5;
   flat(12);
 
-  // Critters must never pace within 6 units of a doors-event wall or its
-  // step ledges (they'd ambush the climb). Shift offenders back toward the
-  // preceding filler, or drop them if there's no clear room.
-  const doorSpans = events
-    .filter((e) => e.type === 'doors')
-    .map((e) => ({ a: e.x - 6, b: e.wallX + 6 }));
+  // Critters must never pace within 6 units of a doors/ladders wall or a
+  // holes pit shelf (they'd ambush the climb or fall in). Shift offenders
+  // back toward the preceding filler, or drop them if there's no room.
+  const doorSpans = events.flatMap((e) => {
+    if (e.type === 'doors' || e.type === 'ladders') return [{ a: e.x - 6, b: e.wallX + 6 }];
+    if (e.type === 'holes') return [{ a: e.x - 6, b: e.x + 30 }];
+    return [];
+  });
   const clearOf = (c) => doorSpans.every((s) => c.x1 < s.a || c.x0 > s.b);
   const placedCritters = [];
   for (const c of critters) {

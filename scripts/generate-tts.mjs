@@ -49,6 +49,8 @@ const SEGMENTS = [
   'Find the word:',
   'Bonk the block with the word:',
   'Jump through the door with the word:',
+  'Jump down the hole with the word:',
+  'Climb the ladder with the word:',
   'Star time! Grab the star with the word:',
   'Almost! The word is:',
   'Nice try! The word is:',

@@ -1,6 +1,7 @@
-// The three word-event types: ? BLOCKS (bonk from below), WORD DOORS
-// (tiered wall) and FLAG STARS (end-of-level review). Visuals are built on
-// activation and disposed when passed, so at most one event's canvas
+// The word-event types: ? BLOCKS (bonk from below), WORD DOORS (tiered
+// wall), SPIKE HOLES (drop down the right pit), LADDERS (climb the right
+// one up a cliff) and FLAG STARS (end-of-level review). Visuals are built
+// on activation and disposed when passed, so at most one event's canvas
 // textures are alive at a time. All signs face +z (the camera).
 
 import * as THREE from 'three';
@@ -345,6 +346,267 @@ export class DoorsEvent {
     const i = this.doors.findIndex((d) =>
       !d.dead && (correct ? d.word === this.word : d.word !== this.word));
     if (i >= 0) this.resolveTier(i, api);
+  }
+
+  passedX() {
+    return this.wallX + 4;
+  }
+
+  dispose() {
+    disposeGroup(this.group);
+  }
+}
+
+// ---------- SPIKE HOLES ----------
+
+// Three pits cut into a raised shelf; a floating sign hangs over each.
+// Dropping into the right pit pays out and pops the kid back up onto the
+// track; wrong pits spring hidden spikes and bounce him back to retry.
+const PIT_DEPTH = 3;
+
+export class HolesEvent {
+  constructor(scene, level, { x, holeXs, groundY, word, distractors }) {
+    this.type = 'holes';
+    this.word = word;
+    this.x = x;
+    this.groundY = groundY;
+    this.done = false;
+    this.attempts = 0;
+    this.cooldown = 0;
+    this.boostT = -1; // countdown from a correct landing to the pop-out
+    this.playerRef = null;
+
+    this.group = new THREE.Group();
+    scene.add(this.group);
+    const spikeMat = new THREE.MeshLambertMaterial({ color: 0xaab7c4 });
+    const words = shuffle([word, ...distractors]);
+    this.holes = holeXs.map((hx, i) => {
+      const sign = makeSign(1.9, 0.95);
+      sign.position.set(hx, groundY + 2.6, 0.4);
+      setSign(sign, words[i], 'normal');
+      this.group.add(sign);
+      // Spikes wait sunk below the pit floor; they pop on a wrong landing.
+      const spikes = new THREE.Group();
+      const floorY = groundY - PIT_DEPTH;
+      spikes.position.set(hx, floorY - 0.7, 0);
+      for (const dx of [-1.05, -0.35, 0.35, 1.05]) {
+        const sp = new THREE.Mesh(boxGeo, spikeMat);
+        sp.scale.setScalar(0.5);
+        sp.rotation.z = Math.PI / 4;
+        sp.position.set(dx, 0.3, 0);
+        spikes.add(sp);
+      }
+      spikes.visible = false;
+      this.group.add(spikes);
+      return { sign, spikes, x: hx, floorY, word: words[i], dead: false, popT: -1 };
+    });
+    this.firstX = holeXs[0];
+    this.lastX = holeXs[holeXs.length - 1];
+  }
+
+  update(dt, player, api) {
+    this.playerRef = player;
+    this.cooldown -= dt;
+    const t = performance.now() / 1000;
+    for (const h of this.holes) {
+      h.sign.position.y = this.groundY + 2.6 + Math.sin(t * 2 + h.x) * 0.08;
+      if (h.popT >= 0 && h.popT < 1) {
+        h.popT = Math.min(1, h.popT + dt * 7);
+        h.spikes.position.y = h.floorY - 0.7 + h.popT * 0.7;
+      }
+    }
+    if (this.boostT > 0) {
+      this.boostT -= dt;
+      if (this.boostT <= 0) player.bounce(12.5); // pop out of the safe pit
+    }
+    if (this.done) return;
+
+    // Landed on a pit floor?
+    if (this.cooldown <= 0 && player.grounded &&
+        player.y < this.groundY - PIT_DEPTH + 0.5) {
+      const i = this.holes.findIndex((h) => Math.abs(player.x - h.x) < 1.6);
+      if (i >= 0) this.resolveHole(i, api);
+    }
+
+    // Ran across every bridge without dropping in (shouldn't normally
+    // happen — the choice zone clamps him — but never let him skip it).
+    if (player.x > this.lastX + 2.2) {
+      api.bounceBack(this.firstX - 6);
+      api.speakWord();
+    }
+  }
+
+  resolveHole(i, api) {
+    const h = this.holes[i];
+    const pos = new THREE.Vector3(h.x, h.floorY + 1, 0);
+    if (h.word === this.word) {
+      this.done = true;
+      setSign(h.sign, '', 'check');
+      sfxCorrect();
+      api.effects.confetti(pos);
+      api.effects.floatText(new THREE.Vector3(h.x, this.groundY + 1.2, 0), '+3');
+      api.addCoins(3);
+      api.praise();
+      api.onCorrect(this.attempts === 0);
+      this.boostT = 0.9; // let the confetti land, then launch him out
+    } else {
+      this.attempts++;
+      h.dead = true;
+      h.popT = 0;
+      h.spikes.visible = true;
+      setSign(h.sign, h.word, 'gray');
+      sfxWrong();
+      if (api.onWrong) api.onWrong();
+      this.cooldown = 1.4;
+      if (this.playerRef) this.playerRef.stumble();
+      api.bounceBack(this.firstX - 6);
+      speak(`Almost! The word is: ${this.word}. Try again!`, { rate: 0.9 });
+    }
+  }
+
+  clampX() {
+    return Infinity; // the choice zone's max already fences the far rim
+  }
+
+  debugResolve(correct, api) {
+    const i = this.holes.findIndex((h) =>
+      !h.dead && (correct ? h.word === this.word : h.word !== this.word));
+    if (i >= 0) this.resolveHole(i, api);
+  }
+
+  passedX() {
+    if (this.boostT > 0) return Infinity; // pop-out still pending
+    return this.lastX + 4;
+  }
+
+  dispose() {
+    disposeGroup(this.group);
+  }
+}
+
+// ---------- LADDERS ----------
+
+// Three ladders up to a scaffold walkway below a cliff. Jumping onto the
+// right ladder auto-climbs the kid to the top; wrong ladders wobble and
+// bounce him back. The cliff wall clamps progress until he climbs.
+export const LADDER_H = 5;
+
+export class LaddersEvent {
+  constructor(scene, level, { x, wallX, ladderXs, groundY, word, distractors }) {
+    this.type = 'ladders';
+    this.word = word;
+    this.x = x;
+    this.wallX = wallX;
+    this.groundY = groundY;
+    this.done = false;
+    this.opened = -1; // ladder index once the climb starts
+    this.attempts = 0;
+    this.cooldown = 0;
+    this.climbY = -1; // player height above ground while auto-climbing
+    this.playerRef = null;
+
+    this.group = new THREE.Group();
+    this.group.position.set(0, groundY, 0);
+    scene.add(this.group);
+
+    const railMat = new THREE.MeshLambertMaterial({ color: 0x8d5a2b });
+    const rungMat = new THREE.MeshLambertMaterial({ color: 0xb5793c });
+    const words = shuffle([word, ...distractors]);
+    this.ladders = ladderXs.map((lx, i) => {
+      const g = new THREE.Group();
+      g.position.set(lx, 0, 0);
+      for (const dx of [-0.38, 0.38]) {
+        const rail = new THREE.Mesh(boxGeo, railMat);
+        rail.scale.set(0.14, LADDER_H, 0.14);
+        rail.position.set(dx, LADDER_H / 2, 0);
+        g.add(rail);
+      }
+      for (let ry = 0.5; ry < LADDER_H; ry += 0.55) {
+        const rung = new THREE.Mesh(boxGeo, rungMat);
+        rung.scale.set(0.85, 0.13, 0.13);
+        rung.position.set(0, ry, 0);
+        g.add(rung);
+      }
+      this.group.add(g);
+      const sign = makeSign(1.9, 0.95);
+      sign.position.set(lx - 1.7, 1.6, 1.2);
+      setSign(sign, words[i], 'normal');
+      this.group.add(sign);
+      return { g, sign, x: lx, word: words[i], dead: false, shakeT: 0 };
+    });
+  }
+
+  update(dt, player, api) {
+    this.playerRef = player;
+    this.cooldown -= dt;
+    for (const l of this.ladders) {
+      if (l.shakeT > 0) {
+        l.shakeT -= dt;
+        l.g.rotation.z = Math.sin(l.shakeT * 40) * 0.07;
+        if (l.shakeT <= 0) l.g.rotation.z = 0;
+      }
+    }
+    if (this.done) return;
+
+    // Auto-climb: carry the kid up the chosen ladder to the walkway.
+    if (this.opened !== -1) {
+      this.climbY = Math.min(LADDER_H, this.climbY + dt * 4.5);
+      player.x = this.ladders[this.opened].x;
+      player.y = this.groundY + this.climbY;
+      player.vy = 0;
+      player.grounded = false; // arms-up pose reads as climbing
+      player.group.position.set(player.x, player.y, 0);
+      if (this.climbY >= LADDER_H) {
+        player.grounded = true;
+        this.done = true;
+      }
+      return;
+    }
+
+    // Grab: jump at a ladder (airborne + overlapping it).
+    if (this.cooldown <= 0 && !player.grounded &&
+        player.y > this.groundY + 0.3) {
+      const i = this.ladders.findIndex((l) => Math.abs(player.x - l.x) < 0.8);
+      if (i >= 0) this.resolveLadder(i, api);
+    }
+  }
+
+  resolveLadder(i, api) {
+    const l = this.ladders[i];
+    if (l.word === this.word) {
+      this.opened = i;
+      this.climbY = Math.max(0, (this.playerRef ? this.playerRef.y : this.groundY) - this.groundY);
+      setSign(l.sign, '', 'check');
+      sfxCorrect();
+      api.effects.confetti(new THREE.Vector3(l.x, this.groundY + 2, 0.5));
+      api.effects.floatText(new THREE.Vector3(l.x, this.groundY + 3, 0), '+3');
+      api.addCoins(3);
+      api.praise();
+      api.onCorrect(this.attempts === 0);
+      if (!this.playerRef) this.done = true; // headless (tests): skip the climb
+    } else {
+      this.attempts++;
+      l.dead = true;
+      l.shakeT = 0.5;
+      setSign(l.sign, l.word, 'gray');
+      sfxWrong();
+      if (api.onWrong) api.onWrong();
+      this.cooldown = 1.4;
+      api.bounceBack(this.x + 1);
+      speak(`Almost! The word is: ${this.word}. Try again!`, { rate: 0.9 });
+    }
+  }
+
+  clampX() {
+    if (this.opened === -1) return this.wallX - 0.85;
+    return Infinity;
+  }
+
+  debugResolve(correct, api) {
+    if (this.opened !== -1) return;
+    const i = this.ladders.findIndex((l) =>
+      !l.dead && (correct ? l.word === this.word : l.word !== this.word));
+    if (i >= 0) this.resolveLadder(i, api);
   }
 
   passedX() {

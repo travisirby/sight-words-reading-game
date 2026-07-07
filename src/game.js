@@ -5,7 +5,9 @@
 import * as THREE from 'three';
 import { LevelScene, generateLevel, generateBossArena } from './level.js';
 import { Player, KID_H } from './player.js';
-import { BlocksEvent, DoorsEvent, StarsEvent } from './wordevents.js';
+import {
+  BlocksEvent, DoorsEvent, HolesEvent, LaddersEvent, StarsEvent,
+} from './wordevents.js';
 import { BossFight, BOSSES } from './boss.js';
 import { Effects } from './effects.js';
 import { createInput } from './input.js';
@@ -287,6 +289,15 @@ export class Game {
       if (ev.type === 'blocks') {
         return { engage: ev.firstX - 4.5, min: ev.firstX - 6, max: ev.lastX + 1.5 };
       }
+      if (ev.type === 'holes') {
+        // Fence him onto the pit shelf: max stops at the far rim so the
+        // only way forward is down a hole.
+        return { engage: ev.firstX - 4.5, min: ev.firstX - 6.5, max: ev.lastX + 1.5 };
+      }
+      if (ev.type === 'ladders') {
+        // Freeze a step before the first sign so it never covers his face.
+        return { engage: ev.x - 1, min: ev.x - 4, max: Infinity };
+      }
       // Doors: freeze before the step ledges; clampX() already walls off max.
       return { engage: ev.wallX - 8, min: ev.wallX - 10, max: Infinity };
     }
@@ -366,17 +377,21 @@ export class Game {
     const word = this.queue[this.eventIdx];
     const distractors = pickDistractors(word, this.levelWords, this.tierList);
     const opts = { ...def, word, distractors };
-    this.activeEv = def.type === 'blocks'
-      ? new BlocksEvent(this.scene, this.level, opts)
-      : new DoorsEvent(this.scene, this.level, opts);
+    const EventClass = {
+      blocks: BlocksEvent, doors: DoorsEvent, holes: HolesEvent, ladders: LaddersEvent,
+    }[def.type];
+    this.activeEv = new EventClass(this.scene, this.level, opts);
     this.spoken = false;
   }
 
   speakIntro() {
     const w = this.activeEv.word;
-    const line = this.activeEv.type === 'blocks'
-      ? `Bonk the block with the word: ${w}!`
-      : `Jump through the door with the word: ${w}!`;
+    const line = {
+      blocks: `Bonk the block with the word: ${w}!`,
+      doors: `Jump through the door with the word: ${w}!`,
+      holes: `Jump down the hole with the word: ${w}!`,
+      ladders: `Climb the ladder with the word: ${w}!`,
+    }[this.activeEv.type];
     speak(line, { rate: 0.9 });
     this.repeatTimer = 8;
     this.autoRepeats = 0;
