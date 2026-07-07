@@ -183,6 +183,8 @@ function buildFairy() {
 let el = null;
 let lastX = 50;
 let speaking = false;
+let startLoop = null;
+let stopLoop = null;
 
 export function mount() {
   if (el) return;
@@ -216,10 +218,17 @@ export function mount() {
   const fairy = buildFairy();
   scene.add(fairy.group);
 
+  // She's a tiny decorative sprite, so 30fps is plenty — and the loop
+  // stops entirely while she's hidden (flyTo toggles it) so her renderer
+  // never competes with the main one for GPU time.
+  const FRAME_MS = 1000 / 30;
   let t = 0;
   let mouthOpen = false;
-  renderer.setAnimationLoop(() => {
-    const dt = 1 / 60;
+  let lastTime = 0;
+  const tick = (now) => {
+    if (now - lastTime < FRAME_MS - 1) return;
+    const dt = lastTime ? Math.min((now - lastTime) / 1000, 0.1) : 1 / 30;
+    lastTime = now;
     t += dt;
     // Wings: gentle flutter, frantic while talking. Small sweep around a
     // spread-open base so they never fold edge-on behind her.
@@ -241,7 +250,21 @@ export function mount() {
     fairy.legL.rotation.x = Math.sin(t * 2.1) * 0.18;
     fairy.legR.rotation.x = Math.sin(t * 2.1 + 1.4) * 0.18;
     renderer.render(scene, camera);
-  });
+  };
+
+  let running = false;
+  startLoop = () => {
+    if (running) return;
+    running = true;
+    lastTime = 0; // don't count hidden time as elapsed
+    renderer.setAnimationLoop(tick);
+  };
+  stopLoop = () => {
+    if (!running) return;
+    running = false;
+    renderer.setAnimationLoop(null);
+  };
+  startLoop();
 
   window.addEventListener('wr-speech', (ev) => {
     speaking = !!ev.detail.speaking;
@@ -253,9 +276,14 @@ export function flyTo(screen) {
   if (!el) return;
   const p = PERCHES[screen];
   // Screens with no perch (e.g. the self-contained cutscene) hide her —
-  // otherwise she'd be stranded at her last perch, over the scene.
+  // otherwise she'd be stranded at her last perch, over the scene. Her
+  // render loop pauses while hidden so it costs nothing.
   el.classList.toggle('hidden', !p);
-  if (!p) return;
+  if (!p) {
+    stopLoop();
+    return;
+  }
+  startLoop();
   // Face the direction she's flying (art faces slightly right).
   if (p.x !== lastX) el.classList.toggle('face-left', p.x < lastX);
   lastX = p.x;
