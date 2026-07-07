@@ -2,7 +2,8 @@
 import { describe, it, expect } from 'vitest';
 import {
   DOLCH, WORLDS, chunkIntoLevels, shuffle, buildRunQueue, pickDistractors,
-  getSecretWords, getBossWords,
+  getSecretWords, getBossWords, isMasteredStats, getNextTierWords,
+  buildDistractorPool, getRunTierList,
 } from '../src/words.js';
 
 const sorted = (a) => a.slice().sort();
@@ -59,6 +60,129 @@ describe('buildRunQueue', () => {
 
   it('works without stats (statsFor null or returning null)', () => {
     expect(sorted(buildRunQueue(words, () => null))).toEqual(sorted(words));
+  });
+
+  const masteredStats = { seen: 5, correct: 5, firstTryCorrect: 4, missed: 0 };
+  const freshStats = { seen: 1, correct: 1, firstTryCorrect: 1, missed: 0 };
+  // Level words mastered, everything else (the promotion pool) unseen.
+  const levelMastered = (w) => (words.includes(w) ? masteredStats : null);
+
+  it('keeps all mastered words when there is no promotion pool', () => {
+    const q = buildRunQueue(words, levelMastered);
+    expect(sorted(q)).toEqual(sorted(words));
+  });
+
+  it('replaces sat-out mastered words with next-tier words, same length', () => {
+    const pool = ['all', 'am', 'are', 'at', 'ate', 'be'];
+    // rng always above the review chance: every mastered word sits out
+    const q = buildRunQueue(words, levelMastered, {
+      promotionPool: pool,
+      rng: () => 0.99,
+    });
+    expect(q).toHaveLength(words.length);
+    expect(sorted(q)).toEqual(sorted(pool.slice(0, words.length)));
+  });
+
+  it('keeps mastered words for review when rng falls under the chance', () => {
+    const q = buildRunQueue(words, levelMastered, {
+      promotionPool: ['all', 'am', 'are', 'at', 'ate'],
+      rng: () => 0, // always below MASTERED_REVIEW_CHANCE
+    });
+    expect(sorted(q)).toEqual(sorted(words));
+  });
+
+  it('mastered words appear roughly 1 run in 4 over many runs', () => {
+    const statsFor = (w) => (w === 'red' ? masteredStats : null);
+    let kept = 0;
+    const runs = 2000;
+    for (let i = 0; i < runs; i++) {
+      const q = buildRunQueue(['red'], statsFor, { promotionPool: DOLCH.primer });
+      if (q.includes('red')) kept++;
+    }
+    expect(kept / runs).toBeGreaterThan(0.18);
+    expect(kept / runs).toBeLessThan(0.33);
+  });
+
+  it('never promotes duplicates of level words or already-mastered pool words', () => {
+    const statsFor = (w) => (w === 'all' || words.includes(w) ? masteredStats : null);
+    const q = buildRunQueue(words, statsFor, {
+      promotionPool: ['red', 'all', 'am', 'are', 'at', 'ate', 'be'],
+      rng: () => 0.99,
+    });
+    // 'red' is a level word, 'all' is mastered — neither may fill a slot
+    expect(sorted(q)).toEqual(sorted(['am', 'are', 'at', 'ate', 'be']));
+  });
+
+  it('runs out of pool gracefully: leftover mastered words stay in', () => {
+    const q = buildRunQueue(words, levelMastered, {
+      promotionPool: ['am', 'at'],
+      rng: () => 0.99,
+    });
+    expect(q).toHaveLength(words.length);
+    expect(sorted(q.slice(0, 2))).toEqual(['am', 'at']);
+    for (const w of q.slice(2)) expect(words).toContain(w);
+  });
+
+  it('still front-loads missed words when mastered words are mixed in', () => {
+    const statsFor = (w) => {
+      if (w === 'jump') return { seen: 3, correct: 3, firstTryCorrect: 1, missed: 2 };
+      if (w === 'red') return masteredStats;
+      return freshStats;
+    };
+    for (let i = 0; i < 20; i++) {
+      const q = buildRunQueue(words, statsFor, {
+        promotionPool: DOLCH.primer,
+        rng: () => 0.99,
+      });
+      expect(q[0]).toBe('jump');
+      expect(q).not.toContain('red');
+    }
+  });
+});
+
+describe('isMasteredStats', () => {
+  it('needs 3 lifetime first-try corrects', () => {
+    expect(isMasteredStats(null)).toBe(false);
+    expect(isMasteredStats({ seen: 5, correct: 5, firstTryCorrect: 2, missed: 3 })).toBe(false);
+    expect(isMasteredStats({ seen: 3, correct: 3, firstTryCorrect: 3, missed: 0 })).toBe(true);
+  });
+});
+
+describe('getNextTierWords', () => {
+  it('returns the following Dolch tier for each world', () => {
+    expect(getNextTierWords(0)).toBe(DOLCH.primer);
+    expect(getNextTierWords(3)).toBe(DOLCH.third);
+  });
+
+  it('returns null past the last tier', () => {
+    expect(getNextTierWords(WORLDS.length - 1)).toBeNull();
+  });
+});
+
+describe('buildDistractorPool / getRunTierList', () => {
+  const level = ['red', 'blue', 'jump'];
+
+  it('appends promoted queue words to the level pool without duplicates', () => {
+    const pool = buildDistractorPool(level, ['jump', 'always', 'because']);
+    expect(pool).toEqual(['red', 'blue', 'jump', 'always', 'because']);
+  });
+
+  it('extends the tier list only when the queue holds next-tier words', () => {
+    expect(getRunTierList(0, ['red', 'blue'])).toBe(DOLCH.prePrimer);
+    const extended = getRunTierList(0, ['red', 'all']);
+    expect(extended).toEqual(DOLCH.prePrimer.concat(DOLCH.primer));
+  });
+
+  it('promoted words can serve as distractors for each other', () => {
+    const queue = ['red', 'always', 'because'];
+    const pool = buildDistractorPool(level, queue);
+    const tier = getRunTierList(0, queue);
+    for (let i = 0; i < 50; i++) {
+      const d = pickDistractors('because', pool, tier);
+      expect(d).toHaveLength(2);
+      expect(d).not.toContain('because');
+      for (const w of d) expect(pool.concat(tier)).toContain(w);
+    }
   });
 });
 

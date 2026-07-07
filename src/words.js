@@ -67,6 +67,21 @@ export function getLevelWords(worldIdx, levelIdx) {
   return WORLDS[worldIdx].levels[levelIdx];
 }
 
+// A word is mastered after 3 lifetime first-try correct answers.
+// stats: {seen, correct, firstTryCorrect, missed} or null.
+export function isMasteredStats(stats) {
+  return !!stats && stats.firstTryCorrect >= 3;
+}
+
+const TIER_ORDER = Object.keys(DOLCH);
+
+// The Dolch tier after a world's tier (null past the last tier). Used to
+// promote strong readers to new material before the next world unlocks.
+export function getNextTierWords(worldIdx) {
+  const next = TIER_ORDER[TIER_ORDER.indexOf(WORLDS[worldIdx].tier) + 1];
+  return next ? DOLCH[next] : null;
+}
+
 export function shuffle(arr) {
   const a = arr.slice();
   for (let i = a.length - 1; i > 0; i--) {
@@ -76,19 +91,67 @@ export function shuffle(arr) {
   return a;
 }
 
+// How often a mastered word still shows up for spaced-repetition review
+// (~1 run in 4) instead of ceding its slot to new material.
+export const MASTERED_REVIEW_CHANCE = 0.25;
+
 // Build the run queue: level words shuffled, but words with lifetime misses
 // (per stored stats) move to the front so they get practiced first.
+// Mastered words mostly sit runs out; each skipped one is replaced by an
+// unmastered word from opts.promotionPool (the next Dolch tier) so strong
+// readers keep seeing new material. Without a pool the mastered word stays
+// in — the run never shrinks. Kept mastered words go to the back as review.
 // statsFor(word) -> {seen, correct, firstTryCorrect, missed} or null.
-export function buildRunQueue(levelWords, statsFor) {
+export function buildRunQueue(levelWords, statsFor, opts = {}) {
+  const { promotionPool = null, rng = Math.random } = opts;
   const shuffled = shuffle(levelWords);
   const missed = [];
   const rest = [];
+  const mastered = [];
   for (const w of shuffled) {
     const s = statsFor ? statsFor(w) : null;
-    if (s && s.missed > 0) missed.push(w);
+    if (isMasteredStats(s)) mastered.push(w);
+    else if (s && s.missed > 0) missed.push(w);
     else rest.push(w);
   }
-  return missed.concat(rest);
+  // Promotion candidates keep tier order (earliest words first), so the
+  // same few new words recur run after run until they're learned.
+  const pool = (promotionPool || []).filter(
+    (w) => !levelWords.includes(w) && !isMasteredStats(statsFor ? statsFor(w) : null)
+  );
+  const review = [];
+  const promoted = [];
+  for (const w of mastered) {
+    if (pool.length && rng() >= MASTERED_REVIEW_CHANCE) promoted.push(pool.shift());
+    else review.push(w);
+  }
+  return missed.concat(shuffle(rest.concat(promoted)), review);
+}
+
+// Distractor pool for a run: the level's own words plus any promoted
+// cross-tier words in the queue, so mixed-in words stay coherent — they
+// can appear as distractors for each other, not just as targets.
+export function buildDistractorPool(levelWords, queue) {
+  const seen = new Set(levelWords);
+  const pool = levelWords.slice();
+  for (const w of queue) {
+    if (!seen.has(w)) {
+      seen.add(w);
+      pool.push(w);
+    }
+  }
+  return pool;
+}
+
+// Tier list for the distractor fallback: the world's own tier, extended
+// with the next tier when the queue actually contains promoted words.
+export function getRunTierList(worldIdx, queue) {
+  const tier = DOLCH[WORLDS[worldIdx].tier];
+  const next = getNextTierWords(worldIdx);
+  if (next && queue.some((w) => !tier.includes(w) && next.includes(w))) {
+    return tier.concat(next);
+  }
+  return tier;
 }
 
 // Pick 2 distractors for the target, preferring similar-length words from the
