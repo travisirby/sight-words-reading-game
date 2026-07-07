@@ -49,7 +49,7 @@ const SEGMENTS = [
   'Find the word:',
   'Bonk the block with the word:',
   'Jump through the door with the word:',
-  'Star time! Grab the star with the word:',
+  'Star time! Jump under the star with the word:',
   'Almost! The word is:',
   'Nice try! The word is:',
   'Try again!',
@@ -61,6 +61,7 @@ const FIXED = [
   'You found a secret key!',
   'Level complete! Amazing!',
   'Bonus round! Read the word out loud. Hold the microphone and say it!',
+  'If you forget your word, tap the blue speaker button to hear it again!',
   'All levels unlocked!',
   'A secret path appeared!',
 ];

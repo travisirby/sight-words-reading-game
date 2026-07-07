@@ -111,12 +111,26 @@ export function generateLevel({ seed, wordCount, theme, secret = false, hasKey =
 
     // Floating platform with a coin arc. Every jump reaches a fixed ~3.5
     // apex, so platforms sit at +2 or +3 — always one full jump away.
+    // Only spots whose ground is flat under the span (and one column to
+    // each side) qualify: anchoring to a stepped column can leave the
+    // platform +5 above the ground on its low side, out of single-jump
+    // reach from that approach.
     if (rand() < (secret ? 0.95 : 0.75) && fillerLen > 11) {
       const w = 3 + ((rand() * 2) | 0);
-      const px = fillerStart + 3 + ((rand() * (fillerLen - w - 6)) | 0);
-      const py = groundY[Math.min(px, x() - 1)] + (rand() < 0.35 ? 2 : 3);
-      platforms.push({ x0: px, x1: px + w - 1, y: py });
-      coinArc(px - 0.5, w, py + 1.1);
+      const spots = [];
+      for (let px = fillerStart + 3; px <= fillerStart + fillerLen - w - 3; px++) {
+        let flat = true;
+        for (let c = px - 1; c <= px + w; c++) {
+          if (groundY[c] !== groundY[px]) { flat = false; break; }
+        }
+        if (flat) spots.push(px);
+      }
+      if (spots.length) {
+        const px = spots[(rand() * spots.length) | 0];
+        const py = groundY[px] + (rand() < 0.35 ? 2 : 3);
+        platforms.push({ x0: px, x1: px + w - 1, y: py });
+        coinArc(px - 0.5, w, py + 1.1);
+      }
     }
 
     // Critter on the last flat stretch (never inside event zones).

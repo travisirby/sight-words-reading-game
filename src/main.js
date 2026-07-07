@@ -52,7 +52,12 @@ const game = new Game(renderer, {
   onDotsInit: (n) => ui.initDots(n),
   onDot: (i, cls) => ui.setDot(i, cls),
   onKey: (found) => ui.setKeyFound(found),
-  onChoice: (on) => ui.showMoveControls(on),
+  onControls: (mode) => ui.showMoveControls(mode),
+  onAutoRepeat: () => ui.pulseRepeatButton(),
+  onRepeatTip: () => {
+    ui.showRepeatTip(true);
+    speak('If you forget your word, tap the blue speaker button to hear it again!', { rate: 0.95 });
+  },
   onRunComplete: (res) => onRunComplete(res),
 });
 

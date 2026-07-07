@@ -23,6 +23,7 @@ const WALK_SPEED = 4.5;
 const STARS_SPEED = 2.5;
 const CHOICE_SPEED = 3.4; // manual left/right steering while time is frozen
 const FORWARD_BOOST = 1.9; // holding forward during auto-run speeds him up
+const REPEAT_AFTER = 6; // seconds of no answer before the word auto-repeats
 const CRITTER_COLORS = [0xff7f50, 0xba68c8, 0x4dd0e1, 0x9fa8da, 0xffb74d];
 
 const boxGeo = new THREE.BoxGeometry(1, 1, 1);
@@ -84,7 +85,9 @@ export function makeKeyMesh() {
 
 export class Game {
   // callbacks: { onCoins(n), onDotsInit(count), onDot(index, cls),
-  //              onKey(found), onRunComplete(res), onChoice(on) }
+  //              onKey(found), onRunComplete(res),
+  //              onControls(mode: 'choice'|'boost'|null),
+  //              onAutoRepeat(), onRepeatTip() }
   constructor(renderer, cb) {
     this.cb = cb;
     this.renderer = renderer;
@@ -139,6 +142,7 @@ export class Game {
     this.stars = null;
     this.choice = false; // time-freeze steering mode at a word choice
     this.moveHeld = {}; // { Lkey, Rkey, Lbtn, Rbtn } held flags
+    this.shownControls = null; // last controls mode sent to the HUD
 
     // Shared context handed to word events.
     this.api = {
@@ -158,7 +162,7 @@ export class Game {
       onWrong: () => {
         // A miss re-teaches the word (listen beat + reshuffle), so restart
         // the auto-repeat clock with a fresh budget.
-        this.repeatTimer = 8;
+        this.repeatTimer = REPEAT_AFTER;
         this.autoRepeats = 0;
         if (this.bossFight) this.bossFight.taunt();
       },
@@ -214,6 +218,7 @@ export class Game {
     this.introSpoke = false;
     this.repeatTimer = 0;
     this.autoRepeats = 0;
+    this.repeatTipT = 0; // countdown to the one-time 🔊-button tutorial tip
     this.bounce = null;
     this.stumbleMul = 1;
     this.flagT = 0;
@@ -264,12 +269,14 @@ export class Game {
 
     this.running = true;
     this.paused = false;
+    this.syncControls();
   }
 
   stopRun() {
     this.running = false;
     this.clearEvents();
     this.setChoice(false);
+    this.syncControls();
   }
 
   // ---------- choice mode (time freeze at the decision spot) ----------
@@ -286,7 +293,32 @@ export class Game {
   setChoice(on) {
     if (this.choice === on) return;
     this.choice = on;
-    if (this.cb.onChoice) this.cb.onChoice(on);
+    this.syncControls();
+  }
+
+  // Forward boost is disabled while a boss is up: boosted speed (~8.6/s)
+  // beats the boss's retreat cap (6/s), so holding forward would overrun
+  // the boss and break the chase staging (and the intro).
+  get boostAllowed() {
+    if (!this.bossFight) return true;
+    return this.bossFight.state === 'defeat' ||
+      this.bossFight.state === 'crownDrop' || this.bossFight.state === 'gone';
+  }
+
+  // What the HUD should show right now: steering arrows at a frozen word
+  // choice, the forward-boost affordance while auto-running, or nothing.
+  get controlsMode() {
+    if (!this.running) return null;
+    if (this.choice) return 'choice';
+    const auto = this.phase === 'run' || this.phase === 'stars' || this.phase === 'flagrun';
+    return auto && this.boostAllowed ? 'boost' : null;
+  }
+
+  syncControls() {
+    const mode = this.controlsMode;
+    if (mode === this.shownControls) return;
+    this.shownControls = mode;
+    if (this.cb.onControls) this.cb.onControls(mode);
   }
 
   // The zone the player may roam while frozen: null when no choice is
@@ -388,8 +420,14 @@ export class Game {
       ? `Bonk the block with the word: ${w}!`
       : `Jump through the door with the word: ${w}!`;
     speak(line, { rate: 0.9 });
-    this.repeatTimer = 8;
+    this.repeatTimer = REPEAT_AFTER;
     this.autoRepeats = 0;
+    // First word event ever: point out the 🔊 repeat button, once the
+    // intro line has had time to finish (speak() cuts off earlier speech).
+    if (!store.get().seenRepeatTip) {
+      store.markRepeatTipSeen();
+      this.repeatTipT = 3.2;
+    }
   }
 
   onEventCorrect(firstTry) {
@@ -439,8 +477,8 @@ export class Game {
       onDone: () => { this.phase = 'flagrun'; },
     });
     if (reviews.length) {
-      speak(`Star time! Grab the star with the word: ${reviews[0].word}!`, { rate: 0.9 });
-      this.repeatTimer = 8;
+      speak(`Star time! Jump under the star with the word: ${reviews[0].word}!`, { rate: 0.9 });
+      this.repeatTimer = REPEAT_AFTER;
       this.autoRepeats = 0;
     }
   }
@@ -589,7 +627,9 @@ export class Game {
     if (this.phase === 'flag' || this.phase === 'done' || this.choice) target = 0;
     if (this.phase === 'bossIntro' || this.phase === 'bossDefeat') target = 0;
     // Pressing forward (right) while auto-running gives an extra speed burst.
-    if (!this.choice && target > 0 && this.moveDir > 0) target *= FORWARD_BOOST;
+    if (!this.choice && target > 0 && this.moveDir > 0 && this.boostAllowed) {
+      target *= FORWARD_BOOST;
+    }
     this.stumbleMul = Math.min(1, this.stumbleMul + dt * 1.2);
     target *= this.stumbleMul;
     this.speed += (target - this.speed) * Math.min(1, dt * 4);
@@ -698,21 +738,32 @@ export class Game {
       if (this.doneTimer <= 0) this.finishRun();
     }
 
-    // Auto re-speak the target if unanswered (max 2 times per event).
+    // Auto re-speak the target if unanswered (max 2 times per quiet spell;
+    // wrong attempts reset the spell via api.onWrong).
     const ev = (this.stars && !this.stars.done && this.stars.reviews.length && this.stars)
       || (this.activeEv && !this.activeEv.done && this.spoken && this.activeEv);
     if (ev) {
       this.repeatTimer -= dt;
       if (this.repeatTimer <= 0 && this.autoRepeats < 2) {
         this.autoRepeats++;
-        this.repeatTimer = 8;
+        this.repeatTimer = REPEAT_AFTER;
         this.repeatWord();
+        if (this.cb.onAutoRepeat) this.cb.onAutoRepeat(); // HUD flashes 🔊
       }
     }
+
+    // One-time 🔊-button tutorial, delayed so the intro line finishes first.
+    if (this.repeatTipT > 0) {
+      this.repeatTipT -= dt;
+      if (this.repeatTipT <= 0 && this.cb.onRepeatTip) this.cb.onRepeatTip();
+    }
+
+    this.syncControls();
   }
 
   finishRun() {
     this.running = false;
+    this.syncControls();
     this.clearEvents();
     this.cb.onRunComplete({
       results: this.results,

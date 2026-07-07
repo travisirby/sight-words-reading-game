@@ -34,6 +34,8 @@ const defaults = () => ({
   bossBeaten: {},
   // house.owned[itemId] = true for every furniture/pet purchase
   house: { owned: {} },
+  // one-time 🔊 repeat-button tutorial shown at the first word event
+  seenRepeatTip: false,
 });
 
 let state = defaults();
@@ -376,6 +378,11 @@ export function devUnlockAll(worldCount = 5) {
 export function setCharacterPart(part, idx) {
   // Merge over defaults so blobs saved before this field existed still work.
   state.character = { ...defaults().character, ...state.character, [part]: idx };
+  save();
+}
+
+export function markRepeatTipSeen() {
+  state.seenRepeatTip = true;
   save();
 }
 

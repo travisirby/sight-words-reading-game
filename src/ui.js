@@ -40,7 +40,10 @@ export function init(h) {
   bindSpeak($('btn-pause-map'), 'Map', () => h.onPauseMap());
 
   // Repeat button re-speaks the target word itself — no label speech first.
-  $('btn-repeat-word').addEventListener('click', () => h.onRepeatWord());
+  $('btn-repeat-word').addEventListener('click', () => {
+    showRepeatTip(false); // he found it — tutorial done
+    h.onRepeatWord();
+  });
 
   bindSpeak($('btn-play-again'), 'Play again!', () => h.onPlayAgain());
   bindSpeak($('btn-next-level'), 'Next level!', () => h.onNextLevel());
@@ -299,9 +302,33 @@ export function setKeyFound(on) {
   $('hud-key').classList.toggle('hidden', !on);
 }
 
-// Steering controls appear only while time is frozen at a word choice.
-export function showMoveControls(on) {
-  $('move-controls').classList.toggle('hidden', !on);
+// In-run controls: full left/right/jump steering while time is frozen at a
+// word choice ('choice'), or just the forward-boost + jump pair whenever
+// boosting is available during auto-run ('boost'). null hides them.
+export function showMoveControls(mode) {
+  const el = $('move-controls');
+  el.classList.toggle('hidden', !mode);
+  el.classList.toggle('boost-only', mode === 'boost');
+}
+
+// Flash the 🔊 button whenever the word auto-repeats, so the kid learns
+// which button makes the word speak.
+let repeatPulseTimer = null;
+export function pulseRepeatButton() {
+  const b = $('btn-repeat-word');
+  b.classList.remove('flash');
+  void b.offsetWidth; // restart the animation
+  b.classList.add('flash');
+  clearTimeout(repeatPulseTimer);
+  repeatPulseTimer = setTimeout(() => b.classList.remove('flash'), 1700);
+}
+
+// One-time callout pointing at the 🔊 button (first word event ever).
+let repeatTipTimer = null;
+export function showRepeatTip(on) {
+  $('repeat-tip').classList.toggle('hidden', !on);
+  clearTimeout(repeatTipTimer);
+  if (on) repeatTipTimer = setTimeout(() => showRepeatTip(false), 8000);
 }
 
 export function initDots(count) {
