@@ -6,46 +6,80 @@
 
 import * as THREE from 'three';
 
-// skyTop/skyBot drive the gradient skydome; hemiGround tints the hemisphere
-// light's ground bounce; sun/cloud tint the celestial voxels; night themes
-// swap the sun for a moon plus stars and dim the lights.
+// skyTop/skyBot drive the gradient skydome; fog doubles as the dome's
+// horizon band so distance melts into the sky. The light rig is a
+// warm-key/cool-fill split: sunTint colors the DirectionalLight (warm by
+// day, moonlight-blue at night), hemiSky is the hemisphere light's warm
+// sky half and hemiGround its cooler bounce, so tops read sunlit and
+// undersides read sky-shadowed. sun/cloud tint the celestial voxels;
+// night themes swap the sun for a moon plus stars and dim the lights.
 export const PALETTES = [
   { // Pasta Plains — sunny noodle country, cheese-slab platforms
     top: [0x8fd35f, 0x83c854], dirt: [0x9c7748, 0x8f6b3f],
     plat: [0xf7c948, 0xeab52e], hill: 0x6fbf62, hill2: 0x8fd48a,
     sky: 0x87ceeb, fog: 0xa9ddf3,
-    skyTop: 0x4aa3e6, skyBot: 0xaee4f8, hemiGround: 0x6da851,
+    skyTop: 0x4aa3e6, skyBot: 0xaee4f8,
+    hemiSky: 0xffeecf, hemiGround: 0x62949c, sunTint: 0xffdca6,
     sun: 0xffec9e, cloud: 0xffffff,
   },
   { // Waffle Desert — toasty waffle-grid dunes, butter-pat sun
     top: [0xe9b463, 0xd89c48], dirt: [0xb5772f, 0xa66a29],
     plat: [0x8a5a2e, 0x7c4f27], hill: 0xd9a45c, hill2: 0xeecb8c,
     sky: 0x8fd4e8, fog: 0xf2debe,
-    skyTop: 0x6fb9df, skyBot: 0xffdba0, hemiGround: 0xbb8340,
+    skyTop: 0x6fb9df, skyBot: 0xffdba0,
+    hemiSky: 0xffe8c0, hemiGround: 0x9a86a0, sunTint: 0xffd494,
     sun: 0xffd27a, cloud: 0xfff3dd,
   },
   { // Snowy Peaks — crisp ice tones
     top: [0xf4f8fc, 0xe6eef7], dirt: [0xb8cee0, 0xaac2d6],
     plat: [0x9fc4e8, 0x92b8dd], hill: 0xcfe0f0, hill2: 0xe8f2fa,
     sky: 0xa8c8e8, fog: 0xdbe9f7,
-    skyTop: 0x7fb2e2, skyBot: 0xe6f2fc, hemiGround: 0xa9c3da,
+    skyTop: 0x7fb2e2, skyBot: 0xe6f2fc,
+    hemiSky: 0xfef0dc, hemiGround: 0x8fabd6, sunTint: 0xffeccc,
     sun: 0xfff6d8, cloud: 0xffffff,
   },
   { // Crystal Caves — cool blue dusk, moon + stars
     top: [0x8578a8, 0x7a6b96], dirt: [0x5e5e6c, 0x54545f],
     plat: [0x9f6fd4, 0x9263c7], hill: 0x453a5e, hill2: 0x584a75,
     sky: 0x241d33, fog: 0x33294a,
-    skyTop: 0x0d0a1a, skyBot: 0x453563, hemiGround: 0x3a3050,
+    skyTop: 0x0d0a1a, skyBot: 0x453563,
+    hemiSky: 0x8c86c8, hemiGround: 0x2e3a66, sunTint: 0xb9c4ff,
     sun: 0xe8ecff, cloud: 0x6a6088, night: true,
   },
   { // Sky Islands — high clear air
     top: [0x9be07a, 0x8ed86e], dirt: [0x9c7748, 0x8f6b3f],
     plat: [0xffd54a, 0xf5c93e], hill: 0x84cd65, hill2: 0xbde8ff,
     sky: 0x6fc3ff, fog: 0xb9e2ff,
-    skyTop: 0x2f8fe6, skyBot: 0xbfe6ff, hemiGround: 0x84cd65,
+    skyTop: 0x2f8fe6, skyBot: 0xbfe6ff,
+    hemiSky: 0xfff0d0, hemiGround: 0x6aa4c8, sunTint: 0xffe2ae,
     sun: 0xfff0a8, cloud: 0xffffff,
   },
 ];
+
+// ACES tone mapping (main.js) mutes saturation, hitting the pale sky/fog
+// tones hardest. Pre-boost every palette color once at load — zero runtime
+// cost — so the voxel world keeps its candy punch through the filmic curve.
+// Light-rig colors (hemiSky/hemiGround/sunTint) were authored post-ACES and
+// stay as written.
+{
+  const c = new THREE.Color();
+  const hsl = {};
+  const shift = (hex, sMul, sAdd, lMul) => {
+    c.setHex(hex).getHSL(hsl);
+    c.setHSL(hsl.h, Math.min(1, hsl.s * sMul + sAdd), hsl.l * lMul);
+    return c.getHex();
+  };
+  // Terrain/props: modest saturation lift.
+  const boost = (hex) => shift(hex, 1.3, 0.04, 0.96);
+  // Sky band + fog sit near white where ACES bleaches hardest: push chroma
+  // harder and pull lightness down so the sky stays blue, not grey.
+  const boostSky = (hex) => shift(hex, 1.45, 0.05, 0.88);
+  for (const p of PALETTES) {
+    for (const k of ['top', 'dirt', 'plat']) p[k] = p[k].map(boost);
+    for (const k of ['hill', 'hill2', 'sun', 'cloud']) p[k] = boost(p[k]);
+    for (const k of ['sky', 'fog', 'skyTop', 'skyBot']) p[k] = boostSky(p[k]);
+  }
+}
 
 export function mulberry32(seed) {
   let a = seed >>> 0;
@@ -393,6 +427,9 @@ export class LevelScene {
     skyCanvas.height = 128;
     this.skyCtx = skyCanvas.getContext('2d');
     this.skyTex = new THREE.CanvasTexture(skyCanvas);
+    // Canvas pixels are sRGB; without this the gradient is read as linear
+    // and the whole sky renders washed-out and pale.
+    this.skyTex.colorSpace = THREE.SRGBColorSpace;
     const dome = new THREE.Mesh(
       new THREE.SphereGeometry(85, 20, 14),
       new THREE.MeshBasicMaterial({
@@ -564,12 +601,19 @@ export class LevelScene {
     this.starField.visible = !!p.night;
     this.sunMat.color.setHex(p.sun);
 
-    // Hemisphere ground bounce follows the terrain palette (set up in
-    // game.js; boss/house scenes may not expose it).
+    // Warm-key/cool-fill rig follows the palette (set up in game.js;
+    // boss/house scenes may not expose it): warm hemisphere sky over a
+    // cooler ground bounce, and a warm (moonlit-blue at night) sun.
     const hemi = this.scene.userData.hemiLight;
     if (hemi) {
+      hemi.color.setHex(p.hemiSky);
       hemi.groundColor.setHex(p.hemiGround);
       hemi.intensity = p.night ? 0.85 : 1.05;
+    }
+    const sun = this.scene.userData.sunLight;
+    if (sun) {
+      sun.color.setHex(p.sunTint);
+      sun.intensity = p.night ? 1.2 : 1.55;
     }
 
     // Parallax silhouette tints: nearer layer darker, farther layers lighter

@@ -56,8 +56,10 @@ export class House {
       45, window.innerWidth / window.innerHeight, 0.1, 200
     );
 
-    const hemi = new THREE.HemisphereLight(0xfff3dd, 0x92a768, 1.05);
-    const sun = new THREE.DirectionalLight(0xffe7bd, 1.35);
+    // Warm key / cool fill: warm sky half, cool blue-grey floor bounce —
+    // the hearth glow below supplies the warmth indoors.
+    const hemi = new THREE.HemisphereLight(0xfff3dd, 0x7e93b0, 1.05);
+    const sun = new THREE.DirectionalLight(0xffdfae, 1.45);
     sun.position.set(8, 14, 10);
     // Warm hearth glow inside the cutaway so the rooms feel cozy
     // (a plain point light — still no shadow maps).

@@ -17,6 +17,10 @@ export function renderLookThumbnails(looks) {
   });
   renderer.setSize(SIZE, SIZE);
   renderer.outputColorSpace = THREE.SRGBColorSpace;
+  // Match the main renderer's tone mapping (main.js) so portraits match
+  // the in-game character colors.
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.15;
 
   const scene = new THREE.Scene();
   scene.add(new THREE.AmbientLight(0xffffff, 0.8));

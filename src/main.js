@@ -52,6 +52,11 @@ const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.outputColorSpace = THREE.SRGBColorSpace;
+// Filmic tone mapping: soft highlight rolloff instead of clipping. Exposure
+// lifted past 1 because ACES darkens mids; fairy.js/thumbs.js mirror these
+// settings so their renderers match the main scene's color response.
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.15;
 container.appendChild(renderer.domElement);
 
 const game = new Game(renderer, {
