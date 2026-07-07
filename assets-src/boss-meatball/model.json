@@ -1,0 +1,55 @@
+{
+  "name": "boss-meatball",
+  "voxelSize": 0.1,
+  "anchor": "bottom-center",
+  "parts": [
+    {
+      "name": "body",
+      "file": "body.vox"
+    },
+    {
+      "name": "armL",
+      "file": "armL.vox",
+      "pivot": [
+        3.5,
+        32,
+        -8
+      ]
+    },
+    {
+      "name": "armR",
+      "file": "armR.vox",
+      "pivot": [
+        36.5,
+        32,
+        -8
+      ]
+    },
+    {
+      "name": "pupilL",
+      "file": "pupilL.vox",
+      "pivot": [
+        16,
+        44,
+        0.5
+      ]
+    },
+    {
+      "name": "pupilR",
+      "file": "pupilR.vox",
+      "pivot": [
+        24,
+        44,
+        0.5
+      ]
+    },
+    {
+      "name": "browL",
+      "file": "browL.vox"
+    },
+    {
+      "name": "browR",
+      "file": "browR.vox"
+    }
+  ]
+}
