@@ -14,6 +14,7 @@ const defaults = () => ({
   coins: 0,
   gems: 0,
   sound: true,
+  music: true,
   mic: true,
   devUnlocked: false,
   // words[word] = { seen, correct, firstTryCorrect, missed }
@@ -381,6 +382,11 @@ export function setCharacterPart(part, idx) {
 
 export function setSound(on) {
   state.sound = on;
+  save();
+}
+
+export function setMusic(on) {
+  state.music = on;
   save();
 }
 
