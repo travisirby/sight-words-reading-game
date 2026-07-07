@@ -396,9 +396,9 @@ export class Overworld {
       if (tier > 0) color.offsetHSL(0, 0, tier * 0.035); // terraces a touch lighter
       // Per-tile jitter breaks up the flat checker without losing the palette.
       color.offsetHSL(
-        (hash2(cx, cz, 1) - 0.5) * 0.02,
+        (hash2(cx, cz, 1) - 0.5) * 0.024,
         (hash2(cx, cz, 2) - 0.5) * 0.1,
-        (hash2(cx, cz, 3) - 0.5) * 0.05
+        (hash2(cx, cz, 3) - 0.5) * 0.09
       );
       this.groundMeta.push({ region, color, cx, cz, tier });
     };
@@ -489,6 +489,18 @@ export class Overworld {
         !this.groundH.has(m.cx + ',' + (m.cz + 1)) ||
         !this.groundH.has(m.cx + ',' + (m.cz - 1));
       if (coast) m.color.lerp(sand, 0.5 + hash2(m.cx, m.cz, 4) * 0.25);
+    }
+
+    // Baked AO from terrace heights: cells hemmed in by taller neighbors
+    // darken at the base of each step, open cells lighten a touch. Runs once
+    // here; applyLockTints() just multiplies the stored colors.
+    for (const m of this.groundMeta) {
+      let higher = 0;
+      for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const t = this.groundH.get((m.cx + dx) + ',' + (m.cz + dz));
+        if (t !== undefined && t > m.tier) higher++;
+      }
+      m.color.multiplyScalar(higher ? Math.max(0.76, 1 - higher * 0.08) : 1.03);
     }
 
     this.groundMesh.count = this.groundMeta.length;
