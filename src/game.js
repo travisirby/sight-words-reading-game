@@ -393,7 +393,7 @@ export class Game {
 
   repeatWord() {
     const w = this.currentWord();
-    if (this.running && w) speak(`Find the word: ${w}`, { rate: 0.85 });
+    if (this.running && w) speak(`Find the word: ${w}`, { rate: 0.85, echoWord: Math.random() < 0.4 });
   }
 
   // Boss battle state for tests / debugging: { hp, phase } or null.
@@ -433,7 +433,7 @@ export class Game {
     const line = this.activeEv.type === 'blocks'
       ? `Bonk the block with the word: ${w}!`
       : `Jump through the door with the word: ${w}!`;
-    speak(line, { rate: 0.9 });
+    speak(line, { rate: 0.9, echoWord: Math.random() < 0.4 });
     this.repeatTimer = REPEAT_AFTER;
     this.autoRepeats = 0;
     // First word event ever: point out the 🔊 repeat button, once the
@@ -492,7 +492,7 @@ export class Game {
       onDone: () => { this.phase = 'flagrun'; },
     });
     if (reviews.length) {
-      speak(`Star time! Jump under the star with the word: ${reviews[0].word}!`, { rate: 0.9 });
+      speak(`Star time! Jump under the star with the word: ${reviews[0].word}!`, { rate: 0.9, echoWord: Math.random() < 0.4 });
       this.repeatTimer = REPEAT_AFTER;
       this.autoRepeats = 0;
     }
