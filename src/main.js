@@ -28,6 +28,7 @@ const LEVEL_COUNTS = WORLDS.map((w) => w.levels.length);
 let current = { world: 0, level: 0, secret: false };
 let selected = null; // node info from the map banner
 let lastRun = null; // { results, coins, gems, stars, keyFound }
+const BONUS_ROUND_ENABLED = false; // read-aloud bonus disabled pending rework
 let bonus = null; // active bonus round state
 let mode = 'map'; // which scene renders: 'map' | 'game' | 'char' | 'house' | 'cutscene'
 // ('char' also backs the title + player-select screens: the spinning kid)
@@ -334,7 +335,7 @@ function onRunComplete(res) {
     }
   }
 
-  if (speech.isAvailable() && store.get().mic && res.results.length) {
+  if (BONUS_ROUND_ENABLED && speech.isAvailable() && store.get().mic && res.results.length) {
     startBonusRound(res);
   } else {
     showSummary();
