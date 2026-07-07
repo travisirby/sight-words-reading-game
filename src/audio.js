@@ -315,6 +315,14 @@ export function sfxStarGrab() {
 
 const CLIP_GAP = 0.12; // pause between concatenated clips, seconds
 
+// The answer word inside a prompt gets star treatment: slower, louder,
+// with a breath around it, and the music fully ducked while it plays
+// (wr-word events, see music.js).
+const WORD_RATE = 0.8;
+const WORD_VOL = 1.6;
+const WORD_GAP = 0.2; // extra pause before/after the word
+const ECHO_GAP = 0.35; // pause before the word is repeated
+
 const clipCache = new Map(); // file -> Promise<AudioBuffer>
 let speakToken = 0; // invalidates in-flight speaks when a new one starts
 let speakSources = []; // currently playing clip sources
@@ -329,14 +337,40 @@ function notifySpeaking(speaking, text = '') {
   } catch (e) { /* ignore */ }
 }
 
+// Tells music.js when the answer word itself is playing, so the music can
+// drop to silence for just that window.
+let wordTimers = [];
+
+function notifyWord(active) {
+  try {
+    window.dispatchEvent(new CustomEvent('wr-word', { detail: { active } }));
+  } catch (e) { /* ignore */ }
+}
+
+function scheduleWordDuck(c, start, wallDur) {
+  const now = c.currentTime;
+  wordTimers.push(
+    setTimeout(() => notifyWord(true), Math.max(0, (start - now - 0.08) * 1000)),
+    setTimeout(() => notifyWord(false), (start - now + wallDur + 0.1) * 1000)
+  );
+}
+
+function clearWordDuck() {
+  for (const t of wordTimers) clearTimeout(t);
+  wordTimers = [];
+  notifyWord(false);
+}
+
 // Resolve text to a clip sequence: an exact phrase, or a known
 // "prefix: word [suffix]" template assembled from segment clips.
-// Returns null when the text has no clips (caller falls back to synthesis).
+// Each entry is { file, word } — word marks the answer-word clip, which
+// gets the emphasis treatment in speak(). Returns null when the text has
+// no clips (caller falls back to synthesis).
 function clipsFor(text) {
   const n = norm(text);
-  if (TTS.phrases[n]) return [TTS.phrases[n]];
+  if (TTS.phrases[n]) return [{ file: TTS.phrases[n], word: false }];
   const ci = n.indexOf(': ');
-  if (ci === -1) return TTS.words[n] ? [TTS.words[n]] : null;
+  if (ci === -1) return TTS.words[n] ? [{ file: TTS.words[n], word: true }] : null;
   const prefix = TTS.phrases[n.slice(0, ci + 1)];
   if (!prefix) return null;
   let rest = n.slice(ci + 2);
@@ -347,7 +381,9 @@ function clipsFor(text) {
   }
   const word = TTS.words[rest.replace(/[.!?]+$/, '').trim()];
   if (!word) return null;
-  return suffix ? [prefix, word, suffix] : [prefix, word];
+  const seq = [{ file: prefix, word: false }, { file: word, word: true }];
+  if (suffix) seq.push({ file: suffix, word: false });
+  return seq;
 }
 
 // edge-tts pads clips with a good half second of silence on each end;
@@ -386,6 +422,7 @@ function stopSpeech() {
     try { s.onended = null; s.stop(); } catch (e) { /* already stopped */ }
   }
   speakSources = [];
+  clearWordDuck();
   if ('speechSynthesis' in window) speechSynthesis.cancel();
   if (pendingFin) pendingFin(); // interrupted speech still reports done
 }
@@ -451,8 +488,10 @@ export function speakLine(category, opts = {}) {
 }
 
 // rate only applies to the speechSynthesis fallback; clips are
-// pre-rendered at a kid-friendly pace.
-export function speak(text, { rate = 1.0, onend = null } = {}) {
+// pre-rendered at a kid-friendly pace. echoWord repeats the answer-word
+// clip once more after a beat ("Find the word: sun... sun") — clip
+// playback only, the synth fallback ignores it.
+export function speak(text, { rate = 1.0, onend = null, echoWord = false } = {}) {
   stopSpeech();
   if (muted) {
     if (onend) setTimeout(onend, 100);
@@ -476,17 +515,36 @@ export function speak(text, { rate = 1.0, onend = null } = {}) {
     return;
   }
   const token = speakToken;
-  Promise.all(clips.map(loadClip)).then(
+  Promise.all(clips.map((cl) => loadClip(cl.file))).then(
     (bufs) => {
       if (token !== speakToken) return; // superseded by a newer speak
       let t = c.currentTime + 0.03;
-      speakSources = bufs.map(({ buf, offset, dur }) => {
-        const src = c.createBufferSource();
-        src.buffer = buf;
-        src.connect(master);
-        src.start(t, offset, dur);
-        t += dur + CLIP_GAP;
-        return src;
+      speakSources = [];
+      bufs.forEach(({ buf, offset, dur }, i) => {
+        const plays = clips[i].word && echoWord ? 2 : 1;
+        for (let p = 0; p < plays; p++) {
+          const src = c.createBufferSource();
+          src.buffer = buf;
+          if (clips[i].word) {
+            // The answer word: slower, louder, a breath around it, and a
+            // wr-word window so the music drops out underneath it.
+            src.playbackRate.value = WORD_RATE;
+            const g = c.createGain();
+            g.gain.value = WORD_VOL;
+            src.connect(g).connect(master);
+            t += p === 0 ? WORD_GAP : ECHO_GAP;
+            const wallDur = dur / WORD_RATE;
+            scheduleWordDuck(c, t, wallDur);
+            src.start(t, offset, dur);
+            t += wallDur + WORD_GAP;
+          } else {
+            src.connect(master);
+            src.start(t, offset, dur);
+            t += dur;
+          }
+          t += CLIP_GAP;
+          speakSources.push(src);
+        }
       });
       speakSources[speakSources.length - 1].onended = fin;
       setTimeout(fin, (t - c.currentTime) * 1000 + 500); // safety net

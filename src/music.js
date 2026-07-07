@@ -154,6 +154,7 @@ const BASE_VOL = 0.6; // music bus level under the 0.5 master
 let bus = null; // music gain node under audio.js's master
 let enabled = true; // the settings "Music" toggle
 let ducked = false; // TTS voice talking
+let wordDucked = false; // TTS saying the answer word: music fully out
 let dimmed = false; // pause screen
 let trackName = null;
 let track = null;
@@ -164,7 +165,7 @@ let timer = null;
 let noiseBuf = null;
 
 function busGainTarget() {
-  if (!enabled) return 0;
+  if (!enabled || wordDucked) return 0;
   return BASE_VOL * (ducked ? 0.22 : 1) * (dimmed ? 0.35 : 1);
 }
 
@@ -172,7 +173,8 @@ function applyBusGain() {
   if (!bus) return;
   const g = audioGraph();
   if (!g) return;
-  bus.gain.setTargetAtTime(busGainTarget(), g.ctx.currentTime, 0.15);
+  // Word ducking snaps fast so silence lands right on the word.
+  bus.gain.setTargetAtTime(busGainTarget(), g.ctx.currentTime, wordDucked ? 0.04 : 0.15);
 }
 
 function ensureBus() {
@@ -363,6 +365,12 @@ export function setDimmed(on) {
 if (typeof window !== 'undefined') {
   window.addEventListener('wr-speech', (e) => {
     ducked = !!(e.detail && e.detail.speaking);
+    if (!ducked) wordDucked = false; // speech over: never stay stuck at zero
+    applyBusGain();
+  });
+  // The answer word itself: music drops to silence for just that window.
+  window.addEventListener('wr-word', (e) => {
+    wordDucked = !!(e.detail && e.detail.active);
     applyBusGain();
   });
 }
