@@ -19,7 +19,7 @@ const cache = new Map(); // url -> Promise<model>
 // geometries are built once per model and reused by every buildVoxMesh call.
 export function loadVoxModel(url) {
   if (!cache.has(url)) {
-    cache.set(url, fetch(url)
+    const p = fetch(url)
       .then((r) => {
         if (!r.ok) throw new Error(`vox model ${url}: HTTP ${r.status}`);
         return r.json();
@@ -31,7 +31,9 @@ export function loadVoxModel(url) {
           tintable: !!p.tintable,
           geometry: buildGeometry(p, data.origin, data.voxelSize),
         })),
-      })));
+      }));
+    p.catch(() => cache.delete(url)); // allow retry after a failed load
+    cache.set(url, p);
   }
   return cache.get(url);
 }

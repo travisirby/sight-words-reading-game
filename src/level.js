@@ -5,7 +5,7 @@
 // layers and a gradient skydome with voxel sun/moon. Forward is +x.
 
 import * as THREE from 'three';
-import { voxelGeo, roundedBox } from './voxelgeo.js';
+import { voxelGeo, chamferVoxelGeo, chamferBox } from './voxelgeo.js';
 
 // skyTop/skyBot drive the gradient skydome; fog doubles as the dome's
 // horizon band so distance melts into the sky. The light rig is a
@@ -57,29 +57,30 @@ export const PALETTES = [
   },
 ];
 
-// ACES tone mapping (main.js) mutes saturation, hitting the pale sky/fog
-// tones hardest. Pre-boost every palette color once at load — zero runtime
-// cost — so the voxel world keeps its candy punch through the filmic curve.
-// Light-rig colors (hemiSky/hemiGround/sunTint) were authored post-ACES and
-// stay as written.
-{
-  const c = new THREE.Color();
-  const hsl = {};
-  const shift = (hex, sMul, sAdd, lMul) => {
-    c.setHex(hex).getHSL(hsl);
-    c.setHSL(hsl.h, Math.min(1, hsl.s * sMul + sAdd), hsl.l * lMul);
-    return c.getHex();
-  };
-  // Terrain/props: modest saturation lift.
-  const boost = (hex) => shift(hex, 1.3, 0.04, 0.96);
-  // Sky band + fog sit near white where ACES bleaches hardest: push chroma
-  // harder and pull lightness down so the sky stays blue, not grey.
-  const boostSky = (hex) => shift(hex, 1.45, 0.05, 0.88);
-  for (const p of PALETTES) {
-    for (const k of ['top', 'dirt', 'plat']) p[k] = p[k].map(boost);
-    for (const k of ['hill', 'hill2', 'sun', 'cloud']) p[k] = boost(p[k]);
-    for (const k of ['sky', 'fog', 'skyTop', 'skyBot']) p[k] = boostSky(p[k]);
-  }
+// ACES tone mapping (rendercfg.js) mutes saturation, hitting the pale
+// sky/fog tones hardest. Pre-boost every palette color once at load — zero
+// runtime cost — so the voxel world keeps its candy punch through the
+// filmic curve. Light-rig colors (hemiSky/hemiGround/sunTint) were authored
+// post-ACES and stay as written. The helpers are exported: any scene that
+// authors raw hex colors outside PALETTES (cutscene backdrops etc.) must
+// run them through the same compensation, or its "same" sky renders greyer
+// than the level's.
+const toneColor = new THREE.Color();
+const toneHSL = {};
+const toneShift = (hex, sMul, sAdd, lMul) => {
+  toneColor.setHex(hex).getHSL(toneHSL);
+  toneColor.setHSL(toneHSL.h, Math.min(1, toneHSL.s * sMul + sAdd), toneHSL.l * lMul);
+  return toneColor.getHex();
+};
+// Terrain/props: modest saturation lift.
+export const toneBoost = (hex) => toneShift(hex, 1.3, 0.04, 0.96);
+// Sky band + fog sit near white where ACES bleaches hardest: push chroma
+// harder and pull lightness down so the sky stays blue, not grey.
+export const toneBoostSky = (hex) => toneShift(hex, 1.45, 0.05, 0.88);
+for (const p of PALETTES) {
+  for (const k of ['top', 'dirt', 'plat']) p[k] = p[k].map(toneBoost);
+  for (const k of ['hill', 'hill2', 'sun', 'cloud']) p[k] = toneBoost(p[k]);
+  for (const k of ['sky', 'fog', 'skyTop', 'skyBot']) p[k] = toneBoostSky(p[k]);
 }
 
 export function mulberry32(seed) {
@@ -319,7 +320,7 @@ export const PROPS = [
       put(x, y + 2.8, -3.5, 1.9, 1.0, 1.9, 0x8a4b2d, 0, j); // meatball pile
       put(x + 0.6, y + 3.4, -3.2, 1.0, 0.8, 1.0, 0x93532f, 0, j + 0.03);
       put(x - 0.55, y + 3.5, -3.7, 1.1, 0.9, 1.1, 0x7f4327, 0, j);
-      put(x, y + 4.0, -3.5, 0.9, 0.5, 0.9, 0xd2422a, 0, j); // marinara splat
+      put(x, y + 4.0, -3.5, 0.9, 0.5, 0.9, 0xd2422a, 0, j, 0, false); // marinara splat — floating decor, keep out of the AO grid
       put(x + 0.2, y + 4.3, -3.4, 0.3, 0.15, 0.3, 0xfff2cc); // parmesan fleck
     } else if (kind < 0.75) { // giant rigatoni standing on end
       put(x, y + 1.1, -3.5, 1.2, 2.2, 1.2, 0xf0c060, 0, j);
@@ -383,13 +384,13 @@ export class LevelScene {
     this.scene = scene;
     this.data = null;
 
-    this.blocks = new THREE.InstancedMesh(boxGeo, new THREE.MeshLambertMaterial(), MAX_BLOCKS);
+    this.blocks = new THREE.InstancedMesh(chamferVoxelGeo, new THREE.MeshLambertMaterial(), MAX_BLOCKS);
     this.blocks.frustumCulled = false;
     this.blocks.count = 0;
     scene.add(this.blocks);
 
     this.coinMesh = new THREE.InstancedMesh(
-      roundedBox(0.55, 0.55, 0.12, 0.04),
+      chamferBox(0.55, 0.55, 0.12, 0.04),
       new THREE.MeshLambertMaterial({ color: 0xffd54a, emissive: 0x664d00 }),
       MAX_COINS
     );
@@ -470,7 +471,7 @@ export class LevelScene {
     this.sky.add(this.moonGroup);
 
     this.starField = new THREE.InstancedMesh(
-      boxGeo, new THREE.MeshBasicMaterial({ color: 0xdfe8ff, fog: false }), 48
+      chamferVoxelGeo, new THREE.MeshBasicMaterial({ color: 0xdfe8ff, fog: false }), 48
     );
     this.starField.frustumCulled = false;
     {
@@ -495,7 +496,7 @@ export class LevelScene {
     this.parallax = [];
     const mkLayer = (z, factor, seed, baseH, ridgeTrees) => {
       const mat = new THREE.MeshLambertMaterial();
-      const mesh = new THREE.InstancedMesh(boxGeo, mat, 120);
+      const mesh = new THREE.InstancedMesh(chamferVoxelGeo, mat, 120);
       mesh.frustumCulled = false;
       const rand = mulberry32(seed);
       const dummy = new THREE.Object3D();
@@ -640,7 +641,7 @@ export class LevelScene {
     const occ = new Set();
     const okey = (x, y, z) => x + ',' + y + ',' + z;
     const aoBlocks = [];
-    const put = (x, y, z, sx, sy, sz, color, emissive = 0, jitter = 0, hue = 0) => {
+    const put = (x, y, z, sx, sy, sz, color, emissive = 0, jitter = 0, hue = 0, ao) => {
       if (n >= MAX_BLOCKS) return;
       this.dummy.position.set(x, y, z);
       this.dummy.scale.set(sx, sy, sz);
@@ -653,9 +654,13 @@ export class LevelScene {
       this.blocks.setColorAt(n, this.color);
       // Only grid-aligned, roughly 1x1 footprint voxels participate in AO;
       // hills (huge slabs) and small decor sprinkles are excluded by size,
-      // parallax-depth scenery by z.
-      if (sx >= 0.9 && sx <= 1.1 && sz >= 0.9 && sz <= 1.1 && sy >= 0.4 &&
-          z > -6 && z < 2) {
+      // parallax-depth scenery by z. The trailing `ao` arg overrides the
+      // heuristic either way, for props it misjudges (floating decor that
+      // happens to be near-unit-sized must not shade the terrain grid).
+      if (ao === undefined
+        ? (sx >= 0.9 && sx <= 1.1 && sz >= 0.9 && sz <= 1.1 && sy >= 0.4 &&
+           z > -6 && z < 2)
+        : ao) {
         const cx = Math.round(x);
         const cy = Math.floor(y);
         const cz = Math.round(z);

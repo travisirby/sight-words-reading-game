@@ -7,6 +7,7 @@
 
 import * as THREE from 'three';
 import { voxelGeo } from './voxelgeo.js';
+import { configureRenderer } from './rendercfg.js';
 
 // Perch per screen, in % of the viewport. 'game' is the during-run perch
 // (under the 🔊 repeat button, since she's the one saying the words).
@@ -204,10 +205,7 @@ export function mount() {
   const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.setSize(96, 96);
-  renderer.outputColorSpace = THREE.SRGBColorSpace;
-  // Match the main renderer's tone mapping (main.js) so she isn't off-color.
-  renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.15;
+  configureRenderer(renderer); // match the main scene's color response
   el.querySelector('.fairy-bob').prepend(renderer.domElement);
 
   const scene = new THREE.Scene();
