@@ -13,11 +13,11 @@ import * as ui from './ui.js';
 import * as store from './store.js';
 import * as speech from './speech.js';
 import {
-  unlockAudio, setMuted, speak, sfxCorrect, sfxCoin, sfxGem,
+  unlockAudio, setMuted, speak, speakLine, sfxCorrect, sfxCoin, sfxGem,
   sfxLevelStart, sfxPause, sfxResume, audioGraph,
 } from './audio.js';
 import * as music from './music.js';
-import { WORLDS, shuffle, PRAISE } from './words.js';
+import { WORLDS, shuffle } from './words.js';
 
 // Testing cheats via URL: ?unlock opens every level/castle/secret,
 // ?reset wipes the save first (combine as ?reset&unlock).
@@ -82,8 +82,7 @@ const map = new Overworld(renderer, {
     else map.walkTo(map.tokenNav); // select the node under the token
   },
   onHouseTapped: () => {
-    speak('My house!', { rate: 1.0 });
-    showHouse('map');
+    showHouse('map'); // showHouse speaks the welcome-home line
   },
   onEditTapped: () => {
     speak('Make your character!', { rate: 1.0 });
@@ -266,6 +265,7 @@ function showHouse(from) {
   house.enter();
   ui.showHUD(false);
   ui.showHouse();
+  speakLine('home');
 }
 
 function leaveHouse() {
@@ -285,9 +285,8 @@ function buyItem(item) {
     return;
   }
   if (!store.buyHouseItem(item.id, item.cost, item.currency)) {
-    const need = item.currency === 'gems' ? 'gems — try the bonus round' : 'coins';
     ui.houseToast('🪙 Keep playing!');
-    speak(`You need more ${need}! Play levels to earn more.`, { rate: 1.0 });
+    speakLine(item.currency === 'gems' ? 'needGems' : 'needCoins');
     return;
   }
   house.refresh();
@@ -295,7 +294,7 @@ function buyItem(item) {
   sfxCorrect();
   ui.refreshShop();
   ui.houseToast(`${item.emoji} ${item.name}!`);
-  speak(`You got the ${item.name}! ${PRAISE[(Math.random() * PRAISE.length) | 0]}`, { rate: 1.0 });
+  speak(`You got the ${item.name}!`, { rate: 1.0, onend: () => speakLine('purchase') });
 }
 
 function startLevel(worldIdx, levelIdx, secret = false) {
@@ -348,7 +347,10 @@ function onRunComplete(res) {
     const firstTime = store.getStars(current.world, current.level) === 0;
     store.setStars(current.world, current.level, stars);
     store.completeLevel(current.world, current.level, LEVEL_COUNTS);
-    if (current.boss) store.beatBoss(current.world);
+    if (current.boss) {
+      lastRun.firstBossWin = !store.isBossBeaten(current.world);
+      store.beatBoss(current.world);
+    }
 
     // Queue map payoff animations for when we return.
     if (firstTime) {
@@ -403,6 +405,17 @@ function showSummary() {
     gems: lastRun.gems,
     hasNext: !!next && store.isLevelUnlocked(next.world, next.level),
   });
+  // One delayed milestone line over the summary: a first castle win means a
+  // new world just unlocked; otherwise celebrate a perfect 3-star run. The
+  // delay lets the in-game flag/crown line finish (speak() cuts earlier
+  // speech); the token check skips it if another run started meanwhile.
+  const token = lastRun;
+  const line = lastRun.firstBossWin ? 'worldUnlock' : lastRun.stars === 3 ? 'threeStars' : null;
+  if (line) {
+    setTimeout(() => {
+      if (lastRun === token && mode === 'game') speakLine(line);
+    }, lastRun.firstBossWin ? 6000 : 2600);
+  }
 }
 
 function backToMap() {
@@ -423,7 +436,7 @@ function startBonusRound(res) {
     };
     music.play(null); // quiet for the mic round
     ui.showScreen('bonus');
-    speak('Bonus round! Read the word out loud. Hold the microphone and say it!', { rate: 1.0 });
+    speakLine('bonus');
     showBonusWord();
   } catch (e) {
     endBonusRound();
@@ -475,7 +488,7 @@ function bonusMicDown() {
         store.addGems(5);
         sfxGem();
         ui.setBonusFeedback('⭐ +5 💎');
-        speak(PRAISE[(Math.random() * PRAISE.length) | 0], { rate: 1.0 });
+        speakLine('correct');
         advanceBonus();
       }
     },

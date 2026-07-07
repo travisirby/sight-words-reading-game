@@ -11,7 +11,7 @@ import { makeKidMesh } from './player.js';
 import { makeKeyMesh } from './game.js';
 import { BOSSES } from './boss.js';
 import { Effects } from './effects.js';
-import { sfxPlink, sfxBoing, speak } from './audio.js';
+import { sfxPlink, sfxBoing, speakLine } from './audio.js';
 import { WORLDS } from './words.js';
 import * as store from './store.js';
 
@@ -1429,7 +1429,7 @@ export class Overworld {
           this.effects.sparkle(new THREE.Vector3(
             r.view.group.position.x, 1.5, r.view.group.position.z
           ));
-          speak('A secret path appeared!', { rate: 1.0 });
+          speakLine('secretPath');
         }
       }
       if (r.nodeT > 1.3) {

@@ -7,6 +7,7 @@
 
 import TTS from './tts-manifest.js';
 import AUDIO from './audio-manifest.js';
+import { LINES } from './lines.js';
 
 let ctx = null;
 let master = null;
@@ -424,6 +425,29 @@ function pickVoice() {
 if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
   pickVoice();
   speechSynthesis.addEventListener('voiceschanged', pickVoice); // iOS loads late
+}
+
+// ---- narrator variety ----
+
+const lastLine = new Map(); // category -> line spoken last time
+
+// Speak a random line from the given bank, never repeating the category's
+// previous pick back to back. Returns the chosen line.
+export function speakVariant(category, lines, opts = {}) {
+  let pool = lines;
+  if (pool.length > 1) {
+    const last = lastLine.get(category);
+    if (last) pool = pool.filter((l) => l !== last);
+  }
+  const line = pool[(Math.random() * pool.length) | 0];
+  lastLine.set(category, line);
+  speak(line, opts);
+  return line;
+}
+
+// Same, for the named banks in lines.js.
+export function speakLine(category, opts = {}) {
+  return speakVariant(category, LINES[category], opts);
 }
 
 // rate only applies to the speechSynthesis fallback; clips are
