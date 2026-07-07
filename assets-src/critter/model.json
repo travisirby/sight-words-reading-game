@@ -1,0 +1,16 @@
+{
+  "name": "critter",
+  "voxelSize": 0.05,
+  "anchor": "bottom-center",
+  "parts": [
+    {
+      "name": "body",
+      "file": "body.vox",
+      "tintable": true
+    },
+    {
+      "name": "trim",
+      "file": "trim.vox"
+    }
+  ]
+}
