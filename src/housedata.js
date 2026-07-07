@@ -33,8 +33,8 @@ export const HOUSE_ITEMS = [
   // ---- boss prizes (never purchasable) ----
   // earned: worldIdx — dropped by that world's castle boss during the trophy
   // ceremony (main.js awards it via store.grantHouseItem). No cost/currency.
-  { id: 'golemstatue', name: 'Grass Golem Statue', emoji: '🗿', earned: 0 },
-  { id: 'serpentstatue', name: 'Sand Serpent Statue', emoji: '🐍', earned: 1 },
+  { id: 'golemstatue', name: 'Meatball Monster Statue', emoji: '🍝', earned: 0 },
+  { id: 'serpentstatue', name: 'Syrup Serpent Statue', emoji: '🧇', earned: 1 },
   { id: 'yetisnowman', name: 'Yeti Snowman', emoji: '⛄', earned: 2 },
   { id: 'crystallamp', name: 'Crystal Lamp', emoji: '💎', earned: 3 },
   { id: 'dragonkite', name: 'Dragon Kite', emoji: '🪁', earned: 4 },

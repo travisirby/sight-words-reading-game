@@ -586,33 +586,36 @@ export class House {
   // ---------- boss-prize builders ----------
 
   makeGolemStatue() {
-    // Mini Grass Golem on a stone pedestal, mossy and proud.
+    // Mini Meatball Monster on a stone pedestal, extra saucy.
     const g = new THREE.Group();
     g.add(box(lambert(0x9c9c8a), 0, 0.15, 0, 1.1, 0.3, 1.1)); // pedestal
-    const moss = lambert(0x4cb545);
-    g.add(box(moss, 0, 0.75, 0, 0.7, 0.9, 0.5)); // body
-    g.add(box(moss, 0, 1.45, 0, 0.5, 0.45, 0.45)); // head
+    const meat = lambert(0x8a4b2d);
+    g.add(box(meat, 0, 0.75, 0, 0.7, 0.9, 0.5)); // body
+    g.add(box(lambert(0xc0392b), 0, 1.16, 0, 0.76, 0.14, 0.56)); // sauce drizzle
+    g.add(box(lambert(0x9c5a36), 0, 1.45, 0, 0.5, 0.45, 0.45)); // head
     const dark = lambert(0x222222);
     g.add(box(dark, -0.12, 1.5, 0.21, 0.09, 0.09, 0.06)); // eyes
     g.add(box(dark, 0.12, 1.5, 0.21, 0.09, 0.09, 0.06));
-    g.add(box(moss, -0.5, 0.85, 0, 0.22, 0.6, 0.22)); // arms
-    g.add(box(moss, 0.5, 0.85, 0, 0.22, 0.6, 0.22));
-    g.add(box(lambert(0x69d06a), 0, 1.78, 0, 0.1, 0.24, 0.1)); // sprout
-    g.add(box(lambert(0x8fe08f), 0, 1.94, 0, 0.3, 0.1, 0.12));
+    g.add(box(meat, -0.5, 0.85, 0, 0.22, 0.6, 0.22)); // arms
+    g.add(box(meat, 0.5, 0.85, 0, 0.22, 0.6, 0.22));
+    g.add(box(lambert(0xf5deb3), 0.08, 1.76, 0, 0.18, 0.16, 0.18)); // spaghetti tuft
+    g.add(box(lambert(0xf5deb3), -0.1, 1.82, 0.06, 0.24, 0.1, 0.14));
+    g.add(box(lambert(0xe74c3c), 0.14, 1.88, 0.08, 0.1, 0.1, 0.1)); // cherry tomato
     g.rotation.y = 0.6; // faces the camera-ish
     return g;
   }
 
   makeSerpentStatue() {
-    // Sandstone serpent rearing out of a sand mound in an S-curve.
+    // Syrup serpent rearing out of a waffle mound in an S-curve.
     const g = new THREE.Group();
-    const sand = lambert(0xdfb45e);
-    g.add(box(lambert(0xe8ca86), 0, 0.12, 0, 1.6, 0.24, 1.3)); // sand mound
-    g.add(box(sand, -0.35, 0.35, 0, 0.7, 0.35, 0.4)); // tail coil
-    g.add(box(sand, 0.15, 0.55, 0, 0.5, 0.4, 0.4));
-    g.add(box(sand, 0.35, 1.0, 0, 0.4, 0.7, 0.38)); // rising body
-    const head = box(sand, 0.35, 1.55, 0.05, 0.55, 0.4, 0.44);
+    const syrup = lambert(0x8a4a1a);
+    g.add(box(lambert(0xc98a3b), 0, 0.12, 0, 1.6, 0.24, 1.3)); // waffle mound
+    g.add(box(syrup, -0.35, 0.35, 0, 0.7, 0.35, 0.4)); // tail coil
+    g.add(box(syrup, 0.15, 0.55, 0, 0.5, 0.4, 0.4));
+    g.add(box(syrup, 0.35, 1.0, 0, 0.4, 0.7, 0.38)); // rising body
+    const head = box(syrup, 0.35, 1.55, 0.05, 0.55, 0.4, 0.44);
     g.add(head);
+    g.add(box(lambert(0xffe082), 0.35, 1.81, 0.05, 0.24, 0.12, 0.24)); // butter pat
     const dark = lambert(0x222222);
     g.add(box(dark, 0.22, 1.62, 0.28, 0.08, 0.08, 0.05)); // eyes
     g.add(box(dark, 0.48, 1.62, 0.28, 0.08, 0.08, 0.05));
