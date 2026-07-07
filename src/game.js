@@ -16,6 +16,7 @@ import {
 import {
   WORLDS, DOLCH, PRAISE, PRAISE_FIRST_TRY, getLevelWords, getSecretWords,
   getBossWords, buildRunQueue, pickDistractors, shuffle,
+  getNextTierWords, getRunTierList, buildDistractorPool,
 } from './words.js';
 import * as store from './store.js';
 
@@ -182,14 +183,19 @@ export class Game {
     this.levelIdx = levelIdx;
     this.secret = secret;
     this.isBoss = boss;
-    this.tierList = DOLCH[WORLDS[worldIdx].tier];
     this.levelWords = boss
       ? getBossWords(worldIdx, store.wordStats)
       : secret
         ? getSecretWords(worldIdx, store.wordStats)
         : getLevelWords(worldIdx, levelIdx);
 
-    this.queue = buildRunQueue(this.levelWords, store.wordStats);
+    // Regular levels promote mastered words' slots to next-tier material;
+    // boss/secret runs are already curated review, so no promotion there.
+    this.queue = buildRunQueue(this.levelWords, store.wordStats, {
+      promotionPool: boss || secret ? null : getNextTierWords(worldIdx),
+    });
+    this.tierList = getRunTierList(worldIdx, this.queue);
+    this.distractorPool = buildDistractorPool(this.levelWords, this.queue);
     this.results = []; // { word, firstTry }
     this.praiseIdx = 0;
     this.runCoins = 0;
@@ -406,7 +412,7 @@ export class Game {
   spawnEvent() {
     const def = this.events[this.eventIdx];
     const word = this.queue[this.eventIdx];
-    const distractors = pickDistractors(word, this.levelWords, this.tierList);
+    const distractors = pickDistractors(word, this.distractorPool, this.tierList);
     const opts = { ...def, word, distractors };
     this.activeEv = def.type === 'blocks'
       ? new BlocksEvent(this.scene, this.level, opts)
@@ -464,7 +470,7 @@ export class Game {
     }
     const reviews = words.map((w) => ({
       word: w,
-      distractor: pickDistractors(w, this.levelWords, this.tierList)[0] || '...',
+      distractor: pickDistractors(w, this.distractorPool, this.tierList)[0] || '...',
     }));
     this.phase = 'stars';
     this.stars = new StarsEvent(this.scene, this.level, {

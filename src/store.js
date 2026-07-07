@@ -5,6 +5,8 @@
 // frontier gains a virtual boss slot: u.level === levelCount means
 // "castle playable".
 
+import { isMasteredStats } from './words.js';
+
 const KEY_BASE = 'wordRunner.v3';
 const OLD_KEYS = ['wordRunner.v2', 'wordRunner.v1'];
 const PROFILES_KEY = 'wordRunner.profiles.v1';
@@ -230,8 +232,7 @@ export function recordWordMiss(word) {
 }
 
 export function isMastered(word) {
-  const s = wordStats(word);
-  return !!s && s.firstTryCorrect >= 3;
+  return isMasteredStats(wordStats(word));
 }
 
 export function addCoins(n) {
