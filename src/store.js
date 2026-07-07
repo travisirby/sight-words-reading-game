@@ -5,6 +5,8 @@
 // frontier gains a virtual boss slot: u.level === levelCount means
 // "castle playable".
 
+import { isMasteredStats } from './words.js';
+
 const KEY_BASE = 'wordRunner.v3';
 const OLD_KEYS = ['wordRunner.v2', 'wordRunner.v1'];
 const PROFILES_KEY = 'wordRunner.profiles.v1';
@@ -14,6 +16,7 @@ const defaults = () => ({
   coins: 0,
   gems: 0,
   sound: true,
+  music: true,
   mic: true,
   devUnlocked: false,
   // words[word] = { seen, correct, firstTryCorrect, missed }
@@ -38,6 +41,12 @@ const defaults = () => ({
   house: { owned: {}, unseen: {}, seenCoins: 0, seenGems: 0 },
   // one-time 🔊 repeat-button tutorial shown at the first word event
   seenRepeatTip: false,
+  // lifetime totals for the finale stats screen. playSeconds counts only
+  // active in-run time (main.js flushes it); wordsRead / coinsEarned are
+  // running counters (per-word stats track accuracy, not lifetime volume).
+  stats: { playSeconds: 0, wordsRead: 0, coinsEarned: 0 },
+  // true once the final boss fell and the finale played (reward granted)
+  gameCompleted: false,
 });
 
 let state = defaults();
@@ -219,6 +228,7 @@ export function recordWordResult(word, firstTry) {
   s.correct++;
   if (firstTry) s.firstTryCorrect++;
   else s.missed++;
+  ensureStats().wordsRead++;
   save();
 }
 
@@ -232,12 +242,12 @@ export function recordWordMiss(word) {
 }
 
 export function isMastered(word) {
-  const s = wordStats(word);
-  return !!s && s.firstTryCorrect >= 3;
+  return isMasteredStats(wordStats(word));
 }
 
 export function addCoins(n) {
   state.coins = Math.max(0, state.coins + n);
+  if (n > 0) ensureStats().coinsEarned += n; // lifetime total survives spending
   save();
   return state.coins;
 }
@@ -246,6 +256,68 @@ export function addGems(n) {
   state.gems = Math.max(0, state.gems + n);
   save();
   return state.gems;
+}
+
+// ---------- lifetime stats (finale screen) ----------
+
+// Saves from before the stats field (or partial shapes) heal here.
+function ensureStats() {
+  state.stats = { ...defaults().stats, ...(state.stats || {}) };
+  return state.stats;
+}
+
+// Accumulated by main.js while a run is live; flushed every few seconds.
+export function addPlaySeconds(sec) {
+  ensureStats().playSeconds += sec;
+  save();
+}
+
+// Everything the completion stats screen shows, in one snapshot.
+// wordsRead/coinsEarned fall back to derived/current values so saves that
+// predate the counters still show their real progress.
+export function totals() {
+  const stats = ensureStats();
+  let starSum = 0;
+  let levelsCompleted = 0;
+  for (const v of Object.values(state.stars)) {
+    if (v > 0) levelsCompleted++;
+    starSum += v;
+  }
+  let secretsFound = 0;
+  for (const v of Object.values(state.secretStars)) {
+    if (v > 0) {
+      secretsFound++;
+      starSum += v;
+    }
+  }
+  let correct = 0;
+  let firstTry = 0;
+  let seen = 0;
+  for (const w of Object.values(state.words)) {
+    correct += w.correct;
+    firstTry += w.firstTryCorrect;
+    seen += w.seen;
+  }
+  return {
+    levelsCompleted,
+    totalStars: starSum,
+    secretsFound,
+    wordsRead: Math.max(stats.wordsRead, correct),
+    accuracy: seen ? Math.round((firstTry / seen) * 100) : 100,
+    coinsEarned: Math.max(stats.coinsEarned, state.coins),
+    playSeconds: stats.playSeconds,
+  };
+}
+
+// ---------- game completion ----------
+
+export function isGameCompleted() {
+  return !!state.gameCompleted;
+}
+
+export function markGameCompleted() {
+  state.gameCompleted = true;
+  save();
 }
 
 export function getStars(worldIdx, levelIdx) {
@@ -316,16 +388,16 @@ export function buyHouseItem(id, cost, currency) {
   return true;
 }
 
-export function houseItemCount() {
-  return state.house ? Object.keys(state.house.owned || {}).length : 0;
-}
-
-// Grant an item without payment (boss-dropped decorations).
-export function awardHouseItem(id) {
+// Own an item without paying — completion rewards (the hero trophy and the
+// boss-dropped decorations). Idempotent.
+export function grantHouseItem(id) {
   if (!state.house) state.house = { owned: {} };
-  if (!state.house.owned) state.house.owned = {};
   state.house.owned[id] = true;
   save();
+}
+
+export function houseItemCount() {
+  return state.house ? Object.keys(state.house.owned || {}).length : 0;
 }
 
 // ---------- house ❗ nudge ----------
@@ -432,6 +504,11 @@ export function markRepeatTipSeen() {
 
 export function setSound(on) {
   state.sound = on;
+  save();
+}
+
+export function setMusic(on) {
+  state.music = on;
   save();
 }
 

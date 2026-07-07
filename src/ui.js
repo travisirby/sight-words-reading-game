@@ -2,7 +2,7 @@
 // The level map itself is 3D (overworld.js) — here we only manage the
 // transparent map screen chrome + the slide-up level banner.
 
-import { speak } from './audio.js';
+import { speak, sfxClick, sfxStar } from './audio.js';
 import * as fairy from './fairy.js';
 import * as store from './store.js';
 import { PALETTES, STYLES, OUTFITS, lookFrom } from './character.js';
@@ -11,7 +11,7 @@ import { renderLookThumbnails } from './thumbs.js';
 
 const $ = (id) => document.getElementById(id);
 
-const SCREENS = ['title', 'players', 'map', 'pause', 'complete', 'bonus', 'char', 'house', 'cutscene'];
+const SCREENS = ['title', 'players', 'map', 'pause', 'complete', 'gamecomplete', 'bonus', 'char', 'house', 'cutscene'];
 
 export function init(h) {
   fairy.mount();
@@ -22,6 +22,7 @@ export function init(h) {
   bindSpeak($('btn-settings'), 'Settings', () => $('settings-panel').classList.toggle('hidden'));
   bindSpeak($('btn-settings-close'), 'Close', () => $('settings-panel').classList.add('hidden'));
   bindSpeak($('btn-toggle-sound'), 'Sound', () => h.onToggleSound());
+  bindSpeak($('btn-toggle-music'), 'Music', () => h.onToggleMusic());
   bindSpeak($('btn-toggle-mic'), 'Mic round', () => h.onToggleMic());
 
   bindSpeak($('btn-switch-player'), 'Switch player!', () => h.onSwitchPlayer());
@@ -48,6 +49,9 @@ export function init(h) {
   bindSpeak($('btn-play-again'), 'Play again!', () => h.onPlayAgain());
   bindSpeak($('btn-next-level'), 'Next level!', () => h.onNextLevel());
   bindSpeak($('btn-complete-map'), 'Map', () => h.onCompleteMap());
+
+  bindSpeak($('btn-final-map'), 'Map', () => h.onCompleteMap());
+  bindSpeak($('btn-final-house'), 'My house!', () => h.onHouse('complete'));
 
   bindSpeak($('btn-bonus-skip'), 'Skip', () => h.onBonusSkip());
 
@@ -80,9 +84,10 @@ export function init(h) {
   });
 }
 
-// Speak the label, then run the action.
+// Tap sound + speak the label, then run the action.
 function bindSpeak(el, label, fn) {
   el.addEventListener('click', () => {
+    sfxClick();
     speak(label, { rate: 1.0 });
     fn();
   });
@@ -116,6 +121,7 @@ export function showHUD(on) {
 export function updateSettingsLabels() {
   const s = store.get();
   $('btn-toggle-sound').textContent = s.sound ? '🔊 Sound: ON' : '🔇 Sound: OFF';
+  $('btn-toggle-music').textContent = s.music ? '🎵 Music: ON' : '🎵 Music: OFF';
   $('btn-toggle-mic').textContent = s.mic ? '🎤 Mic Round: ON' : '🎤 Mic Round: OFF';
 }
 
@@ -357,8 +363,39 @@ export function showComplete({ stars, coins, gems, hasNext }) {
   const starEls = $('star-row').querySelectorAll('.star');
   starEls.forEach((s) => s.classList.remove('earned'));
   for (let i = 0; i < stars; i++) {
-    setTimeout(() => starEls[i].classList.add('earned'), 500 + i * 450);
+    setTimeout(() => {
+      starEls[i].classList.add('earned');
+      sfxStar(i);
+    }, 500 + i * 450);
   }
+}
+
+// ---------- game complete (finale stats) ----------
+
+function formatPlayTime(seconds) {
+  const m = Math.round(seconds / 60);
+  if (m < 1) return 'Just started!';
+  if (m < 60) return `${m}m`;
+  return `${Math.floor(m / 60)}h ${m % 60}m`;
+}
+
+// Fill and show the finale stats screen; rows cascade in one by one.
+export function showGameComplete(t, { firstTime = true } = {}) {
+  showScreen('gamecomplete');
+  $('gc-levels').textContent = t.levelsCompleted;
+  $('gc-stars').textContent = t.totalStars;
+  $('gc-words').textContent = t.wordsRead;
+  $('gc-accuracy').textContent = `${t.accuracy}%`;
+  $('gc-secrets').textContent = t.secretsFound;
+  $('gc-coins').textContent = t.coinsEarned;
+  $('gc-time').textContent = formatPlayTime(t.playSeconds);
+  // On replays the trophy is old news — skip the "new reward" banner.
+  $('gc-reward').classList.toggle('hidden', !firstTime);
+  const rows = $('gc-stats').querySelectorAll('.gc-row');
+  rows.forEach((r, i) => {
+    r.classList.remove('gc-in');
+    setTimeout(() => r.classList.add('gc-in'), 400 + i * 350);
+  });
 }
 
 // ---------- bonus round ----------

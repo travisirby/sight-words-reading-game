@@ -12,7 +12,11 @@ import { CUTSCENES } from './cutscenes.js';
 import * as ui from './ui.js';
 import * as store from './store.js';
 import * as speech from './speech.js';
-import { unlockAudio, setMuted, speak, sfxCorrect, sfxCoin } from './audio.js';
+import {
+  unlockAudio, setMuted, speak, sfxCorrect, sfxCoin, sfxGem,
+  sfxLevelStart, sfxPause, sfxResume, audioGraph,
+} from './audio.js';
+import * as music from './music.js';
 import { WORLDS, shuffle, PRAISE } from './words.js';
 import { HOUSE_ITEMS, decorForWorld } from './housedata.js';
 
@@ -23,6 +27,7 @@ if (cheats.has('reset')) store.reset();
 store.load();
 if (cheats.has('unlock')) store.devUnlockAll(WORLDS.length);
 setMuted(!store.get().sound);
+music.setMusicEnabled(store.get().music);
 
 const LEVEL_COUNTS = WORLDS.map((w) => w.levels.length);
 
@@ -93,12 +98,25 @@ const cutscene = new CutsceneScene();
 
 // Debug handle for automated testing (headless tabs freeze rAF, so tests
 // step the sim manually via game.updateRun(dt) and game.debugResolve()).
-window.__wr = { game, store, map, charScene, house, cutscene };
+window.__wr = { game, store, map, charScene, house, cutscene, music, audio: { audioGraph, unlockAudio } };
+
+// Lifetime play-time: count only live run time (not menus/map), flushed to
+// the store in coarse chunks so we're not writing localStorage every frame.
+let playTimeAcc = 0;
+function flushPlayTime() {
+  if (playTimeAcc < 1) return;
+  store.addPlaySeconds(Math.round(playTimeAcc));
+  playTimeAcc = 0;
+}
 
 const clock = new THREE.Clock();
 renderer.setAnimationLoop(() => {
   const dt = Math.min(clock.getDelta(), 0.05);
   if (mode === 'game') {
+    if (game.running && !game.paused) {
+      playTimeAcc += dt;
+      if (playTimeAcc >= 15) flushPlayTime();
+    }
     game.tick(dt);
     renderer.render(game.scene, game.camera);
   } else if (mode === 'char') {
@@ -130,6 +148,8 @@ window.addEventListener('orientationchange', onResize);
 
 function showMap() {
   mode = 'map';
+  music.play('map');
+  music.setDimmed(false);
   map.enter();
   ui.showHUD(false);
   ui.showScreen('map');
@@ -142,6 +162,7 @@ function showMap() {
 function playCutscene(script, onDone) {
   if (mode === 'map') map.exit();
   mode = 'cutscene';
+  music.play(null); // cutscenes carry their own speech + sfx
   ui.showHUD(false);
   ui.showScreen('cutscene');
   cutscene.play(script, onDone);
@@ -154,6 +175,7 @@ function playCutscene(script, onDone) {
 function showTitle() {
   if (mode === 'map') map.exit();
   mode = 'char';
+  music.play('title');
   charScene.setLook(currentLook());
   ui.setPlayerName(store.activeProfileName());
   ui.showScreen('title');
@@ -164,6 +186,7 @@ function showTitle() {
 function onProfileSwitched() {
   const s = store.get();
   setMuted(!s.sound);
+  music.setMusicEnabled(s.music);
   const look = currentLook();
   applyLook(game.player.group, look);
   applyLook(map.token, look);
@@ -240,6 +263,7 @@ function showHouse(from) {
   houseReturn = from;
   if (mode === 'map') map.exit();
   mode = 'house';
+  music.play('house');
   house.enter();
   store.clearHouseNews(); // he's here — retire the ❗ on the map house
   spokeHouseNudge = false; // ...and re-arm the voice nudge for future news
@@ -253,8 +277,9 @@ function showHouse(from) {
 function showTrophyCeremony(world) {
   houseReturn = 'complete'; // leaving lands on the map at the castle
   mode = 'house';
+  music.play('victory');
   const decor = decorForWorld(world);
-  if (decor) store.awardHouseItem(decor.id);
+  if (decor) store.grantHouseItem(decor.id);
   house.beginCeremony(world, decor && decor.id);
   ui.showHUD(false);
   ui.showCeremony();
@@ -300,6 +325,9 @@ function startLevel(worldIdx, levelIdx, secret = false) {
   current = { world: worldIdx, level: levelIdx, secret, boss };
   map.exit();
   mode = 'game';
+  music.play(boss ? 'boss' : 'level');
+  music.setDimmed(false);
+  sfxLevelStart();
   game.startRun(worldIdx, levelIdx, { secret, boss });
   ui.showScreen(null);
   ui.showHUD(true);
@@ -331,6 +359,7 @@ function computeStars(results) {
 function onRunComplete(res) {
   lastRun = res;
   ui.showHUD(false);
+  flushPlayTime();
 
   const stars = computeStars(res.results);
   lastRun.stars = stars;
@@ -360,6 +389,19 @@ function onRunComplete(res) {
     }
   }
 
+  // The last world's castle falling is the game-complete finale, not a
+  // normal summary or trophy ceremony: cutscene home, then the big stats
+  // screen. Its boss decoration is still granted quietly — it's waiting in
+  // the yard next to the hero trophy.
+  if (current.boss && current.world === WORLDS.length - 1) {
+    if (firstBossWin) {
+      const decor = decorForWorld(current.world);
+      if (decor) store.grantHouseItem(decor.id);
+    }
+    startFinale();
+    return;
+  }
+
   if (firstBossWin) {
     // First win over this castle: trophy ceremony at the house instead of
     // the summary card (the run's coins are already banked by game.js).
@@ -371,7 +413,25 @@ function onRunComplete(res) {
   }
 }
 
+// ---------- game-complete finale ----------
+
+// Replay-safe: the cutscene + stats screen play every time the final boss
+// falls, but the exclusive reward is granted (and announced) only once.
+function startFinale() {
+  const firstTime = !store.isGameCompleted();
+  if (firstTime) {
+    store.markGameCompleted();
+    store.grantHouseItem('herotrophy');
+    house.refresh(); // the trophy is standing there when he visits
+  }
+  playCutscene(CUTSCENES.finale, () => {
+    ui.showGameComplete(store.totals(), { firstTime });
+    speak("You're a sight word hero!", { rate: 1.0 });
+  });
+}
+
 function showSummary() {
+  music.play('victory');
   const next = current.secret ? null : nextLevelOf(current.world, current.level);
   ui.showComplete({
     stars: lastRun.stars,
@@ -405,6 +465,7 @@ function startBonusRound(res) {
       heard: [],
       advancing: false,
     };
+    music.play(null); // quiet for the mic round
     ui.showScreen('bonus');
     speak('Bonus round! Read the word out loud. Hold the microphone and say it!', { rate: 1.0 });
     showBonusWord();
@@ -456,7 +517,7 @@ function bonusMicDown() {
         bonus.heard = [];
         lastRun.gems += 5;
         store.addGems(5);
-        sfxCorrect();
+        sfxGem();
         ui.setBonusFeedback('⭐ +5 💎');
         speak(PRAISE[(Math.random() * PRAISE.length) | 0], { rate: 1.0 });
         advanceBonus();
@@ -500,6 +561,12 @@ ui.init({
     ui.updateSettingsLabels();
     if (on) sfxCoin();
   },
+  onToggleMusic: () => {
+    const on = !store.get().music;
+    store.setMusic(on);
+    music.setMusicEnabled(on);
+    ui.updateSettingsLabels();
+  },
   onToggleMic: () => {
     store.setMic(!store.get().mic);
     ui.updateSettingsLabels();
@@ -508,13 +575,18 @@ ui.init({
   onBannerPlay: () => playSelected(),
   onPause: () => {
     game.pause();
+    sfxPause();
+    music.setDimmed(true);
     ui.showScreen('pause');
   },
   onResume: () => {
     ui.showScreen(null);
+    sfxResume();
+    music.setDimmed(false);
     game.resume();
   },
   onPauseMap: () => {
+    flushPlayTime(); // abandoning the run still banks the time played
     game.stopRun();
     showMap();
   },
@@ -566,6 +638,7 @@ if (cheats.has('cutscene')) {
 document.addEventListener('visibilitychange', () => {
   if (document.hidden && game.running && !game.paused) {
     game.pause();
+    music.setDimmed(true);
     ui.showScreen('pause');
   }
 });

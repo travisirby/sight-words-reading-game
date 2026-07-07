@@ -71,6 +71,11 @@ const FIXED = [
   'A new trophy for your shelf!',
   'Beat the castle boss to win that prize!',
   'Something new at your house!',
+  // game-complete finale (cutscenes.js finale script + stats screen)
+  'You did it! You beat every single world!',
+  'Look! Five shiny trophies for five worlds!',
+  "You're a sight word hero!",
+  'Hero!',
 ];
 
 // Boss-prize reveal lines, one per earned decoration (house.js ceremony).

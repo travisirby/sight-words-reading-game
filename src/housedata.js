@@ -32,7 +32,7 @@ export const HOUSE_ITEMS = [
 
   // ---- boss prizes (never purchasable) ----
   // earned: worldIdx — dropped by that world's castle boss during the trophy
-  // ceremony (main.js awards it via store.awardHouseItem). No cost/currency.
+  // ceremony (main.js awards it via store.grantHouseItem). No cost/currency.
   { id: 'golemstatue', name: 'Grass Golem Statue', emoji: '🗿', earned: 0 },
   { id: 'serpentstatue', name: 'Sand Serpent Statue', emoji: '🐍', earned: 1 },
   { id: 'yetisnowman', name: 'Yeti Snowman', emoji: '⛄', earned: 2 },
@@ -50,7 +50,9 @@ export function decorForWorld(worldIdx) {
 }
 
 // Boss trophies aren't bought — one appears on the trophy shelf per castle
-// beaten. house.js renders these from store.isBossBeaten(w).
+// beaten. house.js renders these from store.isBossBeaten(w). Likewise the
+// 'herotrophy' yard trophy is granted by the game-complete finale (main.js
+// startFinale), never sold, so it lives outside HOUSE_ITEMS.
 export const TROPHY_NAMES = [
   'Grass Plains Trophy',
   'Sandy Desert Trophy',

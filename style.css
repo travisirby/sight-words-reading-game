@@ -580,6 +580,55 @@ html, body {
   color: #2c3e75;
 }
 
+/* ---------- game complete (finale stats) ---------- */
+#screen-gamecomplete { background: rgba(30, 30, 90, 0.88); }
+.gc-panel {
+  gap: 10px;
+  padding: 20px 30px;
+  max-height: calc(100vh - 24px);
+  overflow-y: auto;
+}
+.gc-panel h2 { font-size: 32px; }
+.gc-sub {
+  font-size: 24px;
+  color: #e0a020;
+  text-shadow: 1px 1px 0 #fff;
+}
+#gc-stats {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  width: min(440px, 78vw);
+}
+.gc-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 24px;
+  font-size: 21px;
+  color: #2c3e75;
+  background: #fff3c4;
+  border-radius: 12px;
+  padding: 5px 14px;
+  opacity: 0;
+  transform: translateX(-14px);
+  transition: opacity 0.35s, transform 0.35s cubic-bezier(0.34, 1.6, 0.5, 1);
+}
+.gc-row.gc-in {
+  opacity: 1;
+  transform: none;
+}
+.gc-row span:last-child { font-weight: bold; }
+#gc-reward {
+  font-size: 19px;
+  color: #2c3e75;
+  background: #ffe082;
+  border: 3px solid #e0a020;
+  border-radius: 14px;
+  padding: 8px 16px;
+  max-width: min(440px, 78vw);
+  text-align: center;
+}
+
 /* ---------- bonus round ---------- */
 #screen-bonus { background: rgba(30, 30, 90, 0.88); }
 .bonus-heading {
