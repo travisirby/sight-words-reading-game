@@ -69,12 +69,24 @@ const FIXED = [
   ...Object.values(LINES).flat(),
   'If you forget your word, tap the blue speaker button to hear it again!',
   'All levels unlocked!',
+  // house / trophy ceremony (main.js + house.js)
+  'You beat the castle! Time for your trophy!',
+  'A new trophy for your shelf!',
+  'Beat the castle boss to win that prize!',
+  'Something new at your house!',
   // game-complete finale (cutscenes.js finale script + stats screen)
   'You did it! You beat every single world!',
   'Look! Five shiny trophies for five worlds!',
   "You're a sight word hero!",
   'Hero!',
 ];
+
+// Boss-prize reveal lines, one per earned decoration (house.js ceremony).
+function decorLines() {
+  return HOUSE_ITEMS.filter((it) => it.earned !== undefined).map(
+    (it) => `You won the ${it.name}! What a prize!`
+  );
+}
 
 function bossLines() {
   return bossNames().flatMap((name) => [
@@ -118,7 +130,7 @@ function buildClips() {
   for (const list of Object.values(DOLCH)) {
     for (const w of list) add(w, 'word', WORD_RATE);
   }
-  for (const t of [...SEGMENTS, ...FIXED, ...bossLines(), ...shopLines(), ...nodeNames(), ...UI_LABELS]) {
+  for (const t of [...SEGMENTS, ...FIXED, ...bossLines(), ...decorLines(), ...shopLines(), ...nodeNames(), ...UI_LABELS]) {
     add(t, 'phrase', PHRASE_RATE);
   }
   return clips;

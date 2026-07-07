@@ -18,6 +18,7 @@ import {
 } from './audio.js';
 import * as music from './music.js';
 import { WORLDS, shuffle } from './words.js';
+import { HOUSE_ITEMS, decorForWorld } from './housedata.js';
 
 // Testing cheats via URL: ?unlock opens every level/castle/secret,
 // ?reset wipes the save first (combine as ?reset&unlock).
@@ -263,9 +264,25 @@ function showHouse(from) {
   mode = 'house';
   music.play('house');
   house.enter();
+  store.clearHouseNews(); // he's here — retire the ❗ on the map house
+  spokeHouseNudge = false; // ...and re-arm the voice nudge for future news
   ui.showHUD(false);
   ui.showHouse();
   speakLine('home');
+}
+
+// Post-boss payoff: land in the house for a short trophy ceremony (cup drops
+// onto the shelf, then the boss's decoration appears), with a MAP button as
+// the only — always available — way out, so it's skippable mid-fanfare.
+function showTrophyCeremony(world) {
+  houseReturn = 'complete'; // leaving lands on the map at the castle
+  mode = 'house';
+  music.play('victory');
+  const decor = decorForWorld(world);
+  if (decor) store.grantHouseItem(decor.id);
+  house.beginCeremony(world, decor && decor.id);
+  ui.showHUD(false);
+  ui.showCeremony();
 }
 
 function leaveHouse() {
@@ -280,6 +297,11 @@ function leaveHouse() {
 }
 
 function buyItem(item) {
+  if (item.earned !== undefined && !store.ownsHouseItem(item.id)) {
+    ui.houseToast('🏰 Castle prize!');
+    speak('Beat the castle boss to win that prize!', { rate: 1.0 });
+    return;
+  }
   if (store.ownsHouseItem(item.id)) {
     speak(`You already have the ${item.name}!`, { rate: 1.0 });
     return;
@@ -341,6 +363,7 @@ function onRunComplete(res) {
   const stars = computeStars(res.results);
   lastRun.stars = stars;
 
+  let firstBossWin = false;
   if (current.secret) {
     store.setSecretStars(current.world, stars);
   } else {
@@ -348,7 +371,7 @@ function onRunComplete(res) {
     store.setStars(current.world, current.level, stars);
     store.completeLevel(current.world, current.level, LEVEL_COUNTS);
     if (current.boss) {
-      lastRun.firstBossWin = !store.isBossBeaten(current.world);
+      firstBossWin = !store.isBossBeaten(current.world);
       store.beatBoss(current.world);
     }
 
@@ -366,13 +389,23 @@ function onRunComplete(res) {
   }
 
   // The last world's castle falling is the game-complete finale, not a
-  // normal summary: cutscene home, then the big stats screen.
+  // normal summary or trophy ceremony: cutscene home, then the big stats
+  // screen. Its boss decoration is still granted quietly — it's waiting in
+  // the yard next to the hero trophy.
   if (current.boss && current.world === WORLDS.length - 1) {
+    if (firstBossWin) {
+      const decor = decorForWorld(current.world);
+      if (decor) store.grantHouseItem(decor.id);
+    }
     startFinale();
     return;
   }
 
-  if (BONUS_ROUND_ENABLED && speech.isAvailable() && store.get().mic && res.results.length) {
+  if (firstBossWin) {
+    // First win over this castle: trophy ceremony at the house instead of
+    // the summary card (the run's coins are already banked by game.js).
+    showTrophyCeremony(current.world);
+  } else if (BONUS_ROUND_ENABLED && speech.isAvailable() && store.get().mic && res.results.length) {
     startBonusRound(res);
   } else {
     showSummary();
@@ -405,22 +438,30 @@ function showSummary() {
     gems: lastRun.gems,
     hasNext: !!next && store.isLevelUnlocked(next.world, next.level),
   });
-  // One delayed milestone line over the summary: a first castle win means a
-  // new world just unlocked; otherwise celebrate a perfect 3-star run. The
-  // delay lets the in-game flag/crown line finish (speak() cuts earlier
-  // speech); the token check skips it if another run started meanwhile.
-  const token = lastRun;
-  const line = lastRun.firstBossWin ? 'worldUnlock' : lastRun.stars === 3 ? 'threeStars' : null;
-  if (line) {
+  // Delayed milestone line over the summary for a perfect 3-star run. The
+  // delay lets the in-game flag line finish (speak() cuts earlier speech);
+  // the token check skips it if another run started meanwhile. First castle
+  // wins never land here (trophy ceremony instead) — the 'worldUnlock' line
+  // plays when the new world's node reveals on the map (overworld.js).
+  if (lastRun.stars === 3) {
+    const token = lastRun;
     setTimeout(() => {
-      if (lastRun === token && mode === 'game') speakLine(line);
-    }, lastRun.firstBossWin ? 6000 : 2600);
+      if (lastRun === token && mode === 'game') speakLine('threeStars');
+    }, 2600);
   }
 }
+
+let spokeHouseNudge = false; // one voice nudge per batch of house news
 
 function backToMap() {
   showMap(); // enter() refreshes navList first...
   map.setTokenTo(current.world, current.level, current.secret); // ...then snap
+  // Fresh loot he could spend (or a prize he skipped past)? Say so once —
+  // the ❗ over the house building carries it from there.
+  if (!spokeHouseNudge && store.hasHouseNews(HOUSE_ITEMS)) {
+    spokeHouseNudge = true;
+    speak('Something new at your house!', { rate: 1.0 });
+  }
 }
 
 // ---------- read-aloud bonus round ----------
@@ -560,7 +601,6 @@ ui.init({
     showMap();
   },
   onRepeatWord: () => game.repeatWord(),
-  onPlayAgain: () => startLevel(current.world, current.level, current.secret),
   onNextLevel: () => {
     const next = nextLevelOf(current.world, current.level);
     if (next) startLevel(next.world, next.level);
@@ -578,6 +618,7 @@ ui.init({
   onMicUp: bonusMicUp,
   onHouse: (from) => showHouse(from),
   onHouseBack: () => leaveHouse(),
+  onCeremonyDone: () => leaveHouse(), // house.exit() finalizes the ceremony
   onBuyItem: (item) => buyItem(item),
   onMoveDown: (dir) => game.setMove('btn', dir, true),
   onMoveUp: (dir) => game.setMove('btn', dir, false),
@@ -600,6 +641,14 @@ showTitle();
 if (cheats.has('cutscene')) {
   const script = CUTSCENES[cheats.get('cutscene')] || CUTSCENES.demo;
   playCutscene(script, () => showTitle());
+}
+
+// Dev harness: ?goto=<world>,<level> boots straight into a level (0-based;
+// a level index past the last is the castle, 's' is the secret level).
+if (cheats.has('goto')) {
+  const [w, l] = (cheats.get('goto') || '0,0').split(',');
+  const wi = Math.max(0, Math.min(WORLDS.length - 1, parseInt(w, 10) || 0));
+  startLevel(wi, l === 's' ? 0 : Math.max(0, parseInt(l, 10) || 0), l === 's');
 }
 
 // Auto-pause when the tab is hidden.
