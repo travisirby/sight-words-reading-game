@@ -7,9 +7,13 @@
 // Baked JSON:
 // {
 //   name, voxelSize,
-//   origin: [x,y,z],           // float, voxel units; anchors bottom-center
 //   parts: [{
 //     name, tintable,
+//     origin: [x,y,z],         // float, voxel units, added to positions;
+//                              //   puts the part's LOCAL origin at its
+//                              //   authored pivot (or the model anchor)
+//     offset: [x,y,z],         // float, WORLD units; the mesh.position that
+//                              //   reassembles pivoted parts in place
 //     positions: [...],        // int voxel coords, 3 per vertex (y-up)
 //     normals:   [...],        // 1 axis code per vertex: 0 +x, 1 -x, 2 +y...
 //     colors:    [...],        // 0-255 bytes, 3 per vertex, LINEAR space,
@@ -43,7 +47,7 @@ function main() {
   for (const d of models) bakeModel(join(srcDir, d.name));
 }
 
-function bakeModel(dir) {
+export function bakeModel(dir, out = outDir) {
   const meta = JSON.parse(readFileSync(join(dir, 'model.json'), 'utf8'));
 
   // Load every part into game coords (y-up): game = (vox.x, vox.z, -vox.y).
@@ -71,18 +75,27 @@ function bakeModel(dir) {
   const baked = {
     name: meta.name,
     voxelSize: meta.voxelSize,
-    origin,
     parts: parts.map((p) => {
       const geo = meshPart(p.cells);
-      const { cells, file, ...rest } = p;
-      return { ...rest, ...geo };
+      const { cells, file, pivot, ...rest } = p;
+      // With a pivot, vertices are baked relative to it and the mesh gets a
+      // compensating world-space offset — so (pos + origin) * voxelSize +
+      // offset lands every voxel exactly where a pivotless bake would, but
+      // the mesh's local origin sits at the pivot for rotate/scale anims.
+      const partOrigin = pivot ? pivot.map((v) => -v) : origin;
+      const offset = pivot
+        ? pivot.map((v, i) => (v + origin[i]) * meta.voxelSize)
+        : [0, 0, 0];
+      return { ...rest, origin: partOrigin, offset, ...geo };
     }),
   };
 
-  const out = join(outDir, `${meta.name}.json`);
-  writeFileSync(out, JSON.stringify(baked));
+  const outFile = join(out, `${meta.name}.json`);
+  writeFileSync(outFile, JSON.stringify(baked));
   const tris = baked.parts.reduce((n, p) => n + p.indices.length / 3, 0);
-  console.log(`baked ${meta.name}: ${baked.parts.length} parts, ${tris} tris -> ${out}`);
+  console.log(`baked ${meta.name}: ${baked.parts.length} parts, ${tris} tris -> ${outFile}`);
+  return baked;
 }
 
-main();
+// Run as a CLI when invoked directly (npm run gen:vox); tests import bakeModel.
+if (process.argv[1] === fileURLToPath(import.meta.url)) main();

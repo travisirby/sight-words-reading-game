@@ -89,7 +89,16 @@ export class VoxScene {
       }
       const file = `${part.name}.vox`;
       writeFileSync(join(outDir, file), serializeVox(size, voxels, this.palette));
-      meta.parts.push({ name: part.name, file, ...part.opts });
+      const entry = { name: part.name, file, ...part.opts };
+      if (part.opts.pivot) {
+        // A pivot (authoring coords, floats fine) makes the baked part's
+        // local origin sit there, so the runtime can rotate/scale the part
+        // about it (limb swings, pupil blinks). Stored in the same shifted
+        // frame the baker reconstructs from the .vox grid.
+        const [px, py, pz] = part.opts.pivot;
+        entry.pivot = [px - b.x0, py - b.y0, pz - b.z1];
+      }
+      meta.parts.push(entry);
     }
     writeFileSync(join(outDir, 'model.json'), JSON.stringify(meta, null, 2) + '\n');
     return outDir;
