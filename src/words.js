@@ -60,7 +60,7 @@ export const WORLDS = [
   { name: 'Waffle Desert', emoji: '🧇', tier: 'primer' },
   { name: 'Snowy Peaks', emoji: '❄️', tier: 'first' },
   { name: 'Crystal Caves', emoji: '💎', tier: 'second' },
-  { name: 'Sky Islands', emoji: '☁️', tier: 'third' },
+  { name: 'Pepper Volcano', emoji: '🌶️', tier: 'third' },
 ].map((w) => ({ ...w, levels: chunkIntoLevels(DOLCH[w.tier]) }));
 
 export function getLevelWords(worldIdx, levelIdx) {

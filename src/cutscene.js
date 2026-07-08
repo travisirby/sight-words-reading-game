@@ -446,7 +446,7 @@ function makeHouseProp() {
 }
 
 // Gold cup matching the house trophy shelf, tinted per world.
-const PROP_TROPHY_TINTS = [0xffd54a, 0xffc233, 0xffe082, 0xf5b942, 0xffdb6e];
+const PROP_TROPHY_TINTS = [0xffd54a, 0xffc233, 0xffe082, 0xf5b942, 0xff8c3e];
 
 function makeTrophyProp(worldIdx = 0) {
   const g = new THREE.Group();
