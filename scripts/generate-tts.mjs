@@ -139,7 +139,7 @@ function buildClips() {
   return clips;
 }
 
-async function synth(file, { text, rate }) {
+async function synth(file, { text, rate, kind }) {
   const out = path.join(OUT_DIR, file);
   if (!FORCE && fs.existsSync(out) && fs.statSync(out).size > 0) return 'kept';
   for (let attempt = 1; ; attempt++) {
@@ -152,6 +152,10 @@ async function synth(file, { text, rate }) {
           text,
           model_id: MODEL,
           voice_settings: { stability: 0.5, similarity_boost: 0.75, speed: rate },
+          // Isolated function words get read in reduced form without context
+          // ("a" -> "uh", "am" -> "umm"). previous_text conditions the model
+          // to use the citation pronunciation but is not spoken.
+          ...(kind === 'word' && { previous_text: 'Say the word:' }),
         }),
       }
     );
