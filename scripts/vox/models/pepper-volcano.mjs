@@ -120,5 +120,32 @@ export default function build() {
   bomb(6, 11, 6, 1, YEL);
   bomb(-7, 16, 3, -1, ORG);
 
+  // Each part bakes to its own mesh, so a cell claimed by two parts z-fights.
+  // Decorations win over the cone: the leaves drape over everything, the lava
+  // bombs and stem nubs are lodged *into* the slope (the cone yields pockets
+  // so the bombs stay visible), and the dribbles run under the draped leaves
+  // (guard pattern from giant-cabbage.mjs).
+  yieldClaimedCells(trim, [leaf]);
+  yieldClaimedCells(lava, [leaf, trim]);
+  yieldClaimedCells(body, [leaf, trim, lava]);
+  assertNoPartOverlap(s);
+
   return s;
+}
+
+function yieldClaimedCells(part, winners) {
+  for (const k of [...part.voxels.keys()]) {
+    if (winners.some((w) => w.voxels.has(k))) part.voxels.delete(k);
+  }
+}
+
+function assertNoPartOverlap(scene) {
+  const seen = new Map();
+  for (const part of scene.parts) {
+    for (const key of part.voxels.keys()) {
+      const prev = seen.get(key);
+      if (prev) throw new Error(`${scene.name}: ${part.name} overlaps ${prev} at ${key}`);
+      seen.set(key, part.name);
+    }
+  }
 }

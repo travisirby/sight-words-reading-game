@@ -82,5 +82,29 @@ export default function build() {
   browR.box(5, 47, 7, 6, 47, 7, DARK);
   browR.box(3, 46, 7, 5, 46, 7, DARK);
 
+  // Each part bakes to its own mesh, so a cell claimed by two parts z-fights.
+  // The arms yield their shoulder cells buried in the sauce slab to the body
+  // (guard pattern from giant-cabbage.mjs).
+  yieldClaimedCells(armL, [body]);
+  yieldClaimedCells(armR, [body]);
+  assertNoPartOverlap(s);
+
   return s;
+}
+
+function yieldClaimedCells(part, winners) {
+  for (const k of [...part.voxels.keys()]) {
+    if (winners.some((w) => w.voxels.has(k))) part.voxels.delete(k);
+  }
+}
+
+function assertNoPartOverlap(scene) {
+  const seen = new Map();
+  for (const part of scene.parts) {
+    for (const key of part.voxels.keys()) {
+      const prev = seen.get(key);
+      if (prev) throw new Error(`${scene.name}: ${part.name} overlaps ${prev} at ${key}`);
+      seen.set(key, part.name);
+    }
+  }
 }
