@@ -150,6 +150,103 @@ const TRACKS = {
     hat: [HAT_SWING, HAT_SWING, HAT_SWING, HAT_SWING],
   },
 
+  // ---- per-world level themes (worlds 0-4; world 5 uses `finale`) ----
+
+  // Pasta Plains: sunny, bouncy G-major stroll (the cheeriest world).
+  pasta: {
+    bpm: 120,
+    melVol: 0.09, bassVol: 0.14, hatVol: 0.03,
+    mel: [
+      ['G4', null, 'B4', null, 'D5', '-', 'B4', null, 'G4', null, 'D5', '-', 'B4', '-', null, null],
+      ['C5', null, 'E5', null, 'D5', '-', 'B4', null, 'A4', '-', 'G4', null, 'A4', '-', null, null],
+      ['G4', null, 'B4', null, 'D5', '-', 'G5', null, 'F#5', '-', 'E5', null, 'D5', '-', null, null],
+      ['C5', '-', 'B4', '-', 'A4', '-', 'D5', '-', 'G4', '-', '-', '-', null, null, null, null],
+    ],
+    bass: [
+      ['G2', null, 'D3', null, 'G2', null, 'D3', null, 'C3', null, 'G3', null, 'C3', null, 'G3', null],
+      ['C3', null, 'G3', null, 'D3', null, 'A3', null, 'G2', null, 'D3', null, 'D3', null, null, null],
+      ['G2', null, 'D3', null, 'G2', null, 'D3', null, 'C3', null, 'G3', null, 'C3', null, 'G3', null],
+      ['A2', null, 'E3', null, 'D3', null, 'A3', null, 'G2', null, 'D3', null, 'G2', null, null, null],
+    ],
+    hat: [HAT_SWING, HAT_SWING, HAT_SWING, HAT_SWING],
+  },
+
+  // Waffle Desert: warm, syrupy, lazy F-major shuffle.
+  waffle: {
+    bpm: 108,
+    melVol: 0.09, bassVol: 0.14, hatVol: 0.025,
+    mel: [
+      ['F4', '-', 'A4', null, 'C5', '-', 'A4', null, 'D5', '-', 'C5', '-', 'A4', '-', null, null],
+      ['Bb4', '-', 'A4', null, 'G4', '-', 'F4', null, 'G4', '-', '-', '-', null, null, null, null],
+      ['F4', '-', 'A4', null, 'C5', '-', 'F5', null, 'E5', '-', 'C5', '-', 'A4', '-', null, null],
+      ['D5', '-', 'C5', '-', 'Bb4', '-', 'A4', '-', 'F4', '-', '-', '-', null, null, null, null],
+    ],
+    bass: [
+      ['F2', null, null, 'C3', null, null, 'F2', null, 'Bb2', null, null, 'F3', null, null, null, null],
+      ['C3', null, null, 'G3', null, null, 'C3', null, 'F2', null, null, 'C3', null, null, null, null],
+      ['F2', null, null, 'C3', null, null, 'F2', null, 'Bb2', null, null, 'F3', null, null, null, null],
+      ['C3', null, null, 'G3', null, null, 'C3', null, 'F2', null, null, null, null, null, null, null],
+    ],
+    hat: [HAT_OFF, HAT_OFF, HAT_OFF, HAT_OFF],
+  },
+
+  // Snowcones Islands: light, twinkly, cool D-major (glockenspiel feel).
+  snow: {
+    bpm: 112,
+    melVol: 0.085, bassVol: 0.12, hatVol: 0.025,
+    mel: [
+      ['D5', null, 'F#5', null, 'A5', '-', 'F#5', null, 'E5', '-', 'D5', null, 'E5', '-', null, null],
+      ['B4', null, 'D5', null, 'F#5', '-', 'E5', null, 'D5', '-', '-', '-', null, null, null, null],
+      ['D5', null, 'A5', null, 'F#5', '-', 'A5', null, 'B5', '-', 'A5', null, 'F#5', '-', null, null],
+      ['G5', '-', 'F#5', '-', 'E5', '-', 'D5', '-', 'A4', '-', '-', '-', null, null, null, null],
+    ],
+    bass: [
+      ['D3', null, null, null, 'A2', null, null, null, 'B2', null, null, null, 'F#2', null, null, null],
+      ['G2', null, null, null, 'D3', null, null, null, 'A2', null, null, null, 'A2', null, null, null],
+      ['D3', null, null, null, 'A2', null, null, null, 'B2', null, null, null, 'F#2', null, null, null],
+      ['G2', null, null, null, 'A2', null, null, null, 'D3', null, null, null, null, null, null, null],
+    ],
+    hat: [HAT_OFF, HAT_OFF, HAT_OFF, HAT_OFF],
+  },
+
+  // Purple Cabbage Swamp: squishy, funky A-Dorian groove.
+  swamp: {
+    bpm: 100,
+    melVol: 0.085, bassVol: 0.16, hatVol: 0.03,
+    mel: [
+      ['A4', null, 'C5', null, 'D5', '-', 'C5', null, 'E5', '-', 'D5', null, 'C5', '-', null, null],
+      ['A4', null, 'G4', null, 'A4', '-', null, null, 'D5', '-', 'C5', null, 'A4', '-', null, null],
+      ['E5', null, 'D5', null, 'C5', '-', 'A4', null, 'B4', '-', 'C5', null, 'D5', '-', null, null],
+      ['C5', '-', 'B4', '-', 'A4', '-', 'G4', '-', 'A4', '-', '-', '-', null, null, null, null],
+    ],
+    bass: [
+      ['A2', null, 'A2', 'E3', null, 'A2', null, null, 'D3', null, 'D3', 'A3', null, 'D3', null, null],
+      ['A2', null, 'A2', 'E3', null, 'A2', null, null, 'G2', null, 'G2', 'D3', null, 'G2', null, null],
+      ['A2', null, 'A2', 'E3', null, 'A2', null, null, 'D3', null, 'D3', 'A3', null, 'D3', null, null],
+      ['E2', null, 'E2', 'B2', null, 'E2', null, null, 'A2', null, 'A2', null, null, null, null, null],
+    ],
+    hat: [HAT_SWING, HAT_SWING, HAT_SWING, HAT_SWING],
+  },
+
+  // Crystal Caves: mysterious, sparkling E-minor with room to echo.
+  caves: {
+    bpm: 96,
+    melVol: 0.09, bassVol: 0.13, hatVol: 0.02,
+    mel: [
+      ['E5', '-', null, 'G5', '-', null, 'B5', '-', '-', '-', 'A5', '-', 'G5', '-', null, null],
+      ['F#5', '-', null, 'A5', '-', null, 'E5', '-', '-', '-', null, null, null, null, null, null],
+      ['E5', '-', null, 'B5', '-', null, 'C6', '-', '-', '-', 'B5', '-', 'A5', '-', null, null],
+      ['G5', '-', 'F#5', '-', 'E5', '-', 'D5', '-', 'E5', '-', '-', '-', null, null, null, null],
+    ],
+    bass: [
+      ['E2', null, null, null, 'B2', null, null, null, 'C3', null, null, null, 'G2', null, null, null],
+      ['A2', null, null, null, 'E3', null, null, null, 'B2', null, null, null, 'B2', null, null, null],
+      ['E2', null, null, null, 'B2', null, null, null, 'C3', null, null, null, 'G2', null, null, null],
+      ['A2', null, null, null, 'B2', null, null, null, 'E2', null, null, null, null, null, null, null],
+    ],
+    hat: [HAT_OFF, HAT_OFF, HAT_OFF, HAT_OFF],
+  },
+
   // My house / shop: cozy and slow.
   house: {
     bpm: 88,
@@ -388,6 +485,15 @@ export function play(name) {
   } else {
     startSynth(name);
   }
+}
+
+// Warm the cache for a track the kid is about to hear (e.g. the world whose
+// level card is open) so play() starts instantly instead of after a cold
+// fetch — the fix for the per-world tracks feeling slow on poor connections.
+// No-op when the track has no sample file (it'll use the synth fallback).
+export function prefetch(name) {
+  const file = AUDIO.music[name];
+  if (file) loadAudioBuffer(`audio/${file}`).catch(() => {});
 }
 
 export function setMusicEnabled(on) {
