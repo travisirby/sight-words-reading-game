@@ -76,10 +76,9 @@ export function disposeGroup(group) {
 
 // ---------- ? BLOCKS ----------
 
-// Listen beat after a miss: blocks are inert this long while the narrator
-// re-says the word and the words spin to new blocks. Also guarantees at
-// most one bonk per jump arc: blocks sit 5 apart, so even a double jump
-// can't reach the next block before the lock expires.
+// Listen beat after a miss: drives the no-no wobble while the narrator
+// re-says the word. Blocks stay bonkable throughout (a wrong bonk knocks
+// the kid down, so a fresh jump is needed for another hit anyway).
 const MISS_LOCK = 1.5;
 const SPIN_DUR = 0.7; // full-turn shuffle spin; words swap while facing away
 const MAX_TRIES = 3; // wrong bonks before the event fails and the run moves on
@@ -94,7 +93,7 @@ export class BlocksEvent {
     this.respawns = 0;
     this.level = level;
     this.explodeT = -1; // countdown from correct answer to the box burst
-    this.lockT = 0; // listen-beat countdown; bonks are ignored while > 0
+    this.lockT = 0; // listen-beat countdown; drives the wobble animation
     this.swapPending = false; // reshuffle words at the spin's halfway point
 
     this.group = new THREE.Group();
@@ -191,8 +190,8 @@ export class BlocksEvent {
     }
     if (this.done) return;
 
-    // Bonk from below (inert during the post-miss listen beat).
-    if (this.lockT <= 0 && player.vy > 0) {
+    // Bonk from below — active even during the post-miss spin/listen beat.
+    if (player.vy > 0) {
       const head = player.y + KID_H;
       const prevHead = head - player.vy * dt;
       for (const b of this.blocks) {

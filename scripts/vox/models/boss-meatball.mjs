@@ -82,5 +82,29 @@ export default function build() {
   browR.box(5, 47, 7, 6, 47, 7, DARK);
   browR.box(3, 46, 7, 5, 46, 7, DARK);
 
+  // Same-cell overlap across parts z-fights at runtime (each part is its own
+  // mesh), so the arms yield the top-inner corners buried in the sauce slab.
+  // Every yielded cell stays filled by the body, so the assembled silhouette
+  // is unchanged.
+  const yieldTo = (part, ...owners) => {
+    for (const k of part.voxels.keys()) {
+      if (owners.some((o) => o.voxels.has(k))) part.voxels.delete(k);
+    }
+  };
+  yieldTo(armL, body);
+  yieldTo(armR, body);
+  assertNoPartOverlap(s);
+
   return s;
+}
+
+function assertNoPartOverlap(scene) {
+  const seen = new Map();
+  for (const part of scene.parts) {
+    for (const key of part.voxels.keys()) {
+      const prev = seen.get(key);
+      if (prev) throw new Error(`${scene.name}: ${part.name} overlaps ${prev} at ${key}`);
+      seen.set(key, part.name);
+    }
+  }
 }

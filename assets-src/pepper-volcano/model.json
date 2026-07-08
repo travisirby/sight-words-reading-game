@@ -8,6 +8,10 @@
       "file": "body.vox"
     },
     {
+      "name": "leaf",
+      "file": "leaf.vox"
+    },
+    {
       "name": "lava",
       "file": "lava.vox",
       "pivot": [
@@ -15,10 +19,6 @@
         26,
         -13
       ]
-    },
-    {
-      "name": "leaf",
-      "file": "leaf.vox"
     },
     {
       "name": "trim",
