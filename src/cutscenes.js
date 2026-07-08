@@ -38,15 +38,15 @@ const demo = [
   { say: { who: 'kid', text: "Let's go get it!" } },
 ];
 
-// Game-complete finale: the kid walks home at sunset, five boss trophies
+// Game-complete finale: the kid walks home at sunset, six boss trophies
 // line the yard, fireworks + confetti, narrator celebrates. Played after
 // the final (world 5) castle falls; preview with ?cutscene=finale.
 const finale = [
   { setting: { sky: 0xffc98a, ground: 0x7ec850 } },
   { spawn: { id: 'house', kind: 'house', at: [7, -3] } },
   // One trophy per world, lined up in the front yard.
-  ...[0, 1, 2, 3, 4].map((w) => (
-    { spawn: { id: `trophy${w}`, kind: 'trophy', world: w, at: [3.6 + w * 1.4, -0.2] } }
+  ...[0, 1, 2, 3, 4, 5].map((w) => (
+    { spawn: { id: `trophy${w}`, kind: 'trophy', world: w, at: [2.9 + w * 1.4, -0.2] } }
   )),
   { spawn: { id: 'kid', kind: 'kid', at: [-11, 1] } },
   { cam: { to: [-11, 3, 9], lookAt: [-10, 1.5, 1], dur: 0.01 } },
@@ -57,7 +57,7 @@ const finale = [
   { fx: { kind: 'fireworks', at: [7, 6, -3] } },
   { fx: { kind: 'fireworks', at: [1, 7, -2] } },
   { cam: { to: [6, 2.8, 6.5], lookAt: [6.5, 1, 0], dur: 1.6 }, async: true },
-  { say: { text: 'Look! Five shiny trophies for five worlds!', highlight: ['look', 'five'] } },
+  { say: { text: 'Look! Six shiny trophies for six worlds!', highlight: ['look', 'six'] } },
   { sfx: 'sfxKeyJingle' },
   { fx: { kind: 'sparkle', at: [6.5, 1.5, 0] } },
   { wait: 0.5 },

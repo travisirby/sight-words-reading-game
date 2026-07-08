@@ -36,8 +36,9 @@ export const HOUSE_ITEMS = [
   { id: 'golemstatue', name: 'Meatball Monster Statue', emoji: '🍝', earned: 0 },
   { id: 'serpentstatue', name: 'Syrup Serpent Statue', emoji: '🧇', earned: 1 },
   { id: 'yetisnowman', name: 'Yeti Snowman', emoji: '⛄', earned: 2 },
-  { id: 'crystallamp', name: 'Crystal Lamp', emoji: '💎', earned: 3 },
-  { id: 'dragonkite', name: 'Pepper Kite', emoji: '🪁', earned: 4 },
+  { id: 'cabbagecrown', name: 'Cabbage Crown', emoji: '🥬', earned: 3 },
+  { id: 'crystallamp', name: 'Crystal Lamp', emoji: '💎', earned: 4 },
+  { id: 'dragonkite', name: 'Pepper Kite', emoji: '🪁', earned: 5 },
 ];
 
 export function getItem(id) {
@@ -57,6 +58,7 @@ export const TROPHY_NAMES = [
   'Pasta Plains Trophy',
   'Waffle Desert Trophy',
   'Snowy Peaks Trophy',
+  'Purple Cabbage Swamp Trophy',
   'Crystal Caves Trophy',
   'Pepper Volcano Trophy',
 ];

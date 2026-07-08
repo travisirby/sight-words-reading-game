@@ -76,7 +76,7 @@ const FIXED = [
   'Something new at your house!',
   // game-complete finale (cutscenes.js finale script + stats screen)
   'You did it! You beat every single world!',
-  'Look! Five shiny trophies for five worlds!',
+  'Look! Six shiny trophies for six worlds!',
   "You're a sight word hero!",
   'Hero!',
 ];

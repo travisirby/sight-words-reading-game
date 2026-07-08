@@ -31,7 +31,13 @@ const DOOR_HALF = 2.6;   // doorway waypoints clamp to |x| <= this
 const WALK_SPEED = 3.6;  // units/s
 
 const inRect = (r, x, z) => x > r.minX && x < r.maxX && z > r.minZ && z < r.maxZ;
-const TROPHY_TINTS = [0xffd54a, 0xffc233, 0xffe082, 0xf5b942, 0xff8c3e];
+const WORLD_TROPHY_COUNT = 6;
+const TROPHY_SHELF_SPACING = 0.78;
+const TROPHY_TINTS = [0xffd54a, 0xffc233, 0xffe082, 0xe07ac2, 0xf5b942, 0xff8c3e];
+
+function trophyShelfX(worldIdx) {
+  return (worldIdx - (WORLD_TROPHY_COUNT - 1) / 2) * TROPHY_SHELF_SPACING;
+}
 
 function lambert(hex, emissive = 0x000000) {
   return new THREE.MeshLambertMaterial({ color: hex, emissive });
@@ -98,6 +104,7 @@ export class House {
       golemstatue: [5.4, GRASS_Y, 5.2],
       serpentstatue: [-4.8, GRASS_Y, 6.6],
       yetisnowman: [9.2, GRASS_Y, 6.0],
+      cabbagecrown: [-0.4, FLOOR_Y, -5.0],
       crystallamp: [1.4, FLOOR_Y, -5.0],
       dragonkite: [10.2, GRASS_Y, 10.4],
       // game-complete reward (granted, never sold) — front yard, can't-miss
@@ -660,6 +667,40 @@ export class House {
     return g;
   }
 
+  makeCabbageCrown() {
+    // A crisp little royal crown on a plum cushion for Purple Cabbage Swamp.
+    const g = new THREE.Group();
+    const gold = lambert(0xd9b36a, 0x5a4000);
+    const leaf = lambert(0x9c5bb0, 0x2b0d35);
+    const vein = lambert(0xd9c2e8);
+    g.add(box(lambert(0x5a4632), 0, 0.12, 0, 0.9, 0.24, 0.9)); // display base
+    g.add(box(lambert(0x6e4059), 0, 0.34, 0, 0.62, 0.2, 0.62)); // cushion
+
+    const band = new THREE.Mesh(cylGeo, gold);
+    band.scale.set(0.46, 0.16, 0.46);
+    band.position.y = 0.62;
+    const center = new THREE.Mesh(cylGeo, lambert(0x6e4059));
+    center.scale.set(0.28, 0.18, 0.28);
+    center.position.y = 0.66;
+    g.add(band, center);
+
+    for (let k = 0; k < 6; k++) {
+      const a = k * (Math.PI * 2 / 6);
+      const x = Math.sin(a) * 0.36;
+      const z = Math.cos(a) * 0.36;
+      const point = new THREE.Mesh(coneGeo, leaf);
+      point.scale.set(0.16, 0.48, 0.16);
+      point.position.set(x, 0.96, z);
+      point.rotation.y = a;
+      g.add(point);
+      const rib = box(vein, x, 0.98, z, 0.04, 0.32, 0.04);
+      rib.rotation.y = a;
+      g.add(rib);
+    }
+    g.rotation.y = -0.35;
+    return g;
+  }
+
   makeCrystalLamp(anims) {
     // Glowing crystal cluster from the caves on a dark wood base.
     const g = new THREE.Group();
@@ -798,6 +839,7 @@ export class House {
       golemstatue: () => this.makeGolemStatue(),
       serpentstatue: () => this.makeSerpentStatue(),
       yetisnowman: () => this.makeYetiSnowman(this.anims),
+      cabbagecrown: () => this.makeCabbageCrown(),
       crystallamp: () => this.makeCrystalLamp(this.anims),
       dragonkite: () => this.makeDragonKite(this.anims),
       herotrophy: () => this.makeHeroTrophy(this.anims),
@@ -828,11 +870,11 @@ export class House {
       this.built[id] = g;
       this.scene.add(g);
     }
-    for (let w = 0; w < 5; w++) {
+    for (let w = 0; w < WORLD_TROPHY_COUNT; w++) {
       if (this.ceremony && this.ceremony.world === w) continue;
       if (!store.isBossBeaten(w) || this.trophies[w]) continue;
       const t = this.makeTrophy(w);
-      t.position.set(-1.8 + w * 0.9, 0.08, 0); // left to right along the shelf
+      t.position.set(trophyShelfX(w), 0.08, 0); // left to right along the shelf
       this.shelf.add(t);
       this.trophies[w] = t;
     }
@@ -860,7 +902,7 @@ export class House {
     // because this.trophies[worldIdx] is set before the next refresh call.
     if (!this.trophies[worldIdx]) {
       const cup = this.makeTrophy(worldIdx);
-      cup.position.set(-1.8 + worldIdx * 0.9, 1.7, 0);
+      cup.position.set(trophyShelfX(worldIdx), 1.7, 0);
       this.shelf.add(cup);
       this.trophies[worldIdx] = cup;
     }
@@ -909,8 +951,8 @@ export class House {
           this.celebrate(c.decorId);
           sfxCorrect();
           speak(`You won the ${item.name}! What a prize!`, { rate: 1.0 });
-          // Close offset shot of the new prize; stays inside the walls for
-          // the one interior prize (crystallamp) and in open air for the yard.
+          // Close offset shot of the new prize; stays inside for interior
+          // prizes and in open air for the yard.
           const pos = this.itemPos[c.decorId];
           this.ceremonyCam = {
             pos: new THREE.Vector3(pos[0] + 3.2, pos[1] + 3.4, pos[2] + 5.2),
