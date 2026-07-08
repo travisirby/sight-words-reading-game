@@ -176,6 +176,7 @@ function showTitle() {
   if (mode === 'map') map.exit();
   mode = 'char';
   music.play('title');
+  charScene.setAntics(true); // the kid waves/dances/sits while idle here
   charScene.setLook(currentLook());
   ui.setPlayerName(store.activeProfileName());
   ui.showScreen('title');
@@ -237,6 +238,7 @@ function showCharacter(from = 'title') {
   charReturn = from;
   if (mode === 'map') map.exit();
   mode = 'char';
+  charScene.setAntics(false); // steady turntable while dressing the kid
   charScene.setLook(currentLook());
   ui.buildCharacterUI((part, idx) => {
     store.setCharacterPart(part, idx);

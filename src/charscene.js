@@ -12,6 +12,7 @@ import * as THREE from 'three';
 import { makeKidMesh, applyLook } from './player.js';
 import { PALETTES, mulberry32 } from './level.js';
 import { buildBoss } from './boss.js';
+import { DOLCH } from './words.js';
 
 const P = PALETTES[0]; // Pasta Plains — the game's opening world
 const boxGeo = new THREE.BoxGeometry(1, 1, 1);
@@ -22,10 +23,7 @@ const css = (hex) => '#' + hex.toString(16).padStart(6, '0');
 // all six faces reads as an accidental stutter ("and and") when two faces
 // show at once.
 function makeWordBlock(word, bgHex) {
-  const panel = (text) => {
-    const c = document.createElement('canvas');
-    c.width = 128;
-    c.height = 128;
+  const paint = (c, text) => {
     const g = c.getContext('2d');
     g.fillStyle = css(bgHex);
     g.fillRect(0, 0, 128, 128);
@@ -40,12 +38,26 @@ function makeWordBlock(word, bgHex) {
       g.textBaseline = 'middle';
       g.fillText(text, 64, 68);
     }
+  };
+  const panel = (text) => {
+    const c = document.createElement('canvas');
+    c.width = 128;
+    c.height = 128;
+    paint(c, text);
     return new THREE.MeshLambertMaterial({ map: new THREE.CanvasTexture(c) });
   };
   const wordMat = panel(word);
   const blank = panel('');
   // BoxGeometry face order: +x, -x, +y, -y, +z, -z.
-  return new THREE.Mesh(boxGeo, [blank, blank, blank, blank, wordMat, wordMat]);
+  const mesh = new THREE.Mesh(boxGeo, [blank, blank, blank, blank, wordMat, wordMat]);
+  // Repaintable so the title's ambient shuffle can land on a new word.
+  mesh.userData.word = word;
+  mesh.userData.setWord = (text) => {
+    mesh.userData.word = text;
+    paint(wordMat.map.image, text);
+    wordMat.map.needsUpdate = true;
+  };
+  return mesh;
 }
 
 export class CharScene {
@@ -268,6 +280,9 @@ export class CharScene {
     // Sight-word toy blocks (pre-primer Dolch words the kid meets first)
     // in the UI letter colors, scattered around the pedestal like toys.
     // Screen-left stays clear of the button stack on the right.
+    // Every so often one does the in-level shuffle spin (wordevents.js) and
+    // lands showing a different word — a sneaky extra flashcard per look.
+    this.wordBlocks = [];
     {
       const defs = [
         ['the', 0xffd93d, -2.2, -3.0, 0.6, 0.35],
@@ -281,8 +296,11 @@ export class CharScene {
         block.position.set(x, -0.22 + s / 2, z);
         block.rotation.y = ry;
         this.scene.add(block);
+        this.wordBlocks.push({ mesh: block, baseRy: ry });
       }
     }
+    this.blockSpin = null; // { block, t, swapped }
+    this.nextBlockSpinIn = 4;
 
     // The Grass Golem waits outside his castle, full armor on — the same
     // buildBoss() mesh the boss fight uses, complete with his 5 gold armor
@@ -330,21 +348,143 @@ export class CharScene {
     this.kid = makeKidMesh(1);
     this.scene.add(this.kid);
     this.t = 0;
+
+    // Title-screen antics: between stretches of the normal slow spin the kid
+    // turns to the camera and does a random trick (wave, dance, sit...).
+    // Off in the character creator so the preview stays a steady turntable.
+    this.antics = false;
+    this.rotY = 0; // owned spin angle — tricks pause it, idle resumes it
+    this.act = null; // { name, t, dur }
+    this.lastAct = '';
+    this.nextActIn = 2.5;
   }
 
   setLook(look) {
     applyLook(this.kid, look);
   }
 
+  // Title screen turns these on; the creator/others turn them off.
+  setAntics(on) {
+    this.antics = on;
+    if (!on) this.act = null;
+  }
+
+  startAct() {
+    const names = ['wave', 'dance', 'sit', 'hop', 'twirl'].filter(
+      (n) => n !== this.lastAct
+    );
+    const name = names[(Math.random() * names.length) | 0];
+    const dur = { wave: 2.4, dance: 3.4, sit: 4.0, hop: 1.6, twirl: 1.4 }[name];
+    this.act = { name, t: 0, dur };
+    this.lastAct = name;
+  }
+
   tick(dt) {
     this.t += dt;
-    this.kid.rotation.y = this.t * 0.9;
-    // Gentle idle bob + arm sway so he feels alive while being dressed.
-    this.kid.position.y = Math.sin(this.t * 2.2) * 0.03;
     const p = this.kid.userData.parts;
+
+    // Baseline idle: slow spin, gentle bob, arm sway. Tricks override on top.
     const sway = Math.sin(this.t * 2.2) * 0.15;
-    p.armL.rotation.z = sway;
-    p.armR.rotation.z = -sway;
+    let y = Math.sin(this.t * 2.2) * 0.03;
+    let armLz = sway, armRz = -sway; // swing in the facing plane
+    let armLx = 0, armRx = 0;        // lateral raise (out to the sides)
+    let legLz = 0, legRz = 0;
+
+    if (this.act) {
+      const a = this.act;
+      a.t += dt;
+      if (a.t >= a.dur) {
+        this.act = null;
+        this.nextActIn = 2.5 + Math.random() * 3;
+      } else {
+        // Turn to the camera for the performance (kid faces +x at rotY 0).
+        const FACE_CAM = Math.atan2(-6.6, 1.1);
+        let diff = FACE_CAM - this.rotY;
+        diff -= Math.round(diff / (Math.PI * 2)) * Math.PI * 2;
+        this.rotY += diff * Math.min(1, dt * 6);
+
+        // Ease in/out so every trick starts and ends from the idle pose.
+        let e = Math.min(a.t / 0.35, (a.dur - a.t) / 0.35, 1);
+        e = e * e * (3 - 2 * e);
+
+        if (a.name === 'wave') {
+          // Right arm high, hand wagging.
+          armRx = -2.5 * e;
+          armRz = Math.sin(a.t * 9) * 0.3 * e;
+          armLz = sway * (1 - e);
+        } else if (a.name === 'dance') {
+          // Bouncy alternating arm pumps with a little hip twist.
+          const beat = Math.sin(a.t * 7);
+          armLx = (1.7 + beat * 0.9) * e;
+          armRx = (-1.7 + beat * 0.9) * e;
+          y += Math.abs(beat) * 0.1 * e;
+          legLz = beat * 0.25 * e;
+          legRz = -beat * 0.25 * e;
+          this.rotY += Math.sin(a.t * 3.5) * 0.3 * e * dt * 6;
+        } else if (a.name === 'sit') {
+          // Plop down on the pedestal, legs out, hands resting on knees.
+          y += -0.42 * e;
+          legLz = 1.45 * e;
+          legRz = 1.45 * e;
+          armLz = 0.6 * e;
+          armRz = 0.6 * e;
+        } else if (a.name === 'hop') {
+          // Two happy hops, both arms thrown up.
+          y += Math.abs(Math.sin((a.t / a.dur) * Math.PI * 2)) * 0.32 * e;
+          armLx = 2.4 * e;
+          armRx = -2.4 * e;
+        } else if (a.name === 'twirl') {
+          // A quick full-speed twirl, arms out like a helicopter.
+          this.rotY += dt * 9 * e;
+          armLx = 1.5 * e;
+          armRx = -1.5 * e;
+        }
+      }
+    } else {
+      this.rotY += dt * 0.9;
+      if (this.antics) {
+        this.nextActIn -= dt;
+        if (this.nextActIn <= 0) this.startAct();
+      }
+    }
+
+    this.kid.rotation.y = this.rotY;
+    this.kid.position.y = y;
+    p.armL.rotation.z = armLz;
+    p.armR.rotation.z = armRz;
+    p.armL.rotation.x = armLx;
+    p.armR.rotation.x = armRx;
+    p.legL.rotation.z = legLz;
+    p.legR.rotation.z = legRz;
+
+    // Toy blocks: every so often one does the level shuffle spin — one eased
+    // full turn, swapping to a new sight word at the halfway point while the
+    // word faces face away from the camera (same recipe as wordevents.js).
+    const SPIN_DUR = 0.7;
+    if (!this.blockSpin) {
+      this.nextBlockSpinIn -= dt;
+      if (this.nextBlockSpinIn <= 0) {
+        const block = this.wordBlocks[(Math.random() * this.wordBlocks.length) | 0];
+        this.blockSpin = { block, t: SPIN_DUR, swapped: false };
+      }
+    } else {
+      const s = this.blockSpin;
+      s.t -= dt;
+      const prog = 1 - Math.max(0, s.t) / SPIN_DUR;
+      s.block.mesh.rotation.y =
+        s.block.baseRy + (1 - Math.pow(1 - prog, 2)) * Math.PI * 2;
+      if (!s.swapped && prog >= 0.5) {
+        s.swapped = true;
+        const shown = new Set(this.wordBlocks.map((b) => b.mesh.userData.word));
+        const pool = DOLCH.prePrimer.filter((w) => !shown.has(w));
+        s.block.mesh.userData.setWord(pool[(Math.random() * pool.length) | 0]);
+      }
+      if (s.t <= 0) {
+        s.block.mesh.rotation.y = s.block.baseRy;
+        this.blockSpin = null;
+        this.nextBlockSpinIn = 3.5 + Math.random() * 4.5;
+      }
+    }
 
     // Clouds drift right and wrap; coins twirl and bob.
     for (const c of this.clouds) {
