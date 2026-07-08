@@ -137,5 +137,18 @@ export default function build() {
   bomb(1, 11, 2, YEL);
   bomb(-1, 16, -4, ORG);
 
+  assertNoPartOverlap(s);
+
   return s;
+}
+
+function assertNoPartOverlap(scene) {
+  const seen = new Map();
+  for (const part of scene.parts) {
+    for (const key of part.voxels.keys()) {
+      const prev = seen.get(key);
+      if (prev) throw new Error(`${scene.name}: ${part.name} overlaps ${prev} at ${key}`);
+      seen.set(key, part.name);
+    }
+  }
 }
