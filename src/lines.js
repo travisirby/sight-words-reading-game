@@ -53,12 +53,12 @@ export const LINES = {
     'Special bonus! Read the word with your voice. Hold the microphone!',
   ],
 
-  // Grabbed the hidden key in a level.
+  // Grabbed the hidden key in a level. Keep these short (~2s spoken): the
+  // key sits ~18 units before the next word event's intro line, which cuts
+  // off whatever is still playing when the player sprints (8.55 u/s).
   secretKey: [
     'You found a secret key!',
     'A secret key! Amazing!',
-    'Wow! A hidden key! You are a great explorer!',
-    'You found the key! It opens something special!',
   ],
 
   // The secret path reveals on the map.
