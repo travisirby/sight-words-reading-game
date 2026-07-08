@@ -1,0 +1,55 @@
+{
+  "name": "boss-cabbage",
+  "voxelSize": 0.1,
+  "anchor": "bottom-center",
+  "parts": [
+    {
+      "name": "body",
+      "file": "body.vox"
+    },
+    {
+      "name": "armL",
+      "file": "armL.vox",
+      "pivot": [
+        4,
+        34,
+        -10
+      ]
+    },
+    {
+      "name": "armR",
+      "file": "armR.vox",
+      "pivot": [
+        40,
+        34,
+        -10
+      ]
+    },
+    {
+      "name": "pupilL",
+      "file": "pupilL.vox",
+      "pivot": [
+        17.5,
+        38.5,
+        0.5
+      ]
+    },
+    {
+      "name": "pupilR",
+      "file": "pupilR.vox",
+      "pivot": [
+        26.5,
+        38.5,
+        0.5
+      ]
+    },
+    {
+      "name": "browL",
+      "file": "browL.vox"
+    },
+    {
+      "name": "browR",
+      "file": "browR.vox"
+    }
+  ]
+}

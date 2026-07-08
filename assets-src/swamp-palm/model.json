@@ -1,0 +1,15 @@
+{
+  "name": "swamp-palm",
+  "voxelSize": 0.2,
+  "anchor": "bottom-center",
+  "parts": [
+    {
+      "name": "trunk",
+      "file": "trunk.vox"
+    },
+    {
+      "name": "fronds",
+      "file": "fronds.vox"
+    }
+  ]
+}

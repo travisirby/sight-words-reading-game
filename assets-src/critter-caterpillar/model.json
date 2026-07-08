@@ -1,0 +1,15 @@
+{
+  "name": "critter-caterpillar",
+  "voxelSize": 0.05,
+  "anchor": "bottom-center",
+  "parts": [
+    {
+      "name": "body",
+      "file": "body.vox"
+    },
+    {
+      "name": "glow",
+      "file": "glow.vox"
+    }
+  ]
+}
