@@ -57,6 +57,22 @@ export function bakeModel(dir, out = outDir) {
     return { ...p, cells: voxToCells(voxels, palette) };
   });
 
+  // Each part bakes to its own mesh, so a cell claimed by two parts renders
+  // two coplanar same-facing surfaces that z-fight (flicker) at runtime.
+  for (let i = 0; i < parts.length; i++) {
+    for (let j = i + 1; j < parts.length; j++) {
+      let shared = 0;
+      for (const k of parts[i].cells.keys()) if (parts[j].cells.has(k)) shared++;
+      if (shared) {
+        console.warn(
+          `WARNING ${meta.name}: parts "${parts[i].name}" and "${parts[j].name}" ` +
+          `overlap on ${shared} voxel cell(s) — they will z-fight at runtime; ` +
+          `make one part yield or sit a voxel proud in scripts/vox/models/${meta.name}.mjs`
+        );
+      }
+    }
+  }
+
   // Anchor from the union bounding box: x/z centered, feet at y = 0.
   let bb = null;
   for (const { cells } of parts) {
