@@ -52,17 +52,20 @@ export default function build() {
   }
 
   // ---- trim: two chili pods hanging from the branches ----
+  // Pods dangle from the branch UNDERSIDES (parts bake to separate meshes,
+  // so sharing a cell with the trunk z-fights): y here is the first free
+  // row below the branch cell they hang from.
   const trim = s.part('trim');
   const POD = s.color('#e23b2e');
   const POD2 = s.color('#ff7a2e');
   const GRN = s.color('#2f7d2e');
   const pod = (x, y, z, C) => {
-    trim.set(x, y, z, GRN); // tiny stem link
+    trim.set(x, y, z, GRN); // tiny stem link under the branch
     trim.box(x, y - 3, z, x, y - 1, z, C);
-    trim.set(x, y - 4, z + (z >= 0 ? 0 : 0), C);
+    trim.set(x, y - 4, z, C);
   };
-  pod(4, 18, 0, POD);
-  pod(-3, 14, 0, POD2);
+  pod(4, 15, 0, POD); // under branch cell (4, 16, 0)
+  pod(-3, 12, 0, POD2); // under branch cell (-3, 13, 0)
 
   return s;
 }

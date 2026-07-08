@@ -57,9 +57,14 @@ export default function build() {
   body.box(-2 + capDx, H + 1, -2, 2 + capDx, H + 1, 2, B);
 
   // ---- leaf: calyx sepals draped over the shoulder + curly stem ----
+  // Parts bake to separate meshes, so any cell claimed twice z-fights at
+  // runtime: every leaf placement yields to the body.
   const leaf = s.part('leaf');
   const GRN = s.color('#3f9e3a');
   const GRN2 = s.color('#2f7d2e');
+  const put = (x, y, z, c) => {
+    if (!body.voxels.has(`${x},${y},${z}`)) leaf.set(x, y, z, c);
+  };
 
   // Five sepals over the rim, stepping down/outward like the volcano's
   // crater leaves; the fifth rides the lean-side diagonal.
@@ -71,15 +76,20 @@ export default function build() {
       for (let w = -t; w <= t; w++) {
         const x = (dx !== 0 ? dx * r : w) + capDx;
         const z = dz !== 0 ? dz * r : w;
-        leaf.set(x, y, z, j < 2 ? GRN : GRN2);
+        put(x, y, z, j < 2 ? GRN : GRN2);
       }
     }
   }
   // Curly stem: rises off-center, hooks against the lean for balance.
-  for (let y = H + 2; y <= H + 5; y++) leaf.box(capDx - 1, y, -1, capDx, y, 0, GRN2);
-  leaf.box(capDx - 3, H + 5, -1, capDx - 2, H + 5, 0, GRN2);
-  leaf.set(capDx - 3, H + 4, -1, GRN2);
-  leaf.set(capDx - 3, H + 4, 0, GRN2);
+  for (let y = H + 2; y <= H + 5; y++) {
+    for (const [x, z] of [[capDx - 1, -1], [capDx - 1, 0], [capDx, -1], [capDx, 0]]) put(x, y, z, GRN2);
+  }
+  for (const x of [capDx - 3, capDx - 2]) {
+    put(x, H + 5, -1, GRN2);
+    put(x, H + 5, 0, GRN2);
+  }
+  put(capDx - 3, H + 4, -1, GRN2);
+  put(capDx - 3, H + 4, 0, GRN2);
 
   return s;
 }
