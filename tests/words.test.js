@@ -19,16 +19,16 @@ describe('chunkIntoLevels', () => {
     for (const list of Object.values(DOLCH)) {
       for (const lvl of chunkIntoLevels(list, 5)) {
         expect(lvl.length).toBeGreaterThanOrEqual(4);
-        expect(lvl.length).toBeLessThanOrEqual(7);
+        expect(lvl.length).toBeLessThanOrEqual(8);
       }
     }
   });
 
-  it('caps the number of levels at 8', () => {
+  it('caps the number of levels at 7 (8 map stops with the castle)', () => {
     for (const list of Object.values(DOLCH)) {
-      expect(chunkIntoLevels(list, 5).length).toBeLessThanOrEqual(8);
+      expect(chunkIntoLevels(list, 5).length).toBeLessThanOrEqual(7);
     }
-    expect(chunkIntoLevels(DOLCH.primer, 5)).toHaveLength(8);
+    expect(chunkIntoLevels(DOLCH.primer, 5)).toHaveLength(7);
   });
 
   it('handles a list smaller than the target', () => {
@@ -67,10 +67,10 @@ describe('WORLDS', () => {
 
   it('keeps every world level chunk within the size bounds', () => {
     for (const world of WORLDS) {
-      expect(world.levels.length).toBeLessThanOrEqual(8);
+      expect(world.levels.length).toBeLessThanOrEqual(7);
       for (const level of world.levels) {
         expect(level.length).toBeGreaterThanOrEqual(4);
-        expect(level.length).toBeLessThanOrEqual(7);
+        expect(level.length).toBeLessThanOrEqual(8);
       }
     }
   });
