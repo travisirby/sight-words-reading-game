@@ -1,17 +1,15 @@
-// Pre-generate all game speech as mp3 clips using Microsoft Edge neural TTS
-// (via `uvx edge-tts`, no install needed). Clips land in public/tts/ and a
+// Pre-generate all game speech as mp3 clips using the ElevenLabs TTS API
+// (voice "Matilda" — upbeat teacher). Clips land in public/tts/ and a
 // lookup manifest is written to src/tts-manifest.js; audio.js plays clips
 // through WebAudio and falls back to speechSynthesis for any unknown text.
 //
-// Usage: node scripts/generate-tts.mjs [--force]
+// Usage: ELEVENLABS_API_KEY=... node scripts/generate-tts.mjs [--force]
 //   --force  regenerate clips that already exist
 //
 // Dynamic sentences are assembled at runtime from segments:
 //   "Find the word: cat" -> [prefix clip "find the word:"] + [word clip "cat"]
 // so only ~310 small clips cover every line the game can speak.
 
-import { execFile } from 'node:child_process';
-import { promisify } from 'node:util';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -19,16 +17,21 @@ import { DOLCH, WORLDS } from '../src/words.js';
 import { LINES, BOSS_WIN_LINES } from '../src/lines.js';
 import { HOUSE_ITEMS } from '../src/housedata.js';
 
-const run = promisify(execFile);
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const OUT_DIR = path.join(root, 'public', 'tts');
 const MANIFEST = path.join(root, 'src', 'tts-manifest.js');
 const FORCE = process.argv.includes('--force');
 
-const VOICE = 'en-US-JennyNeural';
-const PHRASE_RATE = '-8%'; // sentences: a touch slower than default
-const WORD_RATE = '-20%'; // isolated sight words: slow and clear
-const CONCURRENCY = 8;
+const VOICE_ID = 'XrExE9yKIg1WjnnlVkGX'; // ElevenLabs "Matilda"
+const MODEL = 'eleven_multilingual_v2';
+const PHRASE_RATE = 0.95; // sentences: a touch slower than default
+const WORD_RATE = 0.8; // isolated sight words: slow and clear
+const CONCURRENCY = 3; // ElevenLabs caps concurrent requests per plan
+const API_KEY = process.env.ELEVENLABS_API_KEY;
+if (!API_KEY) {
+  console.error('set ELEVENLABS_API_KEY');
+  process.exit(1);
+}
 
 // Boss names live in src/boss.js, which pulls in three.js/DOM modules, so
 // scrape them from the source instead of importing it.
@@ -136,24 +139,47 @@ function buildClips() {
   return clips;
 }
 
-async function synth(file, { text, rate }) {
+async function synth(file, { text, rate, kind }) {
   const out = path.join(OUT_DIR, file);
   if (!FORCE && fs.existsSync(out) && fs.statSync(out).size > 0) return 'kept';
-  await run('uvx', [
-    'edge-tts', '--voice', VOICE, `--rate=${rate}`,
-    '--text', text, '--write-media', out,
-  ]);
-  if (!fs.existsSync(out) || fs.statSync(out).size === 0) {
-    throw new Error(`empty output for "${text}"`);
+  for (let attempt = 1; ; attempt++) {
+    const res = await fetch(
+      `https://api.elevenlabs.io/v1/text-to-speech/${VOICE_ID}?output_format=mp3_44100_128`,
+      {
+        method: 'POST',
+        headers: { 'xi-api-key': API_KEY, 'content-type': 'application/json' },
+        body: JSON.stringify({
+          text,
+          model_id: MODEL,
+          voice_settings: { stability: 0.5, similarity_boost: 0.75, speed: rate },
+          // Isolated function words get read in reduced form without context
+          // ("a" -> "uh", "am" -> "umm"). previous_text conditions the model
+          // to use the citation pronunciation but is not spoken.
+          ...(kind === 'word' && { previous_text: 'Say the word:' }),
+        }),
+      }
+    );
+    if (res.ok) {
+      const buf = Buffer.from(await res.arrayBuffer());
+      if (!buf.length) throw new Error(`empty output for "${text}"`);
+      fs.writeFileSync(out, buf);
+      return 'made';
+    }
+    const body = await res.text();
+    // 429 = concurrency/rate limit; 5xx = transient — back off and retry.
+    if ((res.status === 429 || res.status >= 500) && attempt < 5) {
+      await new Promise((r) => setTimeout(r, 2000 * attempt));
+      continue;
+    }
+    throw new Error(`HTTP ${res.status} for "${text}": ${body.slice(0, 160)}`);
   }
-  return 'made';
 }
 
 async function main() {
   fs.mkdirSync(OUT_DIR, { recursive: true });
   const clips = buildClips();
   const entries = [...clips.entries()];
-  console.log(`${entries.length} clips, voice ${VOICE}`);
+  console.log(`${entries.length} clips, ElevenLabs voice ${VOICE_ID} (Matilda)`);
 
   let made = 0, kept = 0, failed = 0;
   const queue = [...entries];
