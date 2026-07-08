@@ -772,6 +772,42 @@ export class Overworld {
       spots(wi, counts[wi], rand).forEach((s, i) => emitters[wi](put, s, rand, i, glow));
     });
 
+    { // Pasta Plains extras: spaghetti-pile landmark plates anchor the row.
+      // Baked model (public/models/spaghetti-pile.json, bottom-center
+      // anchor, ~3.4 units tall at scale 1). Groups position synchronously
+      // and meshes attach when the fetch lands; lock tints reach them
+      // through this.voxDecor (see applyLockTints).
+      const rz = 0 * ROW_Z;
+      const prand = mulberry32(11717);
+      const pile = (spotList, scale) => {
+        for (const [x, z] of spotList) {
+          const y = this.groundH.get(x + ',' + z);
+          if (y === undefined || this.flatCells.has(x + ',' + z)) continue;
+          const g = new THREE.Group();
+          g.position.set(x, y - 0.1, z);
+          g.rotation.y = prand() * Math.PI * 2;
+          g.scale.setScalar(scale + prand() * 0.08);
+          this.scene.add(g);
+          const entry = { region: 0, mats: [] };
+          this.voxDecor.push(entry);
+          loadVoxModel(`${import.meta.env.BASE_URL}models/spaghetti-pile.json`)
+            .then((model) => {
+              if (voxBuildId !== this.voxBuildId) return;
+              const { group, parts } = buildVoxMesh(model);
+              g.add(group);
+              for (const name in parts) entry.mats.push(parts[name].material);
+              this.applyLockTints(); // re-tint now that the materials exist
+            })
+            .catch((err) => console.error('spaghetti-pile model failed to load:', err));
+          return;
+        }
+      };
+      // Most of the row is flattened for paths/level pads; these candidate
+      // cells sit on the open grass shoulder just in front of them.
+      pile([[-12, rz + 3], [-13, rz + 3], [-11, rz + 3]], 0.72);
+      pile([[10, rz + 3], [11, rz + 2], [9, rz + 3]], 0.5);
+    }
+
     { // Purple Cabbage Swamp extras: magenta pools, giant cabbages, bubbles.
       const poolGlow = poolPut(3);
       const rz = 3 * ROW_Z;
