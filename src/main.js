@@ -31,6 +31,7 @@ setMuted(!store.get().sound);
 music.setMusicEnabled(store.get().music);
 
 const LEVEL_COUNTS = WORLDS.map((w) => w.levels.length);
+store.clampFrontier(LEVEL_COUNTS);
 
 let current = { world: 0, level: 0, secret: false };
 let selected = null; // node info from the map banner

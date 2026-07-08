@@ -650,7 +650,16 @@ export class Overworld {
       }
     };
 
-    // Picks prop spots on existing ground, off the trail, min 2 apart.
+    // Picks prop spots on existing ground, min 3 apart, with a 1-cell buffer
+    // off the trail corridor so decorations never crowd the path or pads.
+    const nearTrail = (x, z) => {
+      for (let dx = -1; dx <= 1; dx++) {
+        for (let dz = -1; dz <= 1; dz++) {
+          if (this.flatCells.has((x + dx) + ',' + (z + dz))) return true;
+        }
+      }
+      return false;
+    };
     const spots = (wi, count, rand) => {
       const out = [];
       let guard = 0;
@@ -658,22 +667,19 @@ export class Overworld {
         const x = Math.round(-19 + rand() * 38);
         const z = Math.round(wi * ROW_Z - 3 + rand() * 6);
         const key = x + ',' + z;
-        if (!this.groundH.has(key) || this.flatCells.has(key)) continue;
-        if (out.some((s) => Math.abs(s.x - x) < 2 && Math.abs(s.z - z) < 2)) continue;
+        if (!this.groundH.has(key) || nearTrail(x, z)) continue;
+        if (out.some((s) => Math.abs(s.x - x) < 3 && Math.abs(s.z - z) < 3)) continue;
         out.push({ x, z, y: this.groundH.get(key) });
       }
       return out;
     };
 
     const emitters = [
-      (put, s, rand, i) => { // Pasta Plains: meatball trees, marinara pond, tomatoes
-        if (i < 5) { // spaghetti tree: noodle trunk, meatball top, marinara splat
+      (put, s, rand, i) => { // Pasta Plains: meatball trees, tomatoes, farfalle
+        if (i < 4) { // spaghetti tree: noodle trunk, meatball top, marinara splat
           put(s.x, s.y + 0.6, s.z, 0.3, 1.2, 0.3, 0xf5d778);
           put(s.x, s.y + 1.6, s.z, 1.4, 1.0, 1.4, 0x8a4b2d);
           put(s.x, s.y + 2.3, s.z, 0.8, 0.4, 0.8, 0xd2422a);
-        } else if (i === 5) { // marinara pond with a parmesan boulder
-          put(s.x, s.y + 0.04, s.z, 2.6, 0.1, 1.9, 0xd2422a);
-          put(s.x + 1.5, s.y + 0.15, s.z + 0.8, 0.5, 0.3, 0.5, 0xfff2cc);
         } else if (i & 1) { // cherry tomato on a stem
           put(s.x, s.y + 0.22, s.z, 0.08, 0.45, 0.08, 0x3f9e3a);
           put(s.x, s.y + 0.52, s.z, 0.26, 0.26, 0.26, 0xe23b2e);
@@ -684,54 +690,54 @@ export class Overworld {
         }
       },
       (put, s, rand, i) => { // Waffle Desert: waffle stacks, syrup dunes, a strawberry
-        if (i < 5) { // waffle stack with a butter pat
+        if (i < 3) { // waffle stack with a butter pat
           put(s.x, s.y + 0.25, s.z, 1.5, 0.45, 1.5, 0xcf8c3c, rand() * 0.4);
           put(s.x + 0.1, s.y + 0.65, s.z, 1.4, 0.4, 1.4, 0xdd9c4a);
           put(s.x, s.y + 1.0, s.z, 0.5, 0.28, 0.5, 0xffe36a);
-        } else if (i < 10) { // syrup-drizzled dune
+        } else if (i < 6) { // syrup-drizzled dune
           put(s.x, s.y + 0.25, s.z, 2.6, 0.6, 1.8, 0xe0a850, rand() * 0.6);
           put(s.x + 0.5, s.y + 0.55, s.z + 0.2, 1.2, 0.25, 0.9, 0x8a4a1a);
-        } else if (i === 10) { // one giant strawberry landmark
+        } else if (i === 6) { // one giant strawberry landmark
           put(s.x, s.y + 0.55, s.z, 1.1, 1.1, 1.1, 0xe23b2e);
           put(s.x, s.y + 1.2, s.z, 0.7, 0.3, 0.7, 0x3f9e3a);
           put(s.x + 0.2, s.y + 1.45, s.z, 0.14, 0.3, 0.14, 0x3f9e3a);
         } else rock(put, s.x, s.y, s.z, 0x5a3520); // chocolate chunk
       },
       (put, s, rand, i) => { // Snowy Peaks: snowy trees, snowman, ice
-        if (i < 5) {
+        if (i < 4) {
           put(s.x, s.y + 0.55, s.z, 0.32, 1.1, 0.32, 0x6b4a2a);
           put(s.x, s.y + 1.55, s.z, 1.4, 1.0, 1.4, 0x2e7d4f);
           put(s.x, s.y + 2.25, s.z, 1.5, 0.4, 1.5, 0xf4f8fc);
-        } else if (i === 5) {
+        } else if (i === 4) {
           put(s.x, s.y + 0.45, s.z, 0.9, 0.9, 0.9, 0xffffff);
           put(s.x, s.y + 1.2, s.z, 0.65, 0.65, 0.65, 0xf4f8fc);
           put(s.x, s.y + 1.75, s.z, 0.45, 0.45, 0.45, 0xffffff);
           put(s.x, s.y + 1.75, s.z + 0.3, 0.1, 0.1, 0.25, 0xff8c42);
-        } else if (i < 10) {
+        } else if (i < 7) {
           put(s.x, s.y + 0.03, s.z, 1.9, 0.08, 1.5, 0xcfe8ff, rand());
         } else rock(put, s.x, s.y, s.z, 0xaac2d6);
       },
       (put, s, rand, i, glow) => { // Purple Cabbage Swamp: cabbages, reeds, palms
-        if (i < 5) {
+        if (i < 3) {
           cabbage(put, s.x, s.y, s.z, rand, i);
           if (i < 2) {
             glow(s.x + 0.28, s.y + 0.34, s.z - 0.18,
               0.18, 0.08, 0.18, 0xe93fc8, rand() * Math.PI);
           }
-        } else if (i < 9) {
+        } else if (i < 6) {
           reeds(put, s.x, s.y, s.z, rand);
-        } else if (i < 12) {
+        } else if (i < 8) {
           swampPalm(put, s.x, s.y, s.z, rand);
         } else {
           rock(put, s.x, s.y, s.z, i & 1 ? 0xa85332 : 0x7e3d26);
         }
       },
       (put, s, rand, i, glow) => { // Crystal Caves: arches, crystals, mushrooms
-        if (i < 3) {
+        if (i < 2) {
           put(s.x - 0.9, s.y + 0.8, s.z, 0.6, 1.6, 0.6, 0x54545f);
           put(s.x + 0.9, s.y + 0.8, s.z, 0.6, 1.6, 0.6, 0x5e5e6c);
           put(s.x, s.y + 1.75, s.z, 2.6, 0.55, 0.7, 0x54545f);
-        } else if (i < 9) {
+        } else if (i < 6) {
           const cols = [0x7ef0ff, 0xd07eff, 0xff8ad8];
           for (let k = 0; k < 3; k++) {
             glow(s.x + (k - 1) * 0.5, s.y + 0.7 + rand() * 0.4, s.z,
@@ -744,12 +750,12 @@ export class Overworld {
         }
       },
       (put, s, rand, i, glow) => { // Pepper Volcano: cones, chili plants, embers
-        if (i < 3) { // mini stepped cinder cone with a molten glow on top
+        if (i < 2) { // mini stepped cinder cone with a molten glow on top
           put(s.x, s.y + 0.35, s.z, 1.9, 0.7, 1.9, 0x4a3a34, rand() * 0.5);
           put(s.x, s.y + 0.95, s.z, 1.3, 0.55, 1.3, 0x5c4438);
           put(s.x, s.y + 1.42, s.z, 0.8, 0.45, 0.8, 0x3a2d28);
           glow(s.x, s.y + 1.7, s.z, 0.5, 0.16, 0.5, 0xff9a3c);
-        } else if (i < 9) { // chili plant: leafy bush hung with bright peppers
+        } else if (i < 6) { // chili plant: leafy bush hung with bright peppers
           put(s.x, s.y + 0.32, s.z, 0.95, 0.6, 0.95, 0x3f9e3a, rand() * 0.6);
           put(s.x, s.y + 0.72, s.z, 0.6, 0.4, 0.6, 0x4cb545);
           const pep = [0xe23b2e, 0xff8c42, 0xffd93d];
@@ -764,7 +770,9 @@ export class Overworld {
         }
       },
     ];
-    const counts = [14, 14, 13, 13, 13, 12];
+    // Sparser than the old 12-14: fewer, better-spaced props keep each row's
+    // theme readable without competing with the trail.
+    const counts = [9, 9, 8, 8, 8, 8];
     WORLDS.forEach((w, wi) => {
       const rand = mulberry32(wi * 131 + 17);
       const put = decorPut(wi);
@@ -1933,8 +1941,9 @@ export class Overworld {
     // Node idle animations.
     this.nodeViews.forEach((v, i) => {
       if (!v.group.visible) return;
-      const pulse = 1.15 + Math.sin(t * 3 + v.group.position.x) * 0.09;
-      const s = v.isCurrent ? 1.15 + Math.sin(t * 5) * 0.14 : pulse;
+      // Only the current (next-playable) node animates — a whole row of
+      // pulsing pads reads as noise and buries the one that matters.
+      const s = v.isCurrent ? 1.15 + Math.sin(t * 5) * 0.14 : 1.15;
       v.dot.scale.set(s, 0.3, s);
       if (v.isCurrent) { // next-playable: gentle bounce + glow-ring pulse
         const rs = 2.2 + Math.sin(t * 3) * 0.3;
