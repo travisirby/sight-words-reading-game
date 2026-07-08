@@ -1141,32 +1141,36 @@ export class Overworld {
   }
 
   buildNodes() {
-    // Max 3 small gold stars in a flat arc BEHIND the node (-z), bobbing
-    // and spinning individually in tick().
-    const mkStars = () => {
+    // Max 3 small gold stars in a flat arc around the node — behind (-z) for
+    // regular pads, in FRONT for castles (the building would hide them) —
+    // bobbing and spinning individually in tick().
+    const mkStars = (front) => {
       const g = new THREE.Group();
       const mat = new THREE.MeshLambertMaterial({ color: 0xffd54a, emissive: 0x664d00 });
       for (let i = 0; i < 3; i++) {
         const s = new THREE.Mesh(boxGeo, mat);
         s.scale.setScalar(0.26);
         const a = (i - 1) * 0.6;
-        s.position.set(Math.sin(a) * 1.15, 0.62, -Math.cos(a) * 1.15);
+        s.position.set(Math.sin(a) * 1.15, 0.62, (front ? 1 : -1) * Math.cos(a) * 1.15);
         s.rotation.z = Math.PI / 4;
         g.add(s);
       }
       return g;
     };
     const mkNode = (nd, secret) => {
+      const isCastle = !secret && nd.isWorldFinal;
       const g = new THREE.Group();
       g.position.set(nd.x, 0, nd.z);
       const plate = new THREE.Mesh(boxGeo, new THREE.MeshLambertMaterial({ color: 0xfff3cf }));
       plate.scale.set(1.7, 0.25, 1.7);
       plate.position.y = 0.13;
-      // Flat pad (the token stands on it) rather than a cube.
+      // Flat pad (the token stands on it) rather than a cube. Castle nodes
+      // put the building itself on the plate instead of a red square.
       const dotMat = new THREE.MeshLambertMaterial({ color: 0xe53935 });
       const dot = new THREE.Mesh(boxGeo, dotMat);
       dot.scale.set(1.15, 0.3, 1.15);
       dot.position.y = 0.4;
+      dot.visible = !isCastle;
       const ring = new THREE.Mesh(
         boxGeo, new THREE.MeshLambertMaterial({ color: 0xfff176, emissive: 0x554400 })
       );
@@ -1180,7 +1184,7 @@ export class Overworld {
       );
       rim.scale.set(2.02, 0.1, 2.02);
       rim.position.y = 0.03;
-      const stars = mkStars();
+      const stars = mkStars(isCastle);
       g.add(plate, dot, ring, rim, stars);
 
       let crystals = null;
@@ -1269,7 +1273,7 @@ export class Overworld {
         bossHead.add(smile);
         bossHead.position.set(0, 3.3, 0);
         c.add(pole, castleFlag, crown, bossHead);
-        c.position.set(0, 0, -1.7);
+        c.position.set(0, 0.26, 0); // on the plate, where the red square was
         g.add(c);
       }
 
@@ -1501,9 +1505,11 @@ export class Overworld {
         for (let k = 0; k < seg.count; k++) this.tiles[seg.start + k].shown = show;
       }
       if (unlocked) {
+        // The castle building occupies its pad, so the token stands (and
+        // walk paths route) just in front of its gate rather than inside it.
         this.navList.push({
           world: nd.world, level: nd.level, secret: false, boss: !!nd.boss,
-          x: nd.x, z: nd.z, i,
+          x: nd.x, z: nd.boss ? nd.z + 1.3 : nd.z, i,
         });
       }
       // Insert the secret node after its world's last unlocked regular node.
