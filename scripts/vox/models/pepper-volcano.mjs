@@ -120,5 +120,18 @@ export default function build() {
   bomb(6, 11, 6, 1, YEL);
   bomb(-7, 16, 3, -1, ORG);
 
+  // Same-cell overlap across parts z-fights at runtime (each part is its own
+  // mesh), so later parts yield: leaf tongues lose cells buried in the cone
+  // or crossing lava dribbles, and the lava bombs lose the halves lodged
+  // inside the slope. Every yielded cell stays filled by the part that keeps
+  // it, so the assembled silhouette is unchanged.
+  const yieldTo = (part, ...owners) => {
+    for (const k of part.voxels.keys()) {
+      if (owners.some((o) => o.voxels.has(k))) part.voxels.delete(k);
+    }
+  };
+  yieldTo(leaf, body, lava);
+  yieldTo(trim, body);
+
   return s;
 }
