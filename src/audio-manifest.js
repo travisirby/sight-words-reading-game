@@ -7,6 +7,7 @@ export default {
     "map": "music-map.mp3",
     "level": "music-level.mp3",
     "boss": "music-boss.mp3",
+    "finale": "music-finale.mp3",
     "house": "music-house.mp3",
     "victory": "music-victory.mp3"
   },
