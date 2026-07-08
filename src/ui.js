@@ -16,7 +16,6 @@ const SCREENS = ['title', 'players', 'map', 'pause', 'complete', 'gamecomplete',
 export function init(h) {
   fairy.mount();
   bindSpeak($('btn-play'), 'Play!', () => h.onPlay());
-  bindSpeak($('btn-character'), 'Make your character!', () => h.onCharacter());
   bindSpeak($('btn-char-back'), 'Back', () => h.onCharacterDone());
   bindSpeak($('btn-char-done'), 'Looking good!', () => h.onCharacterDone());
   bindSpeak($('btn-settings'), 'Settings', () => $('settings-panel').classList.toggle('hidden'));
@@ -26,7 +25,11 @@ export function init(h) {
   bindSpeak($('btn-toggle-mic'), 'Mic round', () => h.onToggleMic());
   bindSpeak($('btn-toggle-unlock'), 'All levels', () => h.onToggleUnlock());
 
-  bindSpeak($('btn-switch-player'), 'Switch player!', () => h.onSwitchPlayer());
+  // Lives inside the settings panel — close it so the title is clean on return.
+  bindSpeak($('btn-switch-player'), 'Switch player!', () => {
+    $('settings-panel').classList.add('hidden');
+    h.onSwitchPlayer();
+  });
   bindSpeak($('btn-players-back'), 'Back', () => h.onPlayersBack());
   // New-player prompt: OK keeps the typed name, Skip means "no name yet".
   bindSpeak($('btn-new-player-ok'), "Let's go!", () => submitNewPlayer(true));
@@ -56,9 +59,8 @@ export function init(h) {
   bindSpeak($('btn-bonus-skip'), 'Skip', () => h.onBonusSkip());
 
   // On the map the house is a real building in the world (overworld.js
-  // raycasts it) — only title/complete need chrome buttons.
+  // raycasts it) — only the complete screens need chrome buttons.
   // House buttons stay silent — showHouse speaks a "welcome home" line.
-  bindSpeak($('btn-title-house'), null, () => h.onHouse('title'));
   bindSpeak($('btn-complete-house'), null, () => h.onHouse('complete'));
   bindSpeak($('btn-house-back'), 'Back', () => h.onHouseBack());
   bindSpeak($('btn-house-shop'), 'Shop!', () => toggleShop(true));
