@@ -1,0 +1,16 @@
+{
+  "name": "giant-cabbage",
+  "voxelSize": 0.2,
+  "anchor": "bottom-center",
+  "parts": [
+    {
+      "name": "leaf",
+      "file": "leaf.vox",
+      "tintable": true
+    },
+    {
+      "name": "inner",
+      "file": "inner.vox"
+    }
+  ]
+}

@@ -19,6 +19,7 @@ import { HOUSE_ITEMS } from './housedata.js';
 import * as store from './store.js';
 
 const boxGeo = voxelGeo;
+const bubbleGeo = new THREE.SphereGeometry(0.5, 8, 6);
 
 // Deterministic 0..1 hash from a 2D cell + salt: per-tile jitter that stays
 // stable frame to frame without burning RNG state.
@@ -59,6 +60,7 @@ const MAX_SECRET_TILES = 320;
 const MAX_GROUND = 3000;
 const MAX_DECOR = 900;
 const MAX_GLOW = 80;
+const MAX_POOL_GLOW = 80;
 const LOCK_TINT = 0.45; // color multiplier on locked regions
 const ROW_Z = 9;
 const FLOWER_COLORS = [0xff6b81, 0xffd93d, 0xff9ff3, 0x74b9ff];
@@ -391,7 +393,8 @@ export class Overworld {
     this.scene.add(this.groundMesh);
     this.groundMeta = []; // { region, color } per instance
     this.groundH = new Map(); // 'x,z' -> walk-surface height
-    this.lavaPools = []; // carved lava-pool cells (region 4); buildProps fills them
+    this.swampPools = []; // carved magenta-pool cells (region 3); buildProps fills them
+    this.lavaPools = []; // carved lava-pool cells (region 5); buildProps fills them
 
     const dummy = new THREE.Object3D();
     const added = new Set();
@@ -418,6 +421,7 @@ export class Overworld {
 
     WORLDS.forEach((w, wi) => {
       const p = PALETTES[wi];
+      const top = wi === 3 ? [0x6e4059, 0x62384f] : p.top;
       const rz = wi * ROW_Z;
       const rand = mulberry32(wi * 53 + 11);
 
@@ -439,11 +443,19 @@ export class Overworld {
           }
           if (this.keepCells.has(key)) keep = true;
           if (!keep) continue;
+          // Purple Cabbage Swamp: pock the landmass with glowing magenta
+          // pools, separate from the trail so route readability stays intact.
+          if (wi === 3 && !onPath &&
+              Math.sin(cx * 0.72 + 1.4) * Math.sin(cz * 0.94 - 0.6) < -0.64 &&
+              hash2(cx, cz, 23) < 0.68) {
+            this.swampPools.push({ x: cx, z: cz });
+            continue;
+          }
           // Pepper Volcano: pock the landmass with little lava pools — the
           // old floating-island carve throttled way down, plus a hash
           // knockout so the sine pattern doesn't visibly tile. buildProps()
           // drops a glowing slab into each hole.
-          if (wi === 4 && !onPath &&
+          if (wi === 5 && !onPath &&
               Math.sin(cx * 0.9 + 2) * Math.sin(cz * 0.8) < -0.8 &&
               hash2(cx, cz, 7) < 0.6) {
             this.lavaPools.push({ x: cx, z: cz });
@@ -455,7 +467,7 @@ export class Overworld {
             const n = Math.sin(cx * 0.55 + wi * 2) + Math.sin(cz * 0.75 + cx * 0.21);
             tier = n > 1.1 ? 1 : n > 0.35 ? 0.5 : 0;
           }
-          cell(cx, cz, tier, p.top[(cx + cz) & 1], wi);
+          cell(cx, cz, tier, top[(cx + cz) & 1], wi);
         }
       }
 
@@ -466,7 +478,7 @@ export class Overworld {
       for (let dx = -2; dx <= 2; dx++) {
         for (let dz = -2; dz <= 2; dz++) {
           if (Math.abs(dx) === 2 && Math.abs(dz) === 2) continue;
-          cell(sx + dx, sz + dz, 0, p.top[(dx + dz) & 1], wi);
+          cell(sx + dx, sz + dz, 0, top[(dx + dz) & 1], wi);
         }
       }
 
@@ -499,7 +511,10 @@ export class Overworld {
     }
 
     // The secret ledge / bridge cells above may have refilled a carved pool;
-    // keep only the pools that stayed holes so no lava slab hides in ground.
+    // keep only the pools that stayed holes so no glow slab hides in ground.
+    this.swampPools = this.swampPools.filter(
+      (sp) => !this.groundH.has(sp.x + ',' + sp.z)
+    );
     this.lavaPools = this.lavaPools.filter(
       (lp) => !this.groundH.has(lp.x + ',' + lp.z)
     );
@@ -507,9 +522,10 @@ export class Overworld {
     // Sand ring: shoreline cells blend toward beach sand so coasts read as
     // beaches instead of abrupt grass cliffs dropping into the sea. Pepper
     // Volcano coasts char toward dark basalt instead — black-sand shores
-    // that also rim the carved lava pools.
+    // that also rim the carved lava pools. Swamp coasts use dark rust mud.
     const sand = new THREE.Color(0xecd79f);
     const charcoal = new THREE.Color(0x453530);
+    const swampMud = new THREE.Color(0x7e3d26);
     for (const m of this.groundMeta) {
       if (m.tier > 0) continue;
       const coast =
@@ -518,7 +534,7 @@ export class Overworld {
         !this.groundH.has(m.cx + ',' + (m.cz + 1)) ||
         !this.groundH.has(m.cx + ',' + (m.cz - 1));
       if (coast) {
-        m.color.lerp(m.region === 4 ? charcoal : sand,
+        m.color.lerp(m.region === 5 ? charcoal : m.region === 3 ? swampMud : sand,
           0.5 + hash2(m.cx, m.cz, 4) * 0.25);
       }
     }
@@ -552,6 +568,20 @@ export class Overworld {
     this.glowMesh.frustumCulled = false;
     this.scene.add(this.glowMesh);
     this.glowMeta = [];
+    this.swampPoolMat = new THREE.MeshLambertMaterial({
+      color: 0xffffff, emissive: 0xc516a8, emissiveIntensity: 0.5,
+    });
+    this.swampPoolMesh = new THREE.InstancedMesh(
+      flatBoxGeo, this.swampPoolMat, MAX_POOL_GLOW
+    );
+    this.swampPoolMesh.frustumCulled = false;
+    this.scene.add(this.swampPoolMesh);
+    this.swampPoolMeta = [];
+    this.pulseMats = [{ mat: this.swampPoolMat, region: 3 }];
+    this.glowPulse = 0;
+    this.voxDecor = [];
+    this.voxBuildId = (this.voxBuildId || 0) + 1;
+    const voxBuildId = this.voxBuildId;
 
     const dummy = new THREE.Object3D();
     const mkPut = (mesh, meta, cap) => (region) =>
@@ -566,6 +596,7 @@ export class Overworld {
       };
     const decorPut = mkPut(this.decorMesh, this.decorMeta, MAX_DECOR);
     const glowPut = mkPut(this.glowMesh, this.glowMeta, MAX_GLOW);
+    const poolPut = mkPut(this.swampPoolMesh, this.swampPoolMeta, MAX_POOL_GLOW);
 
     // Small voxel prop builders (map coordinates, y = terrace top).
     const tree = (put, x, y, z, leaf1, leaf2) => {
@@ -586,6 +617,37 @@ export class Overworld {
     const rock = (put, x, y, z, hex) => {
       put(x, y + 0.3, z, 1.1, 0.7, 0.9, hex, 0.4);
       put(x + 0.4, y + 0.55, z + 0.2, 0.6, 0.5, 0.55, hex, 0.9);
+    };
+    const cabbage = (put, x, y, z, rand, i) => {
+      const a = rand() * Math.PI * 2;
+      const outer = i & 1 ? 0x7d3f8f : 0x9c5bb0;
+      const inner = i & 1 ? 0x9c5bb0 : 0x7d3f8f;
+      put(x, y + 0.18, z, 0.95, 0.28, 0.55, outer, a, 0.12);
+      put(x, y + 0.2, z, 0.55, 0.3, 0.95, outer, a + Math.PI / 2, -0.12);
+      put(x, y + 0.44, z, 0.62, 0.45, 0.62, inner, a);
+      put(x, y + 0.68, z, 0.18, 0.09, 0.76, 0xd9c2e8, a + 0.2);
+      put(x, y + 0.68, z, 0.76, 0.09, 0.18, 0xd9c2e8, a - 0.15);
+    };
+    const reeds = (put, x, y, z, rand) => {
+      for (let k = 0; k < 4; k++) {
+        const a = rand() * Math.PI * 2;
+        const r = 0.12 + rand() * 0.35;
+        put(x + Math.cos(a) * r, y + 0.38 + rand() * 0.16, z + Math.sin(a) * r,
+          0.07, 0.74 + rand() * 0.32, 0.07, k & 1 ? 0x3f9e8a : 0x5cae7d, a, (rand() - 0.5) * 0.28);
+      }
+      put(x, y + 0.12, z, 0.7, 0.16, 0.5, 0x7e3d26, rand() * Math.PI);
+    };
+    const swampPalm = (put, x, y, z, rand) => {
+      const lean = (rand() - 0.5) * 0.34;
+      put(x, y + 0.72, z, 0.24, 1.45, 0.24, 0xd96a54, rand() * 0.2, lean);
+      put(x + Math.sin(lean) * 0.22, y + 1.55, z, 0.2, 0.9, 0.2, 0xa85332, 0, lean * 0.6);
+      const cx = x + Math.sin(lean) * 0.36;
+      const cy = y + 2.1;
+      for (let k = 0; k < 4; k++) {
+        const a = k * Math.PI / 2 + rand() * 0.28;
+        put(cx + Math.cos(a) * 0.55, cy - 0.08, z + Math.sin(a) * 0.55,
+          1.35, 0.18, 0.34, k & 1 ? 0x3f9e8a : 0x55b39d, a, -0.24 - rand() * 0.18);
+      }
     };
 
     // Picks prop spots on existing ground, off the trail, min 2 apart.
@@ -649,6 +711,21 @@ export class Overworld {
           put(s.x, s.y + 0.03, s.z, 1.9, 0.08, 1.5, 0xcfe8ff, rand());
         } else rock(put, s.x, s.y, s.z, 0xaac2d6);
       },
+      (put, s, rand, i, glow) => { // Purple Cabbage Swamp: cabbages, reeds, palms
+        if (i < 5) {
+          cabbage(put, s.x, s.y, s.z, rand, i);
+          if (i < 2) {
+            glow(s.x + 0.28, s.y + 0.34, s.z - 0.18,
+              0.18, 0.08, 0.18, 0xe93fc8, rand() * Math.PI);
+          }
+        } else if (i < 9) {
+          reeds(put, s.x, s.y, s.z, rand);
+        } else if (i < 12) {
+          swampPalm(put, s.x, s.y, s.z, rand);
+        } else {
+          rock(put, s.x, s.y, s.z, i & 1 ? 0xa85332 : 0x7e3d26);
+        }
+      },
       (put, s, rand, i, glow) => { // Crystal Caves: arches, crystals, mushrooms
         if (i < 3) {
           put(s.x - 0.9, s.y + 0.8, s.z, 0.6, 1.6, 0.6, 0x54545f);
@@ -687,7 +764,7 @@ export class Overworld {
         }
       },
     ];
-    const counts = [14, 14, 13, 13, 12];
+    const counts = [14, 14, 13, 13, 13, 12];
     WORLDS.forEach((w, wi) => {
       const rand = mulberry32(wi * 131 + 17);
       const put = decorPut(wi);
@@ -695,9 +772,91 @@ export class Overworld {
       spots(wi, counts[wi], rand).forEach((s, i) => emitters[wi](put, s, rand, i, glow));
     });
 
+    { // Purple Cabbage Swamp extras: magenta pools, giant cabbages, bubbles.
+      const poolGlow = poolPut(3);
+      const rz = 3 * ROW_Z;
+
+      // Glowing slabs sit in the carved swamp-pool holes, matching the
+      // volcano lava slab treatment but with the swamp's magenta material.
+      for (const sp of this.swampPools) {
+        poolGlow(sp.x, -0.45, sp.z, 1.08, 0.12, 1.08,
+          hash2(sp.x, sp.z, 31) < 0.5 ? 0xc516a8 : 0xe93fc8,
+          hash2(sp.x, sp.z, 32) * 0.35);
+      }
+
+      // 1-2 bubble streams rise from the largest-looking carved pools.
+      this.swampBubbles = [];
+      const poolKeys = new Set(this.swampPools.map((sp) => sp.x + ',' + sp.z));
+      const bubbleSources = this.swampPools.map((sp) => {
+        let score = hash2(sp.x, sp.z, 33);
+        for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+          if (poolKeys.has((sp.x + dx) + ',' + (sp.z + dz))) score += 1;
+        }
+        return { x: sp.x, z: sp.z, score };
+      }).sort((a, b) => b.score - a.score).slice(0, Math.min(2, this.swampPools.length));
+      const brand = mulberry32(33303);
+      bubbleSources.forEach((src, si) => {
+        for (let k = 0; k < 5; k++) {
+          const mat = new THREE.MeshLambertMaterial({
+            color: 0xf1b7ea, emissive: 0xc516a8, emissiveIntensity: 0.35,
+            transparent: true, opacity: 0, depthWrite: false,
+          });
+          const m = new THREE.Mesh(bubbleGeo, mat);
+          this.scene.add(m);
+          this.swampBubbles.push({
+            mesh: m,
+            x: src.x + (brand() - 0.5) * 0.35,
+            z: src.z + (brand() - 0.5) * 0.35,
+            base: -0.38,
+            height: 1.55 + brand() * 0.5,
+            size: 0.13 + brand() * 0.08,
+            phase: (si * 0.43 + k / 5 + brand() * 0.08) % 1,
+          });
+        }
+      });
+
+      // Giant cabbage landmarks (public/models/giant-cabbage.json) anchor the
+      // row. Leaf materials are tinted synchronously; meshes attach later.
+      const crand = mulberry32(36303);
+      const cabbageSpots = spots(3, 2, crand);
+      for (const [x, z] of [[-12, rz - 2], [11, rz + 2]]) {
+        const y = this.groundH.get(x + ',' + z);
+        if (cabbageSpots.length >= 2 || y === undefined || this.flatCells.has(x + ',' + z)) {
+          continue;
+        }
+        if (!cabbageSpots.some((s) => Math.abs(s.x - x) < 2 && Math.abs(s.z - z) < 2)) {
+          cabbageSpots.push({ x, z, y });
+        }
+      }
+      const cabbageTints = [0x7d3f8f, 0x9c5bb0];
+      const giantCabbage = (s, i) => {
+        const g = new THREE.Group();
+        g.position.set(s.x, s.y, s.z);
+        g.rotation.y = crand() * Math.PI * 2;
+        g.scale.setScalar(0.74 + crand() * 0.18);
+        this.scene.add(g);
+        const leafMat = new THREE.MeshLambertMaterial({
+          color: cabbageTints[i % cabbageTints.length], vertexColors: true,
+        });
+        leafMat.userData.lockBaseColor = leafMat.color.clone();
+        const entry = { region: 3, mats: [] };
+        this.voxDecor.push(entry);
+        loadVoxModel(`${import.meta.env.BASE_URL}models/giant-cabbage.json`)
+          .then((model) => {
+            if (voxBuildId !== this.voxBuildId) return;
+            const { group, parts } = buildVoxMesh(model, { materials: { leaf: leafMat } });
+            g.add(group);
+            for (const name in parts) entry.mats.push(parts[name].material);
+            this.applyLockTints(); // re-tint now that the materials exist
+          })
+          .catch((err) => console.error('giant-cabbage model failed to load:', err));
+      };
+      cabbageSpots.forEach((s, i) => giantCabbage(s, i));
+    }
+
     { // Pepper Volcano extras: baked volcano landmarks, crater smoke, embers.
-      const glow = glowPut(4);
-      const rz = 4 * ROW_Z;
+      const glow = glowPut(5);
+      const rz = 5 * ROW_Z;
 
       // Glowing slabs float in the lava-pool holes buildTerrain() carved,
       // just above the sea line so the melt reads as pooled lava, not water.
@@ -713,20 +872,21 @@ export class Overworld {
       // lands (same pattern as makeCritter in game.js); the molten `lava`
       // part gets its own emissive material so the crater glows. Lock tints
       // reach these through this.voxDecor (see applyLockTints).
-      this.voxDecor = [];
+      const pepperLavaMat = new THREE.MeshLambertMaterial({
+        vertexColors: true, emissive: 0xff7a1e, emissiveIntensity: 0.5,
+      });
+      this.pulseMats.push({ mat: pepperLavaMat, region: 5 });
       const volcano = (x, z, scale) => {
         const g = new THREE.Group();
         g.position.set(x, this.groundH.get(x + ',' + z) ?? 0, z);
         g.scale.setScalar(scale);
         this.scene.add(g);
-        const entry = { region: 4, mats: [] };
+        const entry = { region: 5, mats: [] };
         this.voxDecor.push(entry);
         loadVoxModel(`${import.meta.env.BASE_URL}models/pepper-volcano.json`)
           .then((model) => {
-            const lavaMat = new THREE.MeshLambertMaterial({
-              vertexColors: true, emissive: 0xff7a1e, emissiveIntensity: 0.5,
-            });
-            const { group, parts } = buildVoxMesh(model, { materials: { lava: lavaMat } });
+            if (voxBuildId !== this.voxBuildId) return;
+            const { group, parts } = buildVoxMesh(model, { materials: { lava: pepperLavaMat } });
             g.add(group);
             for (const name in parts) entry.mats.push(parts[name].material);
             this.applyLockTints(); // re-tint now that the materials exist
@@ -794,8 +954,10 @@ export class Overworld {
 
     this.decorMesh.count = this.decorMeta.length;
     this.glowMesh.count = this.glowMeta.length;
+    this.swampPoolMesh.count = this.swampPoolMeta.length;
     this.decorMesh.instanceMatrix.needsUpdate = true;
     this.glowMesh.instanceMatrix.needsUpdate = true;
+    this.swampPoolMesh.instanceMatrix.needsUpdate = true;
   }
 
   // Ambient sea life: ducks paddling little laps off the coasts, plus a
@@ -1267,11 +1429,19 @@ export class Overworld {
     apply(this.groundMesh, this.groundMeta);
     apply(this.decorMesh, this.decorMeta);
     apply(this.glowMesh, this.glowMeta);
-    // Vox-model decor (the pepper volcanoes): baked colors live in vertex
-    // attributes, so the lock tint is one grey multiplier per material.
+    apply(this.swampPoolMesh, this.swampPoolMeta);
+    // Vox-model decor: baked colors live in vertex attributes, so the lock
+    // tint is one multiplier per material. Tintable materials keep a base
+    // color in userData so locks preserve authored hue variants.
     for (const d of this.voxDecor) {
       const f = this.lockFactor(d.region);
-      for (const m of d.mats) m.color.setScalar(f);
+      for (const m of d.mats) {
+        if (m.userData.lockBaseColor) {
+          m.color.copy(m.userData.lockBaseColor).multiplyScalar(f);
+        } else {
+          m.color.setScalar(f);
+        }
+      }
     }
     // "?" signs show only over locked regions.
     const zero = new THREE.Matrix4().makeScale(0.0001, 0.0001, 0.0001);
@@ -1715,6 +1885,13 @@ export class Overworld {
       if (c.position.x > b.maxX + 26) c.position.x = b.minX - 26;
     }
 
+    // Shared glow materials breathe with one intensity write each.
+    this.glowPulse += dt;
+    const glowI = 0.45 + Math.sin(this.glowPulse * 2.4) * 0.15;
+    for (const p of this.pulseMats) {
+      p.mat.emissiveIntensity = glowI * this.lockFactor(p.region);
+    }
+
     // Pepper Volcano smoke: each puff climbs out of the crater, swells,
     // drifts a touch downwind and thins to nothing, then respawns at the
     // lip — staggered phases keep the column from ever emptying.
@@ -1729,6 +1906,24 @@ export class Overworld {
       // sin ramp: fade in off the lip, fade out before the wrap.
       p.mesh.material.opacity = 0.8 * Math.sin(Math.min(1, u * 1.15) * Math.PI);
       p.mesh.rotation.y += dt * 0.5;
+    }
+
+    // Swamp bubbles: small round puffs wobble upward and snap larger before
+    // vanishing at the top of the stream.
+    for (const p of this.swampBubbles) {
+      const u = (t * 0.22 + p.phase) % 1;
+      const pop = Math.max(0, (u - 0.82) / 0.18);
+      const snap = pop ? 1 + Math.sin(pop * Math.PI) * 0.95 : 1;
+      p.mesh.position.set(
+        p.x + Math.sin(u * 8 + p.phase * 17) * 0.16,
+        p.base + u * p.height,
+        p.z + Math.sin(u * 6 + p.phase * 11) * 0.14
+      );
+      p.mesh.scale.setScalar(
+        p.size * (0.8 + u * 1.25) * snap * Math.max(0.12, 1 - pop * 0.88)
+      );
+      p.mesh.material.opacity = 0.58 * Math.min(1, u / 0.16) * Math.min(1, (1 - u) / 0.2);
+      p.mesh.rotation.y += dt * (0.4 + p.phase);
     }
 
     // Living sea: shimmer, foam, glints, ducks and the hopping fish.

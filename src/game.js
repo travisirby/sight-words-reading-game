@@ -28,7 +28,7 @@ const STARS_SPEED = 2.5;
 const CHOICE_SPEED = 3.4; // manual left/right steering while time is frozen
 const FORWARD_BOOST = 1.9; // holding forward during auto-run speeds him up
 const REPEAT_AFTER = 6; // seconds of no answer before the word auto-repeats
-const CRITTER_COLORS = [0xff7f50, 0xba68c8, 0x4dd0e1, 0x9fa8da, 0xffb74d];
+const CRITTER_COLORS = [0xff7f50, 0xba68c8, 0x4dd0e1, 0xe93fc8, 0x9fa8da, 0xffb74d];
 
 const boxGeo = voxelGeo;
 
