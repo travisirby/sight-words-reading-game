@@ -55,16 +55,38 @@ export function chunkIntoLevels(list, target = 5) {
   return levels;
 }
 
+const TIER_LEVELS = Object.fromEntries(
+  Object.entries(DOLCH).map(([tier, words]) => [tier, chunkIntoLevels(words)])
+);
+
+function levelPart(levels, idx, count) {
+  const base = Math.floor(levels.length / count);
+  const extra = levels.length % count;
+  const start = idx * base + Math.min(idx, extra);
+  const size = base + (idx < extra ? 1 : 0);
+  return levels.slice(start, start + size);
+}
+
+function worldLevels(world) {
+  const levels = TIER_LEVELS[world.tier];
+  return world.part ? levelPart(levels, world.part[0], world.part[1]) : levels;
+}
+
 export const WORLDS = [
   { name: 'Pasta Plains', emoji: '🍝', tier: 'prePrimer' },
   { name: 'Waffle Desert', emoji: '🧇', tier: 'primer' },
   { name: 'Snowy Peaks', emoji: '❄️', tier: 'first' },
-  { name: 'Crystal Caves', emoji: '💎', tier: 'second' },
+  { name: 'Purple Cabbage Swamp', emoji: '🥬', tier: 'second', part: [0, 2] },
+  { name: 'Crystal Caves', emoji: '💎', tier: 'second', part: [1, 2] },
   { name: 'Pepper Volcano', emoji: '🌶️', tier: 'third' },
-].map((w) => ({ ...w, levels: chunkIntoLevels(DOLCH[w.tier]) }));
+].map((w) => ({ ...w, levels: worldLevels(w) }));
 
 export function getLevelWords(worldIdx, levelIdx) {
   return WORLDS[worldIdx].levels[levelIdx];
+}
+
+export function getWorldWords(worldIdx) {
+  return WORLDS[worldIdx].levels.flat();
 }
 
 // A word is mastered after 3 lifetime first-try correct answers.
@@ -73,13 +95,10 @@ export function isMasteredStats(stats) {
   return !!stats && stats.firstTryCorrect >= 3;
 }
 
-const TIER_ORDER = Object.keys(DOLCH);
-
-// The Dolch tier after a world's tier (null past the last tier). Used to
+// The words introduced by the next world (null past the last world). Used to
 // promote strong readers to new material before the next world unlocks.
 export function getNextTierWords(worldIdx) {
-  const next = TIER_ORDER[TIER_ORDER.indexOf(WORLDS[worldIdx].tier) + 1];
-  return next ? DOLCH[next] : null;
+  return worldIdx + 1 < WORLDS.length ? getWorldWords(worldIdx + 1) : null;
 }
 
 export function shuffle(arr) {
@@ -98,7 +117,7 @@ export const MASTERED_REVIEW_CHANCE = 0.25;
 // Build the run queue: level words shuffled, but words with lifetime misses
 // (per stored stats) move to the front so they get practiced first.
 // Mastered words mostly sit runs out; each skipped one is replaced by an
-// unmastered word from opts.promotionPool (the next Dolch tier) so strong
+// unmastered word from opts.promotionPool (the next world's words) so strong
 // readers keep seeing new material. Without a pool the mastered word stays
 // in — the run never shrinks. Kept mastered words go to the back as review.
 // statsFor(word) -> {seen, correct, firstTryCorrect, missed} or null.
@@ -114,7 +133,7 @@ export function buildRunQueue(levelWords, statsFor, opts = {}) {
     else if (s && s.missed > 0) missed.push(w);
     else rest.push(w);
   }
-  // Promotion candidates keep tier order (earliest words first), so the
+  // Promotion candidates keep world order (earliest words first), so the
   // same few new words recur run after run until they're learned.
   const pool = (promotionPool || []).filter(
     (w) => !levelWords.includes(w) && !isMasteredStats(statsFor ? statsFor(w) : null)
@@ -129,7 +148,7 @@ export function buildRunQueue(levelWords, statsFor, opts = {}) {
 }
 
 // Distractor pool for a run: the level's own words plus any promoted
-// cross-tier words in the queue, so mixed-in words stay coherent — they
+// cross-world words in the queue, so mixed-in words stay coherent — they
 // can appear as distractors for each other, not just as targets.
 export function buildDistractorPool(levelWords, queue) {
   const seen = new Set(levelWords);
@@ -143,10 +162,10 @@ export function buildDistractorPool(levelWords, queue) {
   return pool;
 }
 
-// Tier list for the distractor fallback: the world's own tier, extended
-// with the next tier when the queue actually contains promoted words.
+// Tier list for the distractor fallback: the world's own words, extended
+// with the next world's words when the queue actually contains promoted words.
 export function getRunTierList(worldIdx, queue) {
-  const tier = DOLCH[WORLDS[worldIdx].tier];
+  const tier = getWorldWords(worldIdx);
   const next = getNextTierWords(worldIdx);
   if (next && queue.some((w) => !tier.includes(w) && next.includes(w))) {
     return tier.concat(next);
@@ -173,11 +192,11 @@ export function pickDistractors(target, pool, tierList) {
   return shuffle(nearest).slice(0, 2);
 }
 
-// The 10 hardest words in a world's tier by lifetime first-try ratio.
-// Words never seen rank last; gaps fill with random picks from the tier.
+// The 10 hardest words in a world's word set by lifetime first-try ratio.
+// Words never seen rank last; gaps fill with random picks from the world.
 // statsFor(word) -> {seen, correct, firstTryCorrect, missed} or null.
 export function getSecretWords(worldIdx, statsFor) {
-  const tier = DOLCH[WORLDS[worldIdx].tier];
+  const tier = getWorldWords(worldIdx);
   const scored = tier.map((w) => {
     const s = statsFor ? statsFor(w) : null;
     const ratio = s && s.seen > 0 ? s.firstTryCorrect / s.seen : 2; // 2 = unseen
@@ -190,7 +209,7 @@ export function getSecretWords(worldIdx, statsFor) {
   return hard;
 }
 
-// ~5 review words for a world's boss battle: the tier's hardest by lifetime
+// ~5 review words for a world's boss battle: the world's hardest by lifetime
 // first-try ratio (unseen words fill in at random).
 export function getBossWords(worldIdx, statsFor) {
   return getSecretWords(worldIdx, statsFor).slice(0, 5);

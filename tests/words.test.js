@@ -3,7 +3,7 @@ import { describe, it, expect } from 'vitest';
 import {
   DOLCH, WORLDS, chunkIntoLevels, shuffle, buildRunQueue, pickDistractors,
   getSecretWords, getBossWords, isMasteredStats, getNextTierWords,
-  buildDistractorPool, getRunTierList,
+  buildDistractorPool, getRunTierList, getWorldWords,
 } from '../src/words.js';
 
 const sorted = (a) => a.slice().sort();
@@ -26,6 +26,45 @@ describe('chunkIntoLevels', () => {
 
   it('handles a list smaller than the target', () => {
     expect(chunkIntoLevels(['a', 'b'], 5)).toEqual([['a', 'b']]);
+  });
+});
+
+describe('WORLDS', () => {
+  it('inserts Purple Cabbage Swamp as the 4th world', () => {
+    expect(WORLDS).toHaveLength(6);
+    expect(WORLDS.map((w) => w.name)).toEqual([
+      'Pasta Plains',
+      'Waffle Desert',
+      'Snowy Peaks',
+      'Purple Cabbage Swamp',
+      'Crystal Caves',
+      'Pepper Volcano',
+    ]);
+  });
+
+  it('splits the second tier between swamp and caves without overlap', () => {
+    const secondLevels = chunkIntoLevels(DOLCH.second);
+    const swampLevels = WORLDS[3].levels;
+    const caveLevels = WORLDS[4].levels;
+    const swampWords = getWorldWords(3);
+    const caveWords = getWorldWords(4);
+    const combined = swampWords.concat(caveWords);
+
+    expect(swampLevels).toEqual(secondLevels.slice(0, 5));
+    expect(caveLevels).toEqual(secondLevels.slice(5));
+    expect(combined).toEqual(DOLCH.second);
+    expect(combined).toHaveLength(46);
+    expect(new Set(combined).size).toBe(46);
+    for (const w of swampWords) expect(caveWords).not.toContain(w);
+  });
+
+  it('keeps every world level chunk within the size bounds', () => {
+    for (const world of WORLDS) {
+      for (const level of world.levels) {
+        expect(level.length).toBeGreaterThanOrEqual(4);
+        expect(level.length).toBeLessThanOrEqual(6);
+      }
+    }
   });
 });
 
@@ -149,12 +188,14 @@ describe('isMasteredStats', () => {
 });
 
 describe('getNextTierWords', () => {
-  it('returns the following Dolch tier for each world', () => {
-    expect(getNextTierWords(0)).toBe(DOLCH.primer);
-    expect(getNextTierWords(3)).toBe(DOLCH.third);
+  it('returns the words introduced by the following world', () => {
+    const backHalfOfSecond = chunkIntoLevels(DOLCH.second).slice(5).flat();
+    expect(getNextTierWords(0)).toEqual(DOLCH.primer);
+    expect(getNextTierWords(3)).toEqual(getWorldWords(4));
+    expect(getNextTierWords(3)).toEqual(backHalfOfSecond);
   });
 
-  it('returns null past the last tier', () => {
+  it('returns null past the last world', () => {
     expect(getNextTierWords(WORLDS.length - 1)).toBeNull();
   });
 });
@@ -168,19 +209,19 @@ describe('buildDistractorPool / getRunTierList', () => {
   });
 
   it('extends the tier list only when the queue holds next-tier words', () => {
-    expect(getRunTierList(0, ['red', 'blue'])).toBe(DOLCH.prePrimer);
+    expect(getRunTierList(0, ['red', 'blue'])).toEqual(DOLCH.prePrimer);
     const extended = getRunTierList(0, ['red', 'all']);
     expect(extended).toEqual(DOLCH.prePrimer.concat(DOLCH.primer));
   });
 
   it('promoted words can serve as distractors for each other', () => {
-    const queue = ['red', 'always', 'because'];
+    const queue = ['red', 'all', 'am'];
     const pool = buildDistractorPool(level, queue);
     const tier = getRunTierList(0, queue);
     for (let i = 0; i < 50; i++) {
-      const d = pickDistractors('because', pool, tier);
+      const d = pickDistractors('all', pool, tier);
       expect(d).toHaveLength(2);
-      expect(d).not.toContain('because');
+      expect(d).not.toContain('all');
       for (const w of d) expect(pool.concat(tier)).toContain(w);
     }
   });
@@ -218,7 +259,7 @@ describe('pickDistractors', () => {
 
 describe('getSecretWords / getBossWords', () => {
   it('returns 10 (5 for boss) distinct words from the world tier', () => {
-    const tier = DOLCH[WORLDS[0].tier];
+    const tier = getWorldWords(0);
     const secret = getSecretWords(0, () => null);
     expect(secret).toHaveLength(10);
     expect(new Set(secret).size).toBe(10);
@@ -233,5 +274,22 @@ describe('getSecretWords / getBossWords', () => {
       : { seen: 4, correct: 4, firstTryCorrect: 4, missed: 0 });
     const secret = getSecretWords(0, statsFor);
     for (const w of hard) expect(secret.slice(0, 3)).toContain(w);
+  });
+
+  it('draws swamp secret and boss words only from the swamp half', () => {
+    const swamp = getWorldWords(3);
+    const caves = getWorldWords(4);
+    const statsFor = (w) => (swamp.includes(w)
+      ? { seen: 4, correct: 4, firstTryCorrect: 0, missed: 4 }
+      : { seen: 4, correct: 4, firstTryCorrect: 4, missed: 0 });
+    const secret = getSecretWords(3, statsFor);
+    const boss = getBossWords(3, statsFor);
+
+    for (const w of secret) expect(swamp).toContain(w);
+    for (const w of boss) expect(swamp).toContain(w);
+    for (const w of caves) {
+      expect(secret).not.toContain(w);
+      expect(boss).not.toContain(w);
+    }
   });
 });

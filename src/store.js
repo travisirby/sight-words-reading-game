@@ -1,5 +1,5 @@
 // localStorage persistence. One JSON blob per player profile under
-// superKidsSightWords.v1:<id>, plus a tiny profiles index under
+// superKidsSightWords.v2:<id>, plus a tiny profiles index under
 // superKidsSightWords.profiles.v1 so several kids can share a device.
 // Migrates from the pre-profile Word Runner-era blobs (same shape; the
 // game was renamed). The unlock frontier gains a virtual boss slot:
@@ -7,7 +7,8 @@
 
 import { isMasteredStats } from './words.js';
 
-const KEY_BASE = 'superKidsSightWords.v1';
+const KEY_BASE = 'superKidsSightWords.v2';
+const OLD_KEY_BASE = 'superKidsSightWords.v1';
 const OLD_KEYS = ['wordRunner.v3', 'wordRunner.v2', 'wordRunner.v1'];
 const PROFILES_KEY = 'superKidsSightWords.profiles.v1';
 export const MAX_PROFILES = 6;
@@ -66,7 +67,95 @@ let state = applyDevAudioDefaults(defaults());
 let profiles = null; // { active: id, list: [{ id, name }] } — name may be ''
 
 const blobKey = (id) => `${KEY_BASE}:${id}`;
+const oldBlobKey = (id) => `${OLD_KEY_BASE}:${id}`;
 const newId = () => Math.random().toString(36).slice(2, 8);
+
+const insertedWorldIndex = (world) => (world >= 3 ? world + 1 : world);
+
+function remapCompositeWorldKeys(value) {
+  const out = {};
+  if (!value || typeof value !== 'object') return out;
+  for (const [key, val] of Object.entries(value)) {
+    const parts = key.split('-');
+    const world = Number(parts[0]);
+    if (parts.length > 1 && Number.isInteger(world) && world >= 0) {
+      out[[insertedWorldIndex(world), ...parts.slice(1)].join('-')] = val;
+    } else {
+      out[key] = val;
+    }
+  }
+  return out;
+}
+
+function remapWorldIndexMap(value) {
+  const out = Array.isArray(value) ? [] : {};
+  if (!value || typeof value !== 'object') return out;
+  for (const [key, val] of Object.entries(value)) {
+    const world = Number(key);
+    const outKey = Number.isInteger(world) && world >= 0 && String(world) === key
+      ? insertedWorldIndex(world)
+      : key;
+    out[outKey] = val;
+  }
+  return out;
+}
+
+function migrateWorldInsertion(save) {
+  const s = { ...defaults(), ...(save && typeof save === 'object' ? save : {}) };
+  s.stars = remapCompositeWorldKeys(s.stars);
+  s.keys = remapCompositeWorldKeys(s.keys);
+  s.secretStars = remapWorldIndexMap(s.secretStars);
+  s.secretUnlocked = remapWorldIndexMap(s.secretUnlocked);
+  s.bossBeaten = remapWorldIndexMap(s.bossBeaten);
+
+  const unlocked = { ...defaults().unlocked, ...(s.unlocked || {}) };
+  const world = Number(unlocked.world);
+  unlocked.world = Number.isFinite(world) ? insertedWorldIndex(world) : 0;
+  s.unlocked = unlocked;
+  return s;
+}
+
+function parseSave(raw) {
+  try {
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' ? parsed : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+function migrateSaveBlob(raw, opts = {}) {
+  const parsed = parseSave(raw);
+  if (!parsed) return null;
+  const s = { ...defaults(), ...parsed };
+  if (opts.grandfatherBosses) {
+    s.unlocked = { ...defaults().unlocked, ...(s.unlocked || {}) };
+    if (!s.bossBeaten || typeof s.bossBeaten !== 'object') s.bossBeaten = {};
+    const frontier = Number(s.unlocked.world) || 0;
+    for (let w = 0; w < frontier; w++) s.bossBeaten[w] = true;
+  }
+  return migrateWorldInsertion(s);
+}
+
+function migrateProfileBlob(id) {
+  const nextKey = blobKey(id);
+  const prevKey = oldBlobKey(id);
+  try {
+    if (localStorage.getItem(nextKey)) {
+      localStorage.removeItem(prevKey);
+      return;
+    }
+    const old = localStorage.getItem(prevKey);
+    if (old === null) return;
+    const migrated = migrateSaveBlob(old);
+    if (migrated) localStorage.setItem(nextKey, JSON.stringify(migrated));
+    localStorage.removeItem(prevKey);
+  } catch (e) { /* start fresh if storage is unavailable/corrupt */ }
+}
+
+function migrateProfileBlobs() {
+  for (const p of profiles.list) migrateProfileBlob(p.id);
+}
 
 function saveProfiles() {
   try {
@@ -92,6 +181,7 @@ function ensureProfiles() {
           profiles.active = profiles.list[0].id;
           saveProfiles();
         }
+        migrateProfileBlobs();
         return;
       }
     }
@@ -102,17 +192,21 @@ function ensureProfiles() {
   try {
     let blob = localStorage.getItem(KEY_BASE);
     if (!blob) {
+      const oldGame = localStorage.getItem(OLD_KEY_BASE);
+      if (oldGame) {
+        const migrated = migrateSaveBlob(oldGame);
+        if (migrated) blob = JSON.stringify(migrated);
+      }
+    }
+    if (!blob) {
       const old = OLD_KEYS.map((k) => localStorage.getItem(k)).find(Boolean);
       if (old) {
-        const s = { ...defaults(), ...JSON.parse(old) };
-        // Grandfather old saves: a world you already passed means its boss
-        // (which didn't exist yet) counts as beaten.
-        for (let w = 0; w < s.unlocked.world; w++) s.bossBeaten[w] = true;
-        blob = JSON.stringify(s);
+        const migrated = migrateSaveBlob(old, { grandfatherBosses: true });
+        if (migrated) blob = JSON.stringify(migrated);
       }
     }
     if (blob) localStorage.setItem(blobKey(id), blob);
-    for (const k of [KEY_BASE, ...OLD_KEYS]) localStorage.removeItem(k);
+    for (const k of [KEY_BASE, OLD_KEY_BASE, ...OLD_KEYS]) localStorage.removeItem(k);
   } catch (e) { /* start fresh */ }
   saveProfiles();
 }
@@ -171,7 +265,10 @@ export function selectProfile(id) {
 export function deleteProfile(id) {
   ensureProfiles();
   if (!profiles.list.some((e) => e.id === id)) return;
-  try { localStorage.removeItem(blobKey(id)); } catch (e) { /* ignore */ }
+  try {
+    localStorage.removeItem(blobKey(id));
+    localStorage.removeItem(oldBlobKey(id));
+  } catch (e) { /* ignore */ }
   if (profiles.list.length <= 1) {
     state = applyDevAudioDefaults(defaults());
     save();
@@ -488,7 +585,10 @@ export function isWorldUnlocked(worldIdx) {
 export function reset() {
   ensureProfiles();
   try {
-    for (const k of [blobKey(profiles.active), KEY_BASE, ...OLD_KEYS]) {
+    for (const k of [
+      blobKey(profiles.active), oldBlobKey(profiles.active),
+      KEY_BASE, OLD_KEY_BASE, ...OLD_KEYS,
+    ]) {
       localStorage.removeItem(k);
     }
   } catch (e) { /* ignore */ }
@@ -502,7 +602,7 @@ export function setDevUnlocked(on) {
   save();
 }
 
-export function devUnlockAll(worldCount = 5) {
+export function devUnlockAll(worldCount = 6) {
   state.devUnlocked = true; // also unlocks secrets via isSecretUnlocked
   for (let w = 0; w < worldCount; w++) state.bossBeaten[w] = true;
   save();

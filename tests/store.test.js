@@ -75,6 +75,75 @@ describe('recordWordResult', () => {
   });
 });
 
+describe('save migration', () => {
+  it('moves old v1 world-indexed progress past the inserted swamp exactly once', async () => {
+    globalThis.localStorage = makeLocalStorage();
+    const id = 'kid1';
+    const v1Key = `superKidsSightWords.v1:${id}`;
+    const v2Key = `superKidsSightWords.v2:${id}`;
+    const alwaysStats = { seen: 2, correct: 2, firstTryCorrect: 1, missed: 1 };
+
+    localStorage.setItem('superKidsSightWords.profiles.v1', JSON.stringify({
+      active: id,
+      list: [{ id, name: 'Reader' }],
+    }));
+    localStorage.setItem(v1Key, JSON.stringify({
+      coins: 42,
+      words: { always: alwaysStats },
+      stars: { '2-1': 2, '3-2': 3, '4-0': 1 },
+      keys: { '3-2': true, '4-0': true },
+      secretUnlocked: { 3: true, 4: true },
+      secretStars: [0, 0, 0, 2, 3],
+      bossBeaten: { 2: true, 3: true, 4: true },
+      unlocked: { world: 4, level: 1 },
+      house: { owned: { rug: true }, unseen: { rug: true }, seenCoins: 5, seenGems: 0 },
+    }));
+
+    vi.resetModules();
+    const migrated = await import('../src/store.js');
+    migrated.load();
+
+    expect(localStorage.getItem(v1Key)).toBeNull();
+    expect(localStorage.getItem(v2Key)).not.toBeNull();
+    expect(migrated.get().unlocked).toEqual({ world: 5, level: 1 });
+    expect(migrated.isWorldUnlocked(3)).toBe(true);
+
+    expect(migrated.getStars(2, 1)).toBe(2);
+    expect(migrated.getStars(3, 2)).toBe(0);
+    expect(migrated.getStars(4, 2)).toBe(3);
+    expect(migrated.getStars(5, 0)).toBe(1);
+    expect(migrated.hasKey(4, 2)).toBe(true);
+    expect(migrated.hasKey(5, 0)).toBe(true);
+    expect(migrated.isSecretUnlocked(3)).toBe(false);
+    expect(migrated.isSecretUnlocked(4)).toBe(true);
+    expect(migrated.isSecretUnlocked(5)).toBe(true);
+    expect(migrated.getSecretStars(3)).toBe(0);
+    expect(migrated.getSecretStars(4)).toBe(2);
+    expect(migrated.getSecretStars(5)).toBe(3);
+    expect(migrated.isBossBeaten(3)).toBe(false);
+    expect(migrated.isBossBeaten(4)).toBe(true);
+    expect(migrated.isBossBeaten(5)).toBe(true);
+    expect(migrated.wordStats('always')).toEqual(alwaysStats);
+    expect(migrated.ownsHouseItem('rug')).toBe(true);
+
+    const firstBlob = JSON.parse(localStorage.getItem(v2Key));
+    vi.resetModules();
+    const reloaded = await import('../src/store.js');
+    reloaded.load();
+    const secondBlob = JSON.parse(localStorage.getItem(v2Key));
+
+    expect(secondBlob.stars).toEqual(firstBlob.stars);
+    expect(secondBlob.keys).toEqual(firstBlob.keys);
+    expect(secondBlob.secretUnlocked).toEqual(firstBlob.secretUnlocked);
+    expect(secondBlob.secretStars).toEqual(firstBlob.secretStars);
+    expect(secondBlob.bossBeaten).toEqual(firstBlob.bossBeaten);
+    expect(secondBlob.unlocked).toEqual(firstBlob.unlocked);
+    expect(Object.keys(secondBlob.stars).sort()).toEqual(['2-1', '4-2', '5-0']);
+    expect(reloaded.getStars(4, 2)).toBe(3);
+    expect(reloaded.getStars(5, 0)).toBe(1);
+  });
+});
+
 describe('wordStats / isMastered', () => {
   it('returns null for a never-seen word', () => {
     expect(store.wordStats('zebra')).toBeNull();
@@ -159,7 +228,7 @@ describe('lifetime stats / totals', () => {
     store.recordWordResult('red', true);
     store.addCoins(50);
     // Simulate an old blob: strip the stats field and reload.
-    const key = `superKidsSightWords.v1:${store.activeProfileId()}`;
+    const key = `superKidsSightWords.v2:${store.activeProfileId()}`;
     const blob = JSON.parse(localStorage.getItem(key));
     delete blob.stats;
     localStorage.setItem(key, JSON.stringify(blob));
