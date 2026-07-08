@@ -387,7 +387,7 @@ function clipsFor(text) {
   return seq;
 }
 
-// edge-tts pads clips with a good half second of silence on each end;
+// TTS renders pad clips with silence on each end;
 // find the actual speech bounds so concatenated sentences don't drag.
 function trimBounds(buf) {
   const d = buf.getChannelData(0);
