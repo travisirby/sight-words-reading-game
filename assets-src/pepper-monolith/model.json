@@ -1,0 +1,16 @@
+{
+  "name": "pepper-monolith",
+  "voxelSize": 0.2,
+  "anchor": "bottom-center",
+  "parts": [
+    {
+      "name": "body",
+      "file": "body.vox",
+      "tintable": true
+    },
+    {
+      "name": "leaf",
+      "file": "leaf.vox"
+    }
+  ]
+}

@@ -13,6 +13,11 @@
 //   trim  — pepper lava bombs (fixed color)
 //   lava  — crater pool + dribbles, pivot at the pool center so the game
 //           can pulse mesh.scale for a molten glow throb.
+//
+// Parts share one voxel grid but bake to separate meshes, so any cell two
+// parts both claim z-fights at runtime. Every placement after `body` is
+// guarded with taken(): later parts yield (leaves outrank lava, so the
+// dribbles duck under the calyx and re-emerge below it).
 
 import { VoxScene } from '../voxwriter.mjs';
 
@@ -53,33 +58,8 @@ export default function build() {
     }
   }
 
-  // ---- lava: crater pool + three dribbles down the outer slope ----
-  const lava = s.part('lava', { pivot: [0, craterY + 1, 0] });
-  const LAVA = s.color('#ff9a3c');
-  const CORE = s.color('#ffd54a');
-
-  for (let x = -craterR; x <= craterR; x++) {
-    for (let z = -craterR; z <= craterR; z++) {
-      if (!inside(x, z, craterR)) continue;
-      lava.set(x, craterY + 1, z, Math.abs(x) + Math.abs(z) <= 1 ? CORE : LAVA);
-    }
-  }
-  // Dribbles: follow the slope one voxel proud of the cone surface.
-  const dribble = (dirX, dirZ, len, width) => {
-    for (let i = 0; i < len; i++) {
-      const y = H - 2 - i;
-      const r = half(y) + 1;
-      for (let w = 0; w < width; w++) {
-        const off = w - (width >> 1);
-        const x = dirX !== 0 ? dirX * r : off;
-        const z = dirZ !== 0 ? dirZ * r : off;
-        lava.set(x, y, z, i < 2 ? CORE : LAVA);
-      }
-    }
-  };
-  dribble(1, 0, 10, 2);
-  dribble(0, -1, 7, 2);
-  dribble(-1, 0, 5, 1);
+  const parts = [body];
+  const taken = (x, y, z) => parts.some((p) => p.voxels.has(`${x},${y},${z}`));
 
   // ---- leaf: calyx leaves over the rim + curly stem (the "pepper" tell) ----
   const leaf = s.part('leaf');
@@ -96,7 +76,7 @@ export default function build() {
       for (let w = -t; w <= t; w++) {
         const x = dx !== 0 ? dx * r : w;
         const z = dz !== 0 ? dz * r : w;
-        leaf.set(x, y, z, GRN);
+        if (!taken(x, y, z)) leaf.set(x, y, z, GRN);
       }
     }
   }
@@ -105,33 +85,57 @@ export default function build() {
   leaf.box(-2, H + 4, -2, -1, H + 4, -1, GRN2);
   leaf.set(0, H + 3, -2, GRN2);
   leaf.set(0, H + 3, -1, GRN2);
+  parts.push(leaf);
 
-  // ---- trim: pepper lava bombs lodged in the slopes ----
+  // ---- lava: crater pool + three dribbles down the outer slope ----
+  const lava = s.part('lava', { pivot: [0, craterY + 1, 0] });
+  const LAVA = s.color('#ff9a3c');
+  const CORE = s.color('#ffd54a');
+
+  for (let x = -craterR; x <= craterR; x++) {
+    for (let z = -craterR; z <= craterR; z++) {
+      if (!inside(x, z, craterR)) continue;
+      lava.set(x, craterY + 1, z, Math.abs(x) + Math.abs(z) <= 1 ? CORE : LAVA);
+    }
+  }
+  // Dribbles: follow the slope one voxel proud of the cone surface, ducking
+  // under the draped calyx leaves where the two would share a cell.
+  const dribble = (dirX, dirZ, len, width) => {
+    for (let i = 0; i < len; i++) {
+      const y = H - 2 - i;
+      const r = half(y) + 1;
+      for (let w = 0; w < width; w++) {
+        const off = w - (width >> 1);
+        const x = dirX !== 0 ? dirX * r : off;
+        const z = dirZ !== 0 ? dirZ * r : off;
+        if (!taken(x, y, z)) lava.set(x, y, z, i < 2 ? CORE : LAVA);
+      }
+    }
+  };
+  dribble(1, 0, 10, 2);
+  dribble(0, -1, 7, 2);
+  dribble(-1, 0, 5, 1);
+  parts.push(lava);
+
+  // ---- trim: pepper lava bombs lying tangent on the slopes ----
   const trim = s.part('trim');
   const YEL = s.color('#ffc23e');
   const ORG = s.color('#ff7a2e');
 
-  // Horizontal chili: rounded 2-high body tapering to a bent tip, green nub.
-  const bomb = (bx, by, bz, dir, C) => {
-    trim.box(bx, by, bz - 1, bx + dir * 3, by + 1, bz + 1, C);
-    trim.box(bx + dir * 4, by, bz, bx + dir * 4, by, bz, C); // curled tip
-    leaf.set(bx - dir, by + 1, bz, GRN2); // stem nub
-  };
-  bomb(6, 11, 6, 1, YEL);
-  bomb(-7, 16, 3, -1, ORG);
-
-  // Same-cell overlap across parts z-fights at runtime (each part is its own
-  // mesh), so later parts yield: leaf tongues lose cells buried in the cone
-  // or crossing lava dribbles, and the lava bombs lose the halves lodged
-  // inside the slope. Every yielded cell stays filled by the part that keeps
-  // it, so the assembled silhouette is unchanged.
-  const yieldTo = (part, ...owners) => {
-    for (const k of part.voxels.keys()) {
-      if (owners.some((o) => o.voxels.has(k))) part.voxels.delete(k);
+  // Horizontal chili resting against the cone one voxel proud of the wall,
+  // running along z with a curled tip and a green stem nub.
+  const bomb = (side, by, z0, C) => {
+    const x = side * (half(by) + 1);
+    for (let z = z0; z <= z0 + 3; z++) {
+      for (let y = by; y <= by + 1; y++) {
+        if (!taken(x, y, z)) trim.set(x, y, z, C);
+      }
     }
+    if (!taken(x, by, z0 + 4)) trim.set(x, by, z0 + 4, C); // curled tip
+    if (!taken(x, by + 1, z0 - 1)) leaf.set(x, by + 1, z0 - 1, GRN2); // stem
   };
-  yieldTo(leaf, body, lava);
-  yieldTo(trim, body);
+  bomb(1, 11, 2, YEL);
+  bomb(-1, 16, -4, ORG);
 
   return s;
 }
