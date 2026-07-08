@@ -64,7 +64,20 @@ export const PALETTES = [
     hemiSky: 0xffd9a8, hemiGround: 0x7a4a3c, sunTint: 0xffb070,
     sun: 0xffcf7a, cloud: 0x9a8078,
   },
+  { // Star Party — secret-level bonus world: candy meadow under a starry
+    // magic night, rainbow arches and giant stars. Shared by every world's
+    // secret level (SECRET_THEME), never tied to a map region.
+    top: [0x7fe0b8, 0x6fd4aa], dirt: [0x8a72b8, 0x7d66aa],
+    plat: [0xffd54a, 0xffb63e], hill: 0xc668c4, hill2: 0x9a7ee0,
+    sky: 0x4a2a8c, fog: 0x8a5ac8,
+    skyTop: 0x1c1048, skyBot: 0x9c5ad4,
+    hemiSky: 0xd8c8ff, hemiGround: 0x3a5a8c, sunTint: 0xcfd8ff,
+    sun: 0xfff6d8, cloud: 0xe8b8f0, night: true,
+  },
 ];
+
+// Palette/prop slot used by every secret level, regardless of world.
+export const SECRET_THEME = 6;
 
 // ACES tone mapping (rendercfg.js) mutes saturation, hitting the pale
 // sky/fog tones hardest. Pre-boost every palette color once at load — zero
@@ -135,7 +148,9 @@ export function generateLevel({ seed, wordCount, theme, secret = false, hasKey =
   coinRun(4, g + 0.8, 3);
 
   const keyAt = hasKey ? wordCount >> 1 : -1;
-  const caveAt = secret ? wordCount >> 1 : -1;
+  // Secret bonus levels swap the key for coin caves — two of them, so the
+  // whole run feels like a treasure hunt.
+  const caves = secret ? new Set([1, Math.max(2, wordCount - 2)]) : null;
   const typeOffset = seed % 2;
 
   for (let i = 0; i < wordCount; i++) {
@@ -178,8 +193,9 @@ export function generateLevel({ seed, wordCount, theme, secret = false, hasKey =
       }
     }
 
-    // Critter on the last flat stretch (never inside event zones).
-    if (critters.length < 6 && rand() < 0.55 && fillerLen > 10) {
+    // Critter on the last flat stretch (never inside event zones). Secret
+    // bonus levels are hazard-free — pure celebration, nothing to trip on.
+    if (!secret && critters.length < 6 && rand() < 0.55 && fillerLen > 10) {
       const cx = x() - 7;
       critters.push({ x0: cx, x1: cx + 4 });
     }
@@ -193,7 +209,7 @@ export function generateLevel({ seed, wordCount, theme, secret = false, hasKey =
     }
 
     // Coin cave: dense coin grid between stacked platforms (secret levels).
-    if (i === caveAt) {
+    if (caves && caves.has(i)) {
       const s = x();
       flat(16);
       platforms.push({ x0: s + 3, x1: s + 6, y: g + 3 });
@@ -439,6 +455,40 @@ export const PROPS = [
       put(x + 0.2, y + 0.19, -3.4, 0.5, 0.12, 0.4, 0xffd23e, 1);
       put(x - 1.1, y + 0.2, -3.3, 0.4, 0.35, 0.4, 0x3c3238, 0, j);
       put(x + 1.15, y + 0.18, -3.55, 0.35, 0.3, 0.35, 0x453a40, 0, j);
+    }
+  },
+  (put, x, y, rand) => { // Star Party: rainbow arches, star stalks, candy drops
+    const j = (rand() - 0.5) * 0.08;
+    const kind = rand();
+    if (kind < 0.4) { // voxel rainbow arch stepping over the apron
+      const bands = [0xe23b2e, 0xff9a2e, 0xffd23e, 0x4cd964, 0x4aa3e6, 0xab47bc];
+      const w = 2.6;
+      bands.forEach((c, i) => {
+        const s = 1 - i * 0.13;
+        put(x, y + 0.4 + i * 0.42, -3.6, w * s + 0.9, 0.4, 0.5, c, 1, j);
+      });
+      put(x - 1.9, y + 0.25, -3.5, 0.7, 0.5, 0.7, 0xffffff); // cloud feet
+      put(x + 1.9, y + 0.25, -3.5, 0.7, 0.5, 0.7, 0xffffff);
+    } else if (kind < 0.72) { // giant star on a stripey stalk
+      for (let i = 0; i < 4; i++) {
+        put(x, y + 0.35 + i * 0.6, -3.5, 0.28, 0.62, 0.28,
+          i & 1 ? 0xffffff : 0xff8ad8, 0, j);
+      }
+      const ty = y + 2.9;
+      put(x, ty, -3.5, 1.1, 1.1, 0.5, 0xffd54a, 1, j); // star core
+      put(x, ty + 0.85, -3.5, 0.4, 0.6, 0.45, 0xffe36a, 1);
+      put(x, ty - 0.85, -3.5, 0.4, 0.6, 0.45, 0xffe36a, 1);
+      put(x - 0.85, ty, -3.5, 0.6, 0.4, 0.45, 0xffe36a, 1);
+      put(x + 0.85, ty, -3.5, 0.6, 0.4, 0.45, 0xffe36a, 1);
+    } else { // candy-drop cluster
+      const cols = [0x7ef0ff, 0xff8ad8, 0xb388ff, 0x8aff9e];
+      const nC = 3 + ((rand() * 2) | 0);
+      for (let i = 0; i < nC; i++) {
+        const px = x + (i - (nC - 1) / 2) * 0.7 + (rand() - 0.5) * 0.3;
+        const s = 0.4 + rand() * 0.35;
+        put(px, y + s * 0.6, -3.2 - rand() * 0.8, s, s * 1.2, s,
+          cols[(rand() * cols.length) | 0], 1, j);
+      }
     }
   },
 ];
@@ -952,6 +1002,14 @@ export class LevelScene {
           put(dx, dy + 0.15, dz, 0.14, 0.3, 0.14, 0xcfc4e8);
           put(dx, dy + 0.38, dz, 0.42, 0.18, 0.42, k < 0.3 ? 0x7ef0ff : 0xd07eff, 1);
         } else pebble(dx, dy, dz, 0x6a6a78);
+      } else if (t === SECRET_THEME) { // star party: glow stars, candy pebbles, sparkle tufts
+        if (k < 0.4) {
+          put(dx, dy + 0.2, dz, 0.2, 0.4, 0.2, 0xffd54a, 1);
+        } else if (k < 0.7) {
+          pebble(dx, dy, dz, k < 0.55 ? 0xff8ad8 : 0x7ef0ff);
+        } else {
+          tuft(dx, dy, dz, 0xb388ff);
+        }
       } else if (t === 5) { // pepper volcano: ember pebbles, chili sprouts, flame nubs
         if (k < 0.3) {
           put(dx, dy + 0.11, dz, 0.26 + rand() * 0.1, 0.2, 0.26, 0xff8c3e, 1);

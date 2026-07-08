@@ -1119,12 +1119,18 @@ export class Overworld {
     this.secretSegs = {}; // world -> { start, count }
   }
 
-  ensureSecretTiles(world) {
-    if (this.secretSegs[world]) return this.secretSegs[world];
+  // The regular node the world's secret branch forks off from (where the
+  // key was found; sensible fallback before/without one).
+  secretAnchorNode(world) {
     const anchor = store.keyAnchorLevel(world);
-    const from = this.data.nodes.find(
+    return this.data.nodes.find(
       (nd) => nd.world === world && nd.level === (anchor === null ? 1 : anchor)
     ) || this.data.nodes.find((nd) => nd.world === world);
+  }
+
+  ensureSecretTiles(world) {
+    if (this.secretSegs[world]) return this.secretSegs[world];
+    const from = this.secretAnchorNode(world);
     const pts = secretSegment(from, this.data.secretNodes[world]);
     const seg = { start: this.secretTiles.length, count: pts.length };
     for (const pt of pts) this.secretTiles.push({ x: pt.x, z: pt.z, shown: false, pop: 0 });
@@ -1682,9 +1688,29 @@ export class Overworld {
     this.cb.onDismiss();
     const dir = navIdx > this.tokenNav ? 1 : -1;
     const points = [];
+    const push = (x, z) => {
+      const last = points[points.length - 1];
+      if (!last || last.x !== x || last.z !== z) points.push({ x, z });
+    };
     for (let i = this.tokenNav; ; i += dir) {
       const a = this.navList[i];
-      points.push({ x: a.x, z: a.z });
+      if (a.secret && i !== this.tokenNav && i !== navIdx) {
+        // The secret ledge is a dead-end branch, not a stop on the trail:
+        // walks passing "through" its navList slot skip it entirely.
+      } else if (a.secret) {
+        // Entering or leaving the ledge goes via the branch's anchor node,
+        // following the purple tile path instead of cutting cross-country.
+        const anchor = this.secretAnchorNode(a.world);
+        if (i === this.tokenNav) {
+          push(a.x, a.z);
+          push(anchor.x, anchor.z);
+        } else {
+          push(anchor.x, anchor.z);
+          push(a.x, a.z);
+        }
+      } else {
+        push(a.x, a.z);
+      }
       if (i === navIdx) break;
     }
     // Cumulative arc length so the token glides at constant speed.

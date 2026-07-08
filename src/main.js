@@ -326,7 +326,7 @@ function startLevel(worldIdx, levelIdx, secret = false) {
   lastRun = null; // the summary's delayed 3-star line checks this to stand down
   map.exit();
   mode = 'game';
-  music.play(boss ? 'boss' : 'level');
+  music.play(boss ? 'boss' : secret ? 'secret' : 'level');
   music.setDimmed(false);
   sfxLevelStart();
   game.startRun(worldIdx, levelIdx, { secret, boss });
@@ -384,7 +384,9 @@ function onRunComplete(res) {
         map.queueReveal({ kind: 'node', world: next.world, level: next.level });
       }
     }
-    if (res.keyFound && !store.hasKey(current.world, current.level)) {
+    // One key opens one secret per world: the reveal (and the key itself)
+    // only ever fires while that world's secret is still closed.
+    if (res.keyFound && !store.isSecretUnlocked(current.world)) {
       store.foundKey(current.world, current.level);
       map.queueReveal({ kind: 'secret', world: current.world });
     }
