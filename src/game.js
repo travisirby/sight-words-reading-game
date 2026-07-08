@@ -400,7 +400,13 @@ export class Game {
 
   repeatWord() {
     const w = this.currentWord();
-    if (this.running && w) speak(`Find the word: ${w}`, { rate: 0.85, echoWord: Math.random() < 0.4 });
+    if (this.running && w) {
+      speak(`Find the word: ${w}`, { rate: 0.85, echoWord: Math.random() < 0.4 });
+      // Restart the quiet-spell clock: without this, an auto-repeat due
+      // moments later would cut this prompt off mid-sentence ("Find the
+      // word… Find the word: sun").
+      this.repeatTimer = REPEAT_AFTER;
+    }
   }
 
   // Boss battle state for tests / debugging: { hp, phase } or null.
