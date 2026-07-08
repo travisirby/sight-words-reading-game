@@ -20,6 +20,7 @@ export const BOSSES = [
   { name: 'Meatball Monster', color: 0x8a4b2d },
   { name: 'Syrup Serpent', color: 0x8a4a1a },
   { name: 'Frost Yeti', color: 0xeef6ff },
+  { name: 'Cabbage King', color: 0x9c5bb0 },
   { name: 'Crystal Golem', color: 0x9f6fd4 },
   { name: 'Pepper Dragon', color: 0xff7a2e },
 ];
@@ -75,7 +76,12 @@ export function buildBoss(wi) {
     armor = [[-1.0, 1.5, 1.0], [-0.5, 1.5, 1.02], [0, 1.5, 1.05],
       [0.5, 1.5, 1.02], [1.0, 1.5, 1.0]];
     top = 5.1;
-  } else if (wi === 3) { // Crystal Golem: slate body, glowing shards
+  } else if (wi === 3) { // Cabbage King: leafy swamp monarch with big arms
+    ready = voxBoss('boss-cabbage', ['armL', 'armR']);
+    armor = [[-0.96, 1.55, 1.02], [-0.48, 1.55, 1.05], [0, 1.55, 1.08],
+      [0.48, 1.55, 1.05], [0.96, 1.55, 1.02]];
+    top = 5.1;
+  } else if (wi === 4) { // Crystal Golem: slate body, glowing shards
     ready = voxBoss('boss-golem', ['armL', 'armR'], (parts) => {
       // One shared glow for all shards (average of the three per-shard
       // emissives the hand-built version used; diffuse colors still differ).
@@ -84,7 +90,7 @@ export function buildBoss(wi) {
     armor = [[-0.96, 1.45, 0.8], [-0.48, 1.45, 0.83], [0, 1.45, 0.86],
       [0.48, 1.45, 0.83], [0.96, 1.45, 0.8]];
     top = 5.2;
-  } else { // Pepper Dragon: chili-red dragon riding a smoke puff
+  } else if (wi === 5) { // Pepper Dragon: chili-red dragon riding a smoke puff
     ready = voxBoss('boss-dragon', ['wingL', 'wingR']);
     armor = [[-0.76, 2.0, 0.75], [-0.38, 2.0, 0.78], [0, 2.0, 0.8],
       [0.38, 2.0, 0.78], [0.76, 2.0, 0.75]];

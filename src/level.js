@@ -40,6 +40,14 @@ export const PALETTES = [
     hemiSky: 0xfef0dc, hemiGround: 0x8fabd6, sunTint: 0xffeccc,
     sun: 0xfff6d8, cloud: 0xffffff,
   },
+  { // Purple Cabbage Swamp — glowing magenta bog, warm rust rock
+    top: [0x6e4059, 0x62384f], dirt: [0xa85332, 0x7e3d26],
+    plat: [0xd9b36a, 0xc9a054], hill: 0x7e3d26, hill2: 0xa85332,
+    sky: 0xb04a9e, fog: 0xc77bb4,
+    skyTop: 0x4a2145, skyBot: 0xb04a9e,
+    hemiSky: 0xffe8c8, hemiGround: 0x62384f, sunTint: 0xffc7a5,
+    sun: 0xffd6a3, cloud: 0xf1c8e9,
+  },
   { // Crystal Caves — cool blue dusk, moon + stars
     top: [0x8578a8, 0x7a6b96], dirt: [0x5e5e6c, 0x54545f],
     plat: [0x9f6fd4, 0x9263c7], hill: 0x453a5e, hill2: 0x584a75,
@@ -295,6 +303,7 @@ export function generateBossArena({ seed, wordCount, theme }) {
 const MAX_BLOCKS = 24000;
 const MAX_COINS = 260;
 const CLOUD_COUNT = 6;
+const SWAMP_BUBBLE_COUNT = 9;
 
 const boxGeo = voxelGeo;
 
@@ -361,6 +370,40 @@ export const PROPS = [
     put(x + 1.8, y + 1.5, -4.2, 1.5, 0.7, 1.5, 0x3a7d55);
     put(x + 1.8, y + 2.15, -4.2, 1.0, 0.6, 1.0, 0x447f5c);
     put(x + 1.8, y + 2.7, -4.2, 0.6, 0.5, 0.6, 0xdfeefc);
+  },
+  (put, x, y, rand) => { // Purple Cabbage Swamp: cabbage patches, droopy palms, glowing pools
+    const j = (rand() - 0.5) * 0.08;
+    const kind = rand();
+    if (kind < 0.38) { // mini cabbage patch
+      const nC = 2 + ((rand() * 3) | 0);
+      const cols = [0x7d3f8f, 0x9c5bb0, 0x80509a];
+      for (let i = 0; i < nC; i++) {
+        const px = x + (i - (nC - 1) / 2) * 0.8 + (rand() - 0.5) * 0.25;
+        const pz = -3.3 - rand() * 0.7;
+        const s = 0.65 + rand() * 0.25;
+        const c = cols[(rand() * cols.length) | 0];
+        put(px, y + 0.23 * s, pz, s, 0.46 * s, s * 0.92, c, 0, j);
+        put(px - 0.08, y + 0.48 * s, pz, s * 0.78, 0.22 * s, s * 0.72, 0x9c5bb0, 0, j + 0.03);
+        put(px + 0.02, y + 0.62 * s, pz + 0.02, 0.14 * s, 0.08 * s, s * 0.72, 0xd9c2e8, 0, 0.02);
+      }
+    } else if (kind < 0.7) { // droopy swamp palm, box-built for the synchronous prop path
+      for (let i = 0; i < 4; i++) {
+        put(x + i * 0.12, y + 0.35 + i * 0.52, -3.7, 0.34, 0.7, 0.34,
+          i & 1 ? 0xd96a54 : 0xc75d4d, 0, j);
+      }
+      const tx = x + 0.52;
+      const ty = y + 2.55;
+      put(tx, ty, -3.7, 0.72, 0.28, 1.55, 0x3f9e8a, 0, j + 0.02);
+      put(tx - 0.55, ty - 0.1, -3.7, 1.25, 0.25, 0.46, 0x3a8f80, 0, j);
+      put(tx + 0.58, ty - 0.28, -3.45, 1.28, 0.24, 0.42, 0x3f9e8a, 0, j + 0.01);
+      put(tx + 0.15, ty - 0.35, -4.22, 0.44, 0.22, 1.22, 0x4aa894, 0, j);
+      put(tx + 0.08, ty + 0.12, -3.7, 0.32, 0.24, 0.32, 0xd96a54, 0, j);
+    } else { // glowing swamp pool: magenta slab, hot-pink highlight, rust rocks
+      put(x, y + 0.1, -3.4, 1.95, 0.16, 1.45, 0xc516a8, 1, 0, 0, false, { swampPool: true });
+      put(x + 0.22, y + 0.19, -3.42, 0.58, 0.11, 0.38, 0xe93fc8, 1);
+      put(x - 1.12, y + 0.2, -3.24, 0.38, 0.34, 0.38, 0x7e3d26, 0, j);
+      put(x + 1.18, y + 0.18, -3.58, 0.34, 0.3, 0.34, 0xa85332, 0, j - 0.02);
+    }
   },
   (put, x, y, rand) => { // crystals
     const cols = [0x7ef0ff, 0xd07eff, 0xff8ad8];
@@ -602,18 +645,82 @@ export class LevelScene {
       this.clouds.push(gp);
     }
 
-    // Baked vox scenery (theme 4: big pepper-volcano cones behind the track).
+    // Shared emissive scenery: theme 3 uses magenta swamp pools/caterpillars;
+    // theme 5 uses big pepper-volcano cones behind the track.
     // Group + shared materials exist synchronously; meshes attach when the
     // cached fetch resolves (same pattern as makeCritter in game.js). One
-    // lava material shared by every instance so the crater glow — and its
-    // per-frame pulse — costs a single uniform write.
+    // material per glow color keeps the per-frame pulse to uniform writes.
     this.voxScenery = new THREE.Group();
     scene.add(this.voxScenery);
     this.voxBuildId = 0; // bumps per build; stale fetches see a mismatch and bail
     this.lavaMat = new THREE.MeshLambertMaterial({
       vertexColors: true, emissive: 0xff6a1a, emissiveIntensity: 0.5,
     });
+    this.swampMat = new THREE.MeshLambertMaterial({
+      color: 0xc516a8, vertexColors: true, emissive: 0xc516a8, emissiveIntensity: 0.5,
+    });
+    this.cabbageLeafMats = [0x9c5bb0, 0x7d3f8f, 0x8b49b0, 0x6f6f8c].map((color) =>
+      new THREE.MeshLambertMaterial({ color, vertexColors: true })
+    );
     this.lavaPulse = 0;
+
+    this.swampPoolGeo = chamferBox(1, 1, 1, 0.04);
+    this.swampPoolGeo.setAttribute(
+      'color',
+      new THREE.BufferAttribute(new Float32Array(this.swampPoolGeo.attributes.position.count * 3).fill(1), 3)
+    );
+    this.swampPoolGroup = new THREE.Group();
+    scene.add(this.swampPoolGroup);
+    this.swampPoolAnchors = [];
+
+    this.swampBubbleGroup = new THREE.Group();
+    scene.add(this.swampBubbleGroup);
+    this.swampBubbles = [];
+    const bubbleGeo = new THREE.SphereGeometry(0.5, 8, 6);
+    for (let i = 0; i < SWAMP_BUBBLE_COUNT; i++) {
+      const mat = new THREE.MeshLambertMaterial({
+        color: 0xe93fc8, emissive: 0xc516a8, emissiveIntensity: 0.35,
+        transparent: true, opacity: 0, depthWrite: false,
+      });
+      const mesh = new THREE.Mesh(bubbleGeo, mat);
+      mesh.visible = false;
+      this.swampBubbleGroup.add(mesh);
+      this.swampBubbles.push({
+        mesh, mat, anchor: null, phase: i / SWAMP_BUBBLE_COUNT,
+        rise: 2.2, wobble: 0, ox: 0, oz: 0,
+      });
+    }
+  }
+
+  addSwampPool(x, y, z, sx, sy, sz) {
+    const mesh = new THREE.Mesh(this.swampPoolGeo, this.swampMat);
+    mesh.position.set(x, y, z);
+    mesh.scale.set(sx, sy, sz);
+    this.swampPoolGroup.add(mesh);
+    this.swampPoolAnchors.push({ x, y: y + sy * 0.5, z, sx, sz });
+  }
+
+  placeSwampBubbles(seed) {
+    const anchors = this.swampPoolAnchors;
+    const rand = mulberry32(seed);
+    for (let i = 0; i < this.swampBubbles.length; i++) {
+      const b = this.swampBubbles[i];
+      if (!anchors.length) {
+        b.anchor = null;
+        b.mesh.visible = false;
+        b.mat.opacity = 0;
+        continue;
+      }
+      const a = anchors[i % anchors.length];
+      b.anchor = a;
+      b.phase = (i / this.swampBubbles.length + rand() * 0.2) % 1;
+      b.rise = 2.1 + rand() * 0.9;
+      b.wobble = rand() * Math.PI * 2;
+      b.ox = (rand() - 0.5) * a.sx * 0.45;
+      b.oz = (rand() - 0.5) * a.sz * 0.35;
+      b.mesh.visible = true;
+      b.mat.opacity = 0;
+    }
   }
 
   build(data) {
@@ -665,6 +772,8 @@ export class LevelScene {
       m.emissiveIntensity = p.night ? 0.2 : 0.55;
       m.opacity = m.userData.o * (p.night ? 0.55 : 1);
     }
+    this.swampPoolGroup.clear();
+    this.swampPoolAnchors.length = 0;
 
     const rand = mulberry32((data.theme + 1) * 7919);
     let n = 0;
@@ -675,7 +784,11 @@ export class LevelScene {
     const occ = new Set();
     const okey = (x, y, z) => x + ',' + y + ',' + z;
     const aoBlocks = [];
-    const put = (x, y, z, sx, sy, sz, color, emissive = 0, jitter = 0, hue = 0, ao) => {
+    const put = (x, y, z, sx, sy, sz, color, emissive = 0, jitter = 0, hue = 0, ao, meta) => {
+      if (meta?.swampPool) {
+        this.addSwampPool(x, y, z, sx, sy, sz);
+        return;
+      }
       if (n >= MAX_BLOCKS) return;
       this.dummy.position.set(x, y, z);
       this.dummy.scale.set(sx, sy, sz);
@@ -769,6 +882,7 @@ export class LevelScene {
       const g = data.groundY[Math.min(cx, len - 1)];
       prop(put, cx + rand() * 3, g, rand);
     }
+    this.placeSwampBubbles(len * 197 + data.theme * 53 + 3001);
 
     // Decoration scatter along the track's back row: tufts, pebbles, sprouts
     // and glowing nubs, themed per world. Deterministic (same rand stream),
@@ -802,21 +916,36 @@ export class LevelScene {
         if (k < 0.4) put(dx, dy + 0.22, dz, 0.18, 0.44, 0.18, 0xbfe6ff, 1);
         else if (k < 0.7) pebble(dx, dy, dz, 0x9fb8cc);
         else tuft(dx, dy, dz, 0xdfeefc);
-      } else if (t === 3) { // caves: glow mushrooms + dark pebbles
+      } else if (t === 3) { // swamp: cabbage sprouts, glow pebbles, mushrooms, reeds
+        if (k < 0.28) {
+          put(dx - 0.08, dy + 0.16, dz, 0.18, 0.32, 0.18, 0x7d3f8f, 0, (rand() - 0.5) * 0.08);
+          put(dx + 0.08, dy + 0.22, dz, 0.16, 0.28, 0.16, 0x9c5bb0, 0, (rand() - 0.5) * 0.08);
+          put(dx, dy + 0.42, dz, 0.08, 0.08, 0.32, 0xd9c2e8);
+        } else if (k < 0.52) {
+          put(dx, dy + 0.11, dz, 0.22 + rand() * 0.12, 0.18, 0.22, 0xe93fc8, 1);
+        } else if (k < 0.76) {
+          put(dx, dy + 0.16, dz, 0.12, 0.32, 0.12, 0xd9c2e8);
+          put(dx, dy + 0.38, dz, 0.36, 0.16, 0.36, 0xd96a54, 0, (rand() - 0.5) * 0.08);
+        } else {
+          tuft(dx, dy, dz, 0x3f9e8a);
+        }
+      } else if (t === 4) { // caves: glow mushrooms + dark pebbles
         if (k < 0.55) {
           put(dx, dy + 0.15, dz, 0.14, 0.3, 0.14, 0xcfc4e8);
           put(dx, dy + 0.38, dz, 0.42, 0.18, 0.42, k < 0.3 ? 0x7ef0ff : 0xd07eff, 1);
         } else pebble(dx, dy, dz, 0x6a6a78);
-      } else if (k < 0.3) { // pepper volcano: glowing ember pebble
-        put(dx, dy + 0.11, dz, 0.26 + rand() * 0.1, 0.2, 0.26, 0xff8c3e, 1);
-      } else if (k < 0.6) { // charcoal pebble
-        pebble(dx, dy, dz, 0x4a4044);
-      } else if (k < 0.85) { // chili sprout
-        put(dx, dy + 0.16, dz, 0.1, 0.32, 0.1, 0x3f9e3a);
-        put(dx, dy + 0.44, dz, 0.2, 0.26, 0.2, 0xe23b2e);
-      } else { // flame nub
-        put(dx, dy + 0.14, dz, 0.22, 0.28, 0.22, 0xff7a2e, 1);
-        put(dx, dy + 0.42, dz, 0.13, 0.26, 0.13, 0xffd23e, 1);
+      } else if (t === 5) { // pepper volcano: ember pebbles, chili sprouts, flame nubs
+        if (k < 0.3) {
+          put(dx, dy + 0.11, dz, 0.26 + rand() * 0.1, 0.2, 0.26, 0xff8c3e, 1);
+        } else if (k < 0.6) {
+          pebble(dx, dy, dz, 0x4a4044);
+        } else if (k < 0.85) {
+          put(dx, dy + 0.16, dz, 0.1, 0.32, 0.1, 0x3f9e3a);
+          put(dx, dy + 0.44, dz, 0.2, 0.26, 0.2, 0xe23b2e);
+        } else {
+          put(dx, dy + 0.14, dz, 0.22, 0.28, 0.22, 0xff7a2e, 1);
+          put(dx, dy + 0.42, dz, 0.13, 0.26, 0.13, 0xffd23e, 1);
+        }
       }
     };
     for (let cx = 3; cx < len - 3; cx += 3 + ((rand() * 5) | 0)) {
@@ -865,7 +994,62 @@ export class LevelScene {
     // cached per-model in voxmodel.js and shared across builds/instances.
     this.voxBuildId++;
     this.voxScenery.clear();
-    if (data.theme === 4) {
+    if (data.theme === 3) {
+      const id = this.voxBuildId;
+      // Dedicated stream: consuming `rand` here would reshuffle every other
+      // theme decor placement above.
+      const vr = mulberry32(len * 173 + 9337);
+      const groundAt = (x) => data.groundY[Math.max(0, Math.min(len - 1, Math.round(x)))] ?? 0;
+      const leafMats = this.cabbageLeafMats;
+      const cabbageCount = 3 + ((vr() * 3) | 0);
+      const cabbages = [];
+      for (let i = 0; i < cabbageCount; i++) {
+        const t = (i + 1) / (cabbageCount + 1);
+        const x = Math.max(8, Math.min(len - 10, len * t + (vr() - 0.5) * 14));
+        const z = -4 - vr() * 7;
+        cabbages.push({
+          x, y: groundAt(x) - 0.1, z,
+          s: 1.05 + vr() * 0.45 + (z < -8 ? 0.18 : 0),
+          rot: (vr() - 0.5) * 0.5,
+          mat: leafMats[(vr() * leafMats.length) | 0],
+        });
+      }
+      loadVoxModel(`${import.meta.env.BASE_URL}models/giant-cabbage.json`)
+        .then((model) => {
+          if (id !== this.voxBuildId) return; // rebuilt while loading
+          for (const pl of cabbages) {
+            const { group } = buildVoxMesh(model, { materials: { leaf: pl.mat } });
+            group.position.set(pl.x, pl.y, pl.z);
+            group.rotation.y = pl.rot;
+            group.scale.setScalar(pl.s);
+            this.voxScenery.add(group);
+          }
+        })
+        .catch((err) => console.error('giant-cabbage scenery failed to load:', err));
+
+      const caterpillarCount = vr() < 0.55 ? 2 : 1;
+      const caterpillars = [];
+      for (let i = 0; i < caterpillarCount; i++) {
+        const x = len * (0.3 + i * 0.34) + (vr() - 0.5) * 10;
+        caterpillars.push({
+          x, y: groundAt(x) + 0.06, z: -2.8 - vr() * 0.6,
+          s: 0.72 + vr() * 0.18,
+          rot: vr() < 0.5 ? 0 : Math.PI,
+        });
+      }
+      loadVoxModel(`${import.meta.env.BASE_URL}models/critter-caterpillar.json`)
+        .then((model) => {
+          if (id !== this.voxBuildId) return; // rebuilt while loading
+          for (const pl of caterpillars) {
+            const { group } = buildVoxMesh(model, { materials: { glow: this.swampMat } });
+            group.position.set(pl.x, pl.y, pl.z);
+            group.rotation.y = pl.rot;
+            group.scale.setScalar(pl.s);
+            this.voxScenery.add(group);
+          }
+        })
+        .catch((err) => console.error('critter-caterpillar scenery failed to load:', err));
+    } else if (data.theme === 5) {
       const id = this.voxBuildId;
       // Dedicated stream: consuming `rand` here would reshuffle every other
       // theme decor placement above.
@@ -938,10 +1122,32 @@ export class LevelScene {
       if (c.position.x < playerX - 45) c.position.x += 90;
       if (c.position.x > playerX + 45) c.position.x -= 90;
     }
-    // Crater glow breathes; one shared material, so this is a single write.
-    if (this.voxScenery.children.length) {
-      this.lavaPulse += dt;
-      this.lavaMat.emissiveIntensity = 0.45 + Math.sin(this.lavaPulse * 2.4) * 0.15;
+    // Crater and swamp glows breathe through shared materials.
+    this.lavaPulse += dt;
+    const glow = 0.45 + Math.sin(this.lavaPulse * 2.4) * 0.15;
+    this.lavaMat.emissiveIntensity = glow;
+    this.swampMat.emissiveIntensity = glow;
+
+    const bubbleT = this.lavaPulse * 0.34;
+    for (const b of this.swampBubbles) {
+      if (!b.anchor) continue;
+      const u = (bubbleT + b.phase) % 1;
+      const popping = u > 0.9;
+      const popU = popping ? (u - 0.9) * 10 : 0;
+      const fade = Math.min(1, u * 4, (1 - u) * 5);
+      let sc = 0.16 + u * 0.2;
+      let opacity = 0.5 * fade;
+      if (popping) {
+        sc = 0.44 * (1 - popU * 0.65);
+        opacity = 0.32 * (1 - popU);
+      }
+      b.mesh.position.set(
+        b.anchor.x + b.ox + Math.sin(u * 6.3 + b.wobble) * 0.16,
+        b.anchor.y + 0.08 + u * b.rise,
+        b.anchor.z + b.oz + Math.sin(u * 5.1 + b.wobble * 0.7) * 0.08
+      );
+      b.mesh.scale.setScalar(Math.max(0.001, sc));
+      b.mat.opacity = Math.max(0, opacity);
     }
   }
 
