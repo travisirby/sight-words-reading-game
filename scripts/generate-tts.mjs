@@ -4,7 +4,7 @@
 // through WebAudio and falls back to speechSynthesis for any unknown text.
 //
 // Usage: ELEVENLABS_API_KEY=... node scripts/generate-tts.mjs [--force]
-//   --force  regenerate clips that already exist
+//   --force  regenerate clips that already exist (except HAND_PICKED ones)
 //
 // Dynamic sentences are assembled at runtime from segments:
 //   "Find the word: cat" -> [prefix clip "find the word:"] + [word clip "cat"]
@@ -32,6 +32,20 @@ if (!API_KEY) {
   console.error('set ELEVENLABS_API_KEY');
   process.exit(1);
 }
+
+// Clips replaced by hand-picked renders chosen by ear (PR #66: default takes
+// mispronounced or mumbled these function words). Never regenerated — not
+// even under --force — since a fresh render may regress. To redo one, delete
+// its mp3 (or remove it from this list) and rerun. The picked takes came from
+// variants of previous_text "Now say the word:" / quoted emphatic text with
+// seeds 101/202/303/404 ('been': text '"Been!"', previous_text 'Read this
+// word out loud, clearly:', seed 808) — approximate reproducibility only,
+// ElevenLabs seeds aren't guaranteed stable.
+const HAND_PICKED = new Set([
+  'w-a.mp3', 'w-been.mp3', 'w-for.mp3', 'w-from.mp3', 'w-has.mp3',
+  'w-he.mp3', 'w-into.mp3', 'w-like.mp3', 'w-of.mp3', 'w-sing.mp3',
+  'w-the.mp3', 'w-think.mp3', 'w-under.mp3', 'w-with.mp3',
+]);
 
 // Boss names live in src/boss.js, which pulls in three.js/DOM modules, so
 // scrape them from the source instead of importing it.
@@ -141,6 +155,10 @@ function buildClips() {
 
 async function synth(file, { text, rate, kind }) {
   const out = path.join(OUT_DIR, file);
+  if (HAND_PICKED.has(file) && fs.existsSync(out) && fs.statSync(out).size > 0) {
+    console.log(`  kept hand-picked ${file}`);
+    return 'kept';
+  }
   if (!FORCE && fs.existsSync(out) && fs.statSync(out).size > 0) return 'kept';
   for (let attempt = 1; ; attempt++) {
     const res = await fetch(
