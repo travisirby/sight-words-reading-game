@@ -394,12 +394,14 @@ export class DoorsEvent {
       const i = TIERS.findIndex((t) => Math.abs(rel - t) < 0.7);
       if (i >= 0) this.resolveTier(i, api);
     }
-    if (this.opened !== -1 && player.x > this.wallX + 2) this.done = true;
   }
 
   resolveTier(i, api) {
     const d = this.doors[i];
     if (d.word === this.word) {
+      // Done right away (not once the kid walks past) so the auto-repeat
+      // voice can't re-announce a word that's already been answered.
+      this.done = true;
       this.opened = i;
       d.openT = 0;
       sfxDoorOpen();
