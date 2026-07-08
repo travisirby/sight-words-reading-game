@@ -139,8 +139,23 @@ export function generateLevel({ seed, wordCount, theme, secret = false, hasKey =
   const typeOffset = seed % 2;
 
   for (let i = 0; i < wordCount; i++) {
+    // Golden key: high off-path platform, max-jump reach. It sits at the
+    // top of the section, right after the previous word event, where the
+    // runway to the next event's intro line is longest — speech cuts off
+    // whatever is playing, so the key jingle needs clear air before
+    // "Bonk the block..." fires at the next event.
+    if (i === keyAt) {
+      const kx = x() + 3;
+      flat(8);
+      platforms.push({ x0: kx, x1: kx + 1, y: g + 3 });
+      key = { x: kx + 0.5, y: g + 4.2 };
+    }
+
     // ---- platforming filler ----
-    const fillerLen = 14 + ((rand() * 5) | 0) + (secret ? 4 : 0);
+    // Min length 16: the praise line spoken at a correct answer (longest
+    // ~3.3s) must finish before the next event's intro fires at ev.x - 2,
+    // even at full forward boost (~8.55 u/s).
+    const fillerLen = 16 + ((rand() * 5) | 0) + (secret ? 4 : 0);
     const fillerStart = x();
     let done = 0;
     while (done < fillerLen) {
@@ -184,14 +199,6 @@ export function generateLevel({ seed, wordCount, theme, secret = false, hasKey =
       critters.push({ x0: cx, x1: cx + 4 });
     }
 
-    // Golden key: high off-path platform mid-level, max-jump reach.
-    if (i === keyAt) {
-      const kx = x() + 3;
-      flat(8);
-      platforms.push({ x0: kx, x1: kx + 1, y: g + 3 });
-      key = { x: kx + 0.5, y: g + 4.2 };
-    }
-
     // Coin cave: dense coin grid between stacked platforms (secret levels).
     if (i === caveAt) {
       const s = x();
@@ -217,13 +224,19 @@ export function generateLevel({ seed, wordCount, theme, secret = false, hasKey =
       // a player standing at the tier below (head tops out +1.6 above feet).
       platforms.push({ x0: s + 6, x1: s + 11, y: g + 2, thin: true }); // tier +2 ledge
       platforms.push({ x0: s + 9, x1: s + 11, y: g + 4, thin: true }); // tier +4 ledge
-      flat(19);
+      // Doors resolve at the wall (s + 12), much closer to the zone's end
+      // than blocks do, so the tail is longer: praise spoken at the wall
+      // must outrun the next intro trigger even at full boost.
+      flat(26);
     }
   }
 
   // ---- flag star review zone + flagpole ----
-  const starX = x() + 5;
-  flat(28);
+  // starX sits well past the last event zone: "Star time!" fires at
+  // starX - 10 and cuts off whatever is playing, so a praise line spoken
+  // at a doors wall (~3.3s) needs this much runway at full boost.
+  const starX = x() + 24;
+  flat(47);
   const flagX = x() + 5;
   flat(12);
 
