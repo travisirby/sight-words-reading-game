@@ -91,6 +91,25 @@ const TRACKS = {
     hat: [HAT_SWING, HAT_SWING, HAT_SWING, HAT_SWING],
   },
 
+  // Secret bonus level: fast, sparkly star-party romp — high and twinkly.
+  secret: {
+    bpm: 144,
+    melVol: 0.09, bassVol: 0.14, hatVol: 0.035,
+    mel: [
+      ['C5', null, 'E5', null, 'G5', null, 'C6', '-', 'B5', null, 'G5', null, 'A5', '-', null, null],
+      ['F5', null, 'A5', null, 'C6', '-', 'A5', null, 'G5', '-', 'E5', null, 'D5', '-', null, null],
+      ['C5', null, 'E5', null, 'G5', null, 'C6', '-', 'D6', null, 'C6', null, 'B5', '-', null, null],
+      ['A5', '-', 'G5', '-', 'F5', '-', 'E5', '-', 'D5', '-', 'C5', '-', '-', '-', null, null],
+    ],
+    bass: [
+      ['C3', null, 'G2', null, 'C3', null, 'G2', null, 'A2', null, 'E2', null, 'A2', null, 'E2', null],
+      ['F2', null, 'C3', null, 'F2', null, 'C3', null, 'G2', null, 'D3', null, 'G2', null, 'B2', null],
+      ['C3', null, 'G2', null, 'C3', null, 'G2', null, 'F2', null, 'C3', null, 'G2', null, 'G2', null],
+      ['F2', null, 'F2', null, 'C3', null, 'C3', null, 'G2', null, 'G2', null, 'C3', null, null, null],
+    ],
+    hat: [HAT_SWING, HAT_SWING, HAT_SWING, HAT_SWING],
+  },
+
   // Castle boss: minor-key and mischievous, but silly rather than scary.
   boss: {
     bpm: 138,

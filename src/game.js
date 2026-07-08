@@ -4,7 +4,7 @@
 
 import * as THREE from 'three';
 import { voxelGeo } from './voxelgeo.js';
-import { LevelScene, generateLevel, generateBossArena } from './level.js';
+import { LevelScene, generateLevel, generateBossArena, SECRET_THEME } from './level.js';
 import { Player, KID_H } from './player.js';
 import { BlocksEvent, DoorsEvent, StarsEvent } from './wordevents.js';
 import { BossFight, BOSSES } from './boss.js';
@@ -190,10 +190,12 @@ export class Game {
     this.levelIdx = levelIdx;
     this.secret = secret;
     this.isBoss = boss;
+    // Secret bonus runs are a short, fast treat: the world's 6 trickiest
+    // words rather than the full 10-word review.
     this.levelWords = boss
       ? getBossWords(worldIdx, store.wordStats)
       : secret
-        ? getSecretWords(worldIdx, store.wordStats)
+        ? getSecretWords(worldIdx, store.wordStats).slice(0, 6)
         : getLevelWords(worldIdx, levelIdx);
 
     // Regular levels promote mastered words' slots to next-tier material;
@@ -211,11 +213,15 @@ export class Game {
 
     // Deterministic layout per level (stable across replays).
     const seed = worldIdx * 97 + levelIdx * 13 + (secret ? 7 : 1);
-    const hasKey = !secret && !boss && (worldIdx + levelIdx) % 2 === 0;
+    // One golden key per world: even-parity levels hide one only until the
+    // world's secret is open — after that, no more keys anywhere in it.
+    const hasKey = !secret && !boss && !store.isSecretUnlocked(worldIdx) &&
+      (worldIdx + levelIdx) % 2 === 0;
     this.data = boss
       ? generateBossArena({ seed, wordCount: this.queue.length, theme: worldIdx })
       : generateLevel({
-        seed, wordCount: this.queue.length, theme: worldIdx, secret, hasKey,
+        seed, wordCount: this.queue.length,
+        theme: secret ? SECRET_THEME : worldIdx, secret, hasKey,
       });
     this.level.build(this.data);
 
@@ -236,6 +242,7 @@ export class Game {
     this.stumbleMul = 1;
     this.flagT = 0;
     this.doneTimer = 0;
+    this.trailT = 0; // secret-mode sparkle trail cadence
 
     // Critters.
     for (let i = 0; i < this.critters.length; i++) {
@@ -450,6 +457,13 @@ export class Game {
     store.recordWordResult(word, firstTry);
     this.cb.onDot(this.results.length - 1, firstTry ? 'green' : 'yellow');
     if (this.bossFight) this.bossFight.hit(); // armor block pops off
+    if (this.secret) { // party mode: every word is a firework + coin fountain
+      const p = this.player;
+      sfxFireworks();
+      this.effects.fireworks(new THREE.Vector3(p.x + 2, p.y + 4, 0));
+      this.effects.floatText(new THREE.Vector3(p.x, p.y + 2.2, 0), '+3');
+      this.addCoins(3);
+    }
   }
 
   // Out of tries on a word event: red dot, the miss counts against the
@@ -637,8 +651,8 @@ export class Game {
       this.setChoice(true);
     }
 
-    // Target speed: stops for flag & bounces.
-    let target = WALK_SPEED;
+    // Target speed: stops for flag & bounces. Secret runs are zippier.
+    let target = this.secret ? WALK_SPEED * 1.2 : WALK_SPEED;
     if (this.phase === 'stars') target = STARS_SPEED;
     if (this.phase === 'flag' || this.phase === 'done' || this.choice) target = 0;
     if (this.phase === 'bossIntro' || this.phase === 'bossDefeat') target = 0;
@@ -673,12 +687,22 @@ export class Game {
       }
     }
 
-    // Coins.
+    // Coins (double value in secret bonus runs).
+    const coinVal = this.secret ? 2 : 1;
     for (const pos of this.level.collectCoins(p.x, p.y)) {
       sfxCoin();
-      this.addCoins(1);
+      this.addCoins(coinVal);
       this.effects.sparkle(pos);
-      this.effects.floatText(pos, '+1');
+      this.effects.floatText(pos, `+${coinVal}`);
+    }
+
+    // Secret mode: the kid runs with a sparkle trail.
+    if (this.secret && !this.choice && this.speed > 2) {
+      this.trailT -= dt;
+      if (this.trailT <= 0) {
+        this.trailT = 0.16;
+        this.effects.sparkle(new THREE.Vector3(p.x - 0.5, p.y + 0.3, 0));
+      }
     }
 
     if (!this.choice) this.updateCritters(dt); // critters freeze with time
