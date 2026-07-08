@@ -1,0 +1,23 @@
+{
+  "name": "spaghetti-pile",
+  "voxelSize": 0.2,
+  "anchor": "bottom-center",
+  "parts": [
+    {
+      "name": "plate",
+      "file": "plate.vox"
+    },
+    {
+      "name": "noodles",
+      "file": "noodles.vox"
+    },
+    {
+      "name": "sauce",
+      "file": "sauce.vox"
+    },
+    {
+      "name": "meatball",
+      "file": "meatball.vox"
+    }
+  ]
+}

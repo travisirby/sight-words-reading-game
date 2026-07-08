@@ -1071,7 +1071,40 @@ export class LevelScene {
     this.voxBuildId++;
     this.voxScenery.clear();
     for (const puff of this.smokePuffs) puff.visible = false;
-    if (data.theme === 3) {
+    if (data.theme === 0) {
+      const id = this.voxBuildId;
+      // Dedicated stream: consuming `rand` here would reshuffle every other
+      // theme decor placement above.
+      const vr = mulberry32(len * 149 + 2953);
+      const groundAt = (x) => data.groundY[Math.max(0, Math.min(len - 1, Math.round(x)))] ?? 0;
+      // Heaping spaghetti plates behind the track (bottom-center anchor,
+      // ~3.4 units tall at scale 1): near/far alternation inside the safe
+      // -4..-11 band, far copies larger so the depth reads.
+      const pileCount = 2 + ((vr() * 2) | 0);
+      const piles = [];
+      for (let i = 0; i < pileCount; i++) {
+        const t = (i + 0.5 + (vr() - 0.5) * 0.5) / pileCount;
+        const x = Math.max(8, Math.min(len - 10, len * t));
+        const far = i & 1;
+        piles.push({
+          x, y: groundAt(x) - 0.15, z: far ? -9.5 - vr() * 1.5 : -5 - vr() * 1.5,
+          s: (far ? 1.35 : 1.0) + vr() * 0.25,
+          rot: (vr() - 0.5) * 1.2,
+        });
+      }
+      loadVoxModel(`${import.meta.env.BASE_URL}models/spaghetti-pile.json`)
+        .then((model) => {
+          if (id !== this.voxBuildId) return; // rebuilt while loading
+          for (const pl of piles) {
+            const { group } = buildVoxMesh(model);
+            group.position.set(pl.x, pl.y, pl.z);
+            group.rotation.y = pl.rot;
+            group.scale.setScalar(pl.s);
+            this.voxScenery.add(group);
+          }
+        })
+        .catch((err) => console.error('spaghetti-pile scenery failed to load:', err));
+    } else if (data.theme === 3) {
       const id = this.voxBuildId;
       // Dedicated stream: consuming `rand` here would reshuffle every other
       // theme decor placement above.
