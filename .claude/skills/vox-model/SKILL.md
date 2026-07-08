@@ -76,8 +76,30 @@ Conventions that keep models drop-in compatible:
   shoulder and `mesh.scale.y` squashes a pupil about its center.
 - **Face details**: eyes/pupils/mouth sit one voxel *proud* of the
   surface they're on (pupils one more). Coplanar opposite-facing quads
-  don't z-fight (backface culling), but same-cell overlap across parts
-  does — protrude, don't overlap.
+  don't z-fight (backface culling).
+- **No cell may be claimed by two parts.** Each part is its own mesh, so
+  a shared cell renders coplanar same-facing quads that z-fight (flicker)
+  at runtime. Overlap creeps in wherever parts butt together — an arm
+  column buried in the torso, shard/decoration bases embedded in the body
+  (this shipped in boss-golem and boss-meatball before the bake warned).
+  Author shapes naturally, then end the script with a yield guard (see
+  `boss-golem.mjs`, `boss-meatball.mjs`, `pepper-volcano.mjs`):
+
+  ```js
+  const yieldTo = (part, ...owners) => {
+    for (const k of part.voxels.keys())
+      if (owners.some((o) => o.voxels.has(k))) part.voxels.delete(k);
+  };
+  yieldTo(armL, body);                // animated part yields to the body
+  yieldTo(shards, body, armL, armR);  // decoration yields to everything
+  ```
+
+  Yield direction matters: the part that *stays put* keeps the cell.
+  Animated parts yield to the body — their carved notch is hidden at rest
+  and travels with them when they swing, whereas a hole carved in the
+  body would be exposed the moment the limb moves away. Pure decoration
+  yields to both. Every yielded cell stays filled by the part that keeps
+  it, so the assembled silhouette (and every visible face) is unchanged.
 - **Rotated boxes can't be voxels**: approximate slanted originals
   (brows, shards) as stepped diagonals; chamfer long vertical edges for
   a softer silhouette.
@@ -97,6 +119,11 @@ and `public/models/` — CI re-runs the bake and fails on drift, and the
 bake is deterministic, so a clean `git status` after rebaking is the
 sync check. Sanity-check the log line: a small critter is a few hundred
 tris; thousands means merge seams (see above).
+
+The baker also checks every part pair for shared cells and prints
+`WARNING <model>: parts "a" and "b" overlap on N voxel cell(s)`. Treat
+any such warning as a bug — fix the authoring script with the yield
+guard above before committing; never ship a bake that warns.
 
 ### 4. Wire it in
 
@@ -126,7 +153,8 @@ model.then((m) => {
 
 ### 5. Verify in the browser
 
-Use the preview server (`preview_start` with the `word-runner` config)
+Use the preview server (`preview_start` with the
+`super-kids-sight-words-adventure` config from `.claude/launch.json`)
 and the dev harness: `?goto=<world>,<level>` boots straight into a
 level; the castle/boss slot is `level == WORLDS[w].levels.length`.
 `window.__wr` exposes `{ game, store, ... }` for inspection.

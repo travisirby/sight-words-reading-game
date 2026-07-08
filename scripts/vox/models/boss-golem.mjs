@@ -93,21 +93,22 @@ export default function build() {
   browR.box(5, 43, 6, 6, 43, 6, DARK);
   browR.box(3, 42, 6, 5, 42, 6, DARK);
 
-  // Each part bakes to its own mesh, so a cell claimed by two parts z-fights.
-  // Arms yield their buried inner column to the torso; shards yield the cells
-  // embedded in torso, head, and arms (guard pattern from giant-cabbage.mjs).
-  yieldClaimedCells(armL, [body]);
-  yieldClaimedCells(armR, [body]);
-  yieldClaimedCells(shards, [body, armL, armR]);
+  // Same-cell overlap across parts z-fights at runtime (each part is its own
+  // mesh), so later/decorative parts yield: the arms lose the column buried
+  // in the torso, the shards lose the bases buried in the torso, head and
+  // arms. Every yielded cell stays filled by the part that keeps it, so the
+  // assembled silhouette is unchanged.
+  const yieldTo = (part, ...owners) => {
+    for (const k of part.voxels.keys()) {
+      if (owners.some((o) => o.voxels.has(k))) part.voxels.delete(k);
+    }
+  };
+  yieldTo(armL, body);
+  yieldTo(armR, body);
+  yieldTo(shards, body, armL, armR);
   assertNoPartOverlap(s);
 
   return s;
-}
-
-function yieldClaimedCells(part, winners) {
-  for (const k of [...part.voxels.keys()]) {
-    if (winners.some((w) => w.voxels.has(k))) part.voxels.delete(k);
-  }
 }
 
 function assertNoPartOverlap(scene) {

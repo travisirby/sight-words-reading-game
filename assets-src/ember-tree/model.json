@@ -1,0 +1,19 @@
+{
+  "name": "ember-tree",
+  "voxelSize": 0.2,
+  "anchor": "bottom-center",
+  "parts": [
+    {
+      "name": "trunk",
+      "file": "trunk.vox"
+    },
+    {
+      "name": "ember",
+      "file": "ember.vox"
+    },
+    {
+      "name": "trim",
+      "file": "trim.vox"
+    }
+  ]
+}

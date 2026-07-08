@@ -614,6 +614,24 @@ export class LevelScene {
       vertexColors: true, emissive: 0xff6a1a, emissiveIntensity: 0.5,
     });
     this.lavaPulse = 0;
+    // Monolith tints: one shared material per chili color — the model's
+    // near-white tintable body multiplies with these, AO intact.
+    this.monolithMats = [0xe23b2e, 0xff7a2e, 0xffc23e].map(
+      (c) => new THREE.MeshLambertMaterial({ vertexColors: true, color: c })
+    );
+    // Crater smoke pool: single-box puffs, one material each so opacity
+    // can fade per puff (the clouds use the same emissive≈color trick so
+    // lighting can't flatten them). Anchored per build; hidden off-theme.
+    this.smokePuffs = [];
+    for (let i = 0; i < 8; i++) {
+      const puff = new THREE.Mesh(boxGeo, new THREE.MeshLambertMaterial({
+        color: 0x8a7a76, emissive: 0x7a6a64, transparent: true, opacity: 0,
+        depthWrite: false,
+      }));
+      puff.visible = false;
+      scene.add(puff);
+      this.smokePuffs.push(puff);
+    }
   }
 
   build(data) {
@@ -865,34 +883,76 @@ export class LevelScene {
     // cached per-model in voxmodel.js and shared across builds/instances.
     this.voxBuildId++;
     this.voxScenery.clear();
+    for (const puff of this.smokePuffs) puff.visible = false;
     if (data.theme === 4) {
       const id = this.voxBuildId;
       // Dedicated stream: consuming `rand` here would reshuffle every other
       // theme decor placement above.
       const vr = mulberry32(len * 131 + 4177);
-      // 2-3 cones spread along the level. Both depth slots sit between the
+      // One towering mega-cone mid-level whose smoking crater clears the
+      // ridgelines, flanked by 2-3 mid cones. The mid slots sit between the
       // prop apron (z ~ -3.5) and the near hill band (z = -12, 5-8 units
-      // tall): anything behind the hills is swallowed whole at this low
-      // camera angle, so "far" is a half-step back with a bigger scale.
-      const spots = vr() < 0.5 ? [0.22, 0.72] : [0.15, 0.5, 0.85];
-      const placements = spots.map((t, i) => ({
+      // tall): anything shorter than the hills is swallowed whole behind
+      // them at this low camera angle.
+      const cones = [{ x: len * (0.35 + vr() * 0.3), z: -15, s: 1.9 + vr() * 0.4 }];
+      const spots = vr() < 0.5 ? [0.15, 0.8] : [0.1, 0.55, 0.9];
+      spots.forEach((t, i) => cones.push({
         x: len * t + (vr() - 0.5) * 10,
         z: i & 1 ? -10.5 : -8,
         s: (i & 1 ? 1.15 : 0.9) + vr() * 0.25,
       }));
-      loadVoxModel(`${import.meta.env.BASE_URL}models/pepper-volcano.json`)
-        .then((model) => {
-          if (id !== this.voxBuildId) return; // rebuilt while loading
-          for (const pl of placements) {
-            const { group } = buildVoxMesh(model, { materials: { lava: this.lavaMat } });
-            // Bottom-center anchor; sink slightly into the hill band so the
-            // base never floats over a dip in the stepped ridgelines.
-            group.position.set(pl.x, -0.6, pl.z);
-            group.scale.setScalar(pl.s);
-            this.voxScenery.add(group);
-          }
-        })
-        .catch((err) => console.error('pepper-volcano scenery failed to load:', err));
+      // Crater smoke starts now: the anchors are known before the meshes
+      // arrive (bottom-center anchor, rim at ~5.8 units before scaling).
+      let np = 0;
+      for (const c of cones) {
+        for (let k = 0; k < 2 && np < this.smokePuffs.length; k++, np++) {
+          const puff = this.smokePuffs[np];
+          puff.visible = true;
+          puff.userData = {
+            anchor: { x: c.x + (vr() - 0.5), y: 5.8 * c.s, z: c.z },
+            phase: vr(), speed: 0.1 + vr() * 0.06, size: 0.7 + c.s * 0.4,
+          };
+        }
+      }
+      // Giant chilis planted tip-up between the cones and the track, and
+      // charred ember-trees on the nearest band — the monoliths cycle the
+      // shared tint materials, the tree tips share the pulsing lava glow.
+      const poles = [];
+      const nPoles = 3 + (vr() < 0.5 ? 0 : 1);
+      for (let i = 0; i < nPoles; i++) {
+        poles.push({
+          x: len * ((i + 0.3 + vr() * 0.5) / nPoles), z: -5.5 - vr() * 2,
+          s: 0.6 + vr() * 0.3, mat: this.monolithMats[i % this.monolithMats.length],
+          flip: vr() < 0.5,
+        });
+      }
+      const trees = [];
+      const nTrees = 2 + (vr() < 0.6 ? 0 : 1);
+      for (let i = 0; i < nTrees; i++) {
+        trees.push({
+          x: len * ((i + 0.6 + vr() * 0.35) / nTrees), z: -4.6 - vr() * 1.2,
+          s: 0.9 + vr() * 0.35, flip: vr() < 0.5,
+        });
+      }
+      const place = (name, list, materialsFor) => {
+        loadVoxModel(`${import.meta.env.BASE_URL}models/${name}.json`)
+          .then((model) => {
+            if (id !== this.voxBuildId) return; // rebuilt while loading
+            for (const pl of list) {
+              const { group } = buildVoxMesh(model, { materials: materialsFor(pl) });
+              // Bottom-center anchors; sink slightly so bases never float
+              // over a dip in the stepped ground/ridgelines.
+              group.position.set(pl.x, name === 'pepper-volcano' ? -0.6 : -0.25, pl.z);
+              group.scale.setScalar(pl.s);
+              if (pl.flip) group.rotation.y = Math.PI;
+              this.voxScenery.add(group);
+            }
+          })
+          .catch((err) => console.error(`${name} scenery failed to load:`, err));
+      };
+      place('pepper-volcano', cones, () => ({ lava: this.lavaMat }));
+      place('pepper-monolith', poles, (pl) => ({ body: pl.mat }));
+      place('ember-tree', trees, () => ({ ember: this.lavaMat }));
     }
   }
 
@@ -939,9 +999,18 @@ export class LevelScene {
       if (c.position.x > playerX + 45) c.position.x -= 90;
     }
     // Crater glow breathes; one shared material, so this is a single write.
-    if (this.voxScenery.children.length) {
+    if (this.data && this.data.theme === 4) {
       this.lavaPulse += dt;
       this.lavaMat.emissiveIntensity = 0.45 + Math.sin(this.lavaPulse * 2.4) * 0.15;
+      // Smoke: each puff loops a rise-drift-swell-fade cycle over its crater.
+      for (const puff of this.smokePuffs) {
+        if (!puff.visible) continue;
+        const u = puff.userData;
+        const f = (this.lavaPulse * u.speed + u.phase) % 1;
+        puff.position.set(u.anchor.x + f * 1.6, u.anchor.y + f * 3.4, u.anchor.z);
+        puff.scale.setScalar(u.size * (0.55 + f * 0.9));
+        puff.material.opacity = Math.sin(Math.PI * f) * 0.45;
+      }
     }
   }
 
