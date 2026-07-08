@@ -19,9 +19,16 @@ describe('chunkIntoLevels', () => {
     for (const list of Object.values(DOLCH)) {
       for (const lvl of chunkIntoLevels(list, 5)) {
         expect(lvl.length).toBeGreaterThanOrEqual(4);
-        expect(lvl.length).toBeLessThanOrEqual(6);
+        expect(lvl.length).toBeLessThanOrEqual(8);
       }
     }
+  });
+
+  it('caps the number of levels at 7 (8 map stops with the castle)', () => {
+    for (const list of Object.values(DOLCH)) {
+      expect(chunkIntoLevels(list, 5).length).toBeLessThanOrEqual(7);
+    }
+    expect(chunkIntoLevels(DOLCH.primer, 5)).toHaveLength(7);
   });
 
   it('handles a list smaller than the target', () => {
@@ -50,8 +57,8 @@ describe('WORLDS', () => {
     const caveWords = getWorldWords(4);
     const combined = swampWords.concat(caveWords);
 
-    expect(swampLevels).toEqual(secondLevels.slice(0, 5));
-    expect(caveLevels).toEqual(secondLevels.slice(5));
+    expect(swampLevels).toEqual(secondLevels.slice(0, 4));
+    expect(caveLevels).toEqual(secondLevels.slice(4));
     expect(combined).toEqual(DOLCH.second);
     expect(combined).toHaveLength(46);
     expect(new Set(combined).size).toBe(46);
@@ -60,9 +67,10 @@ describe('WORLDS', () => {
 
   it('keeps every world level chunk within the size bounds', () => {
     for (const world of WORLDS) {
+      expect(world.levels.length).toBeLessThanOrEqual(7);
       for (const level of world.levels) {
         expect(level.length).toBeGreaterThanOrEqual(4);
-        expect(level.length).toBeLessThanOrEqual(6);
+        expect(level.length).toBeLessThanOrEqual(8);
       }
     }
   });
@@ -189,7 +197,7 @@ describe('isMasteredStats', () => {
 
 describe('getNextTierWords', () => {
   it('returns the words introduced by the following world', () => {
-    const backHalfOfSecond = chunkIntoLevels(DOLCH.second).slice(5).flat();
+    const backHalfOfSecond = chunkIntoLevels(DOLCH.second).slice(4).flat();
     expect(getNextTierWords(0)).toEqual(DOLCH.primer);
     expect(getNextTierWords(3)).toEqual(getWorldWords(4));
     expect(getNextTierWords(3)).toEqual(backHalfOfSecond);

@@ -570,6 +570,21 @@ export function completeLevel(worldIdx, levelIdx, worldLevelCounts) {
   save();
 }
 
+// Pull a saved frontier back inside the current level counts (e.g. a save
+// made when a world had 10 levels, loaded after the cap dropped to 8, would
+// otherwise never match completeLevel's frontier check again).
+export function clampFrontier(worldLevelCounts) {
+  const u = state.unlocked;
+  if (u.world >= worldLevelCounts.length) {
+    u.world = worldLevelCounts.length - 1;
+    u.level = worldLevelCounts[u.world]; // boss slot of the last world
+    save();
+  } else if (u.level > worldLevelCounts[u.world]) {
+    u.level = worldLevelCounts[u.world];
+    save();
+  }
+}
+
 export function isLevelUnlocked(worldIdx, levelIdx) {
   if (state.devUnlocked) return true;
   const u = state.unlocked;

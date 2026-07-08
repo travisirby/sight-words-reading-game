@@ -40,11 +40,12 @@ export const DOLCH = {
   ],
 };
 
-// Split a list into levels of ~5 words, as evenly as possible.
-// Short levels (~60-90s) fit a young kid's attention span and make
-// map-progress payoffs come faster.
-export function chunkIntoLevels(list, target = 5) {
-  const n = Math.max(1, Math.round(list.length / target));
+// Split a list into levels of ~5 words, as evenly as possible, capped at
+// maxLevels so no world's map row gets crowded (7 levels + the castle keeps
+// a row at 8 stops total). Short levels (~60-90s) fit a young kid's
+// attention span and make map-progress payoffs come faster.
+export function chunkIntoLevels(list, target = 5, maxLevels = 7) {
+  const n = Math.min(maxLevels, Math.max(1, Math.round(list.length / target)));
   const levels = [];
   let start = 0;
   for (let i = 0; i < n; i++) {
