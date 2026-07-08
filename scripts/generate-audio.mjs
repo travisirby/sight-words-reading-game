@@ -52,6 +52,10 @@ const MUSIC = {
     ms: 45000,
     prompt: `${STYLE} A mischievous, comedic castle-boss theme. Minor key but silly rather than scary: sneaky tuba, staccato strings, bouncy percussion, cartoon villain energy a 6 year old would giggle at.`,
   },
+  finale: {
+    ms: 60000,
+    prompt: `${STYLE} An intense final-world running theme for the last stretch of the adventure. Fast and driving, minor key, urgent pumping bass, bold heroic brass and chiptune leads over pounding drums — epic and exciting like a lava-world showdown, but still fun and kid-friendly rather than frightening.`,
+  },
   house: {
     ms: 45000,
     prompt: `${STYLE} A cozy home-sweet-home theme. Music box and soft felt piano, slow and warm with a lullaby feel, gentle and safe.`,

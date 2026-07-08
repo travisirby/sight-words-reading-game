@@ -62,7 +62,7 @@ everything else still works.
 ## How it teaches
 
 - **Dolch progression** — 5 worlds map to the Dolch tiers (pre-primer → 3rd grade),
-  ~10 words per level: Pasta Plains 🍝, Waffle Desert 🧇, Snowy Peaks ❄️,
+  ~10 words per level: Pasta Plains 🍝, Waffle Desert 🧇, Snowcones Islands 🍧,
   Crystal Caves 💎, Sky Islands ☁️.
 - **Hear it, find it** — the word is spoken, never shown in the HUD; the 🔊 button
   repeats it anytime, and it auto-repeats if he hesitates.

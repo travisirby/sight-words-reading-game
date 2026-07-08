@@ -57,7 +57,7 @@ export function decorForWorld(worldIdx) {
 export const TROPHY_NAMES = [
   'Pasta Plains Trophy',
   'Waffle Desert Trophy',
-  'Snowy Peaks Trophy',
+  'Snowcones Islands Trophy',
   'Purple Cabbage Swamp Trophy',
   'Crystal Caves Trophy',
   'Pepper Volcano Trophy',

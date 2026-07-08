@@ -42,7 +42,7 @@ describe('WORLDS', () => {
     expect(WORLDS.map((w) => w.name)).toEqual([
       'Pasta Plains',
       'Waffle Desert',
-      'Snowy Peaks',
+      'Snowcones Islands',
       'Purple Cabbage Swamp',
       'Crystal Caves',
       'Pepper Volcano',

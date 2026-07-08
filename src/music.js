@@ -129,6 +129,27 @@ const TRACKS = {
     hat: [HAT_SWING, HAT_SWING, HAT_SWING, HAT_SWING],
   },
 
+  // Final world: fast, driving and intense — the last stretch of the whole
+  // adventure. A-minor, urgent pumping sixteenth-note bass under a
+  // heroic-but-anxious melody. Faster and harder-charging than the boss tune.
+  finale: {
+    bpm: 154,
+    melVol: 0.095, bassVol: 0.17, hatVol: 0.04,
+    mel: [
+      ['A4', '-', 'C5', '-', 'E5', '-', 'A5', '-', 'G5', '-', 'E5', '-', 'F5', '-', 'E5', '-'],
+      ['D5', '-', 'F5', '-', 'A5', '-', 'G5', '-', 'F5', '-', 'E5', '-', 'D5', '-', 'C5', '-'],
+      ['A4', '-', 'C5', '-', 'E5', '-', 'A5', '-', 'B5', '-', 'C6', '-', 'B5', '-', 'A5', '-'],
+      ['G5', '-', 'F5', '-', 'E5', '-', 'D5', '-', 'E5', '-', '-', '-', 'A4', '-', '-', '-'],
+    ],
+    bass: [
+      ['A2', 'A2', 'A2', 'A2', 'A2', 'A2', 'A2', 'A2', 'F2', 'F2', 'F2', 'F2', 'F2', 'F2', 'F2', 'F2'],
+      ['D2', 'D2', 'D2', 'D2', 'D2', 'D2', 'D2', 'D2', 'E2', 'E2', 'E2', 'E2', 'E2', 'E2', 'E2', 'E2'],
+      ['A2', 'A2', 'A2', 'A2', 'A2', 'A2', 'A2', 'A2', 'F2', 'F2', 'F2', 'F2', 'C3', 'C3', 'C3', 'C3'],
+      ['G2', 'G2', 'G2', 'G2', 'E2', 'E2', 'E2', 'E2', 'A2', 'A2', 'A2', 'A2', 'A2', 'A2', 'A2', 'A2'],
+    ],
+    hat: [HAT_SWING, HAT_SWING, HAT_SWING, HAT_SWING],
+  },
+
   // My house / shop: cozy and slow.
   house: {
     bpm: 88,

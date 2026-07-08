@@ -1,0 +1,19 @@
+{
+  "name": "snowcone-mountain",
+  "voxelSize": 0.2,
+  "anchor": "bottom-center",
+  "parts": [
+    {
+      "name": "body",
+      "file": "body.vox"
+    },
+    {
+      "name": "syrup",
+      "file": "syrup.vox"
+    },
+    {
+      "name": "cherry",
+      "file": "cherry.vox"
+    }
+  ]
+}

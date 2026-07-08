@@ -234,6 +234,16 @@ export class Effects {
     this.ringPulse(pos, 0xfff3b0, 1.2);
   }
 
+  // Sonic-style: getting hurt sprays your coins out in a golden burst that
+  // arcs up and rains back down. n scales the spray to how much was lost.
+  coinScatter(pos, n = 6) {
+    this.nextBurst().fire(pos, {
+      speed: 4.5, up: 6, life: 1.1, gravity: -13,
+      count: Math.min(28, 8 + n * 3), size: 0.18, palette: GOLD_PALETTE,
+    });
+    this.ringPulse(pos, 0xffd93d, 0.9);
+  }
+
   // Small satisfying pickup: golden glints + a tight ring pulse.
   sparkle(pos) {
     this.nextBurst().fire(pos, {

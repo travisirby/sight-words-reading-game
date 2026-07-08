@@ -329,7 +329,11 @@ function startLevel(worldIdx, levelIdx, secret = false) {
   lastRun = null; // the summary's delayed 3-star line checks this to stand down
   map.exit();
   mode = 'game';
-  music.play(boss ? 'boss' : secret ? 'secret' : 'level');
+  // The final world gets its own intense theme (levels and castle alike) —
+  // it's the last stretch of the whole adventure. Secret bonus runs keep
+  // their own celebratory track.
+  const finalWorld = worldIdx === WORLDS.length - 1;
+  music.play(secret ? 'secret' : finalWorld ? 'finale' : boss ? 'boss' : 'level');
   music.setDimmed(false);
   sfxLevelStart();
   game.startRun(worldIdx, levelIdx, { secret, boss });

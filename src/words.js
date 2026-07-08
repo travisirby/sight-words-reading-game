@@ -76,7 +76,7 @@ function worldLevels(world) {
 export const WORLDS = [
   { name: 'Pasta Plains', emoji: '🍝', tier: 'prePrimer' },
   { name: 'Waffle Desert', emoji: '🧇', tier: 'primer' },
-  { name: 'Snowy Peaks', emoji: '❄️', tier: 'first' },
+  { name: 'Snowcones Islands', emoji: '🍧', tier: 'first' },
   { name: 'Purple Cabbage Swamp', emoji: '🥬', tier: 'second', part: [0, 2] },
   { name: 'Crystal Caves', emoji: '💎', tier: 'second', part: [1, 2] },
   { name: 'Pepper Volcano', emoji: '🌶️', tier: 'third' },
