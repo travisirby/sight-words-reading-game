@@ -9,6 +9,7 @@ import { voxelGeo, makeVoxelGeo, chamferVoxelGeo } from './voxelgeo.js';
 import { buildMapData, secretSegment } from './mapdata.js';
 import { PALETTES, mulberry32 } from './level.js';
 import { makeKidMesh } from './player.js';
+import { loadVoxModel, buildVoxMesh } from './voxmodel.js';
 import { makeKeyMesh } from './game.js';
 import { BOSSES } from './boss.js';
 import { Effects } from './effects.js';
@@ -390,6 +391,7 @@ export class Overworld {
     this.scene.add(this.groundMesh);
     this.groundMeta = []; // { region, color } per instance
     this.groundH = new Map(); // 'x,z' -> walk-surface height
+    this.lavaPools = []; // carved lava-pool cells (region 4); buildProps fills them
 
     const dummy = new THREE.Object3D();
     const added = new Set();
@@ -437,9 +439,16 @@ export class Overworld {
           }
           if (this.keepCells.has(key)) keep = true;
           if (!keep) continue;
-          // Sky Islands: carve holes so the region reads as floating islands.
+          // Pepper Volcano: pock the landmass with little lava pools — the
+          // old floating-island carve throttled way down, plus a hash
+          // knockout so the sine pattern doesn't visibly tile. buildProps()
+          // drops a glowing slab into each hole.
           if (wi === 4 && !onPath &&
-              Math.sin(cx * 0.9 + 2) * Math.sin(cz * 0.8) < -0.45) continue;
+              Math.sin(cx * 0.9 + 2) * Math.sin(cz * 0.8) < -0.8 &&
+              hash2(cx, cz, 7) < 0.6) {
+            this.lavaPools.push({ x: cx, z: cz });
+            continue;
+          }
           // Gentle terraces away from the trail.
           let tier = 0;
           if (!onPath) {
@@ -489,9 +498,18 @@ export class Overworld {
       }
     }
 
+    // The secret ledge / bridge cells above may have refilled a carved pool;
+    // keep only the pools that stayed holes so no lava slab hides in ground.
+    this.lavaPools = this.lavaPools.filter(
+      (lp) => !this.groundH.has(lp.x + ',' + lp.z)
+    );
+
     // Sand ring: shoreline cells blend toward beach sand so coasts read as
-    // beaches instead of abrupt grass cliffs dropping into the sea.
+    // beaches instead of abrupt grass cliffs dropping into the sea. Pepper
+    // Volcano coasts char toward dark basalt instead — black-sand shores
+    // that also rim the carved lava pools.
     const sand = new THREE.Color(0xecd79f);
+    const charcoal = new THREE.Color(0x453530);
     for (const m of this.groundMeta) {
       if (m.tier > 0) continue;
       const coast =
@@ -499,7 +517,10 @@ export class Overworld {
         !this.groundH.has((m.cx - 1) + ',' + m.cz) ||
         !this.groundH.has(m.cx + ',' + (m.cz + 1)) ||
         !this.groundH.has(m.cx + ',' + (m.cz - 1));
-      if (coast) m.color.lerp(sand, 0.5 + hash2(m.cx, m.cz, 4) * 0.25);
+      if (coast) {
+        m.color.lerp(m.region === 4 ? charcoal : sand,
+          0.5 + hash2(m.cx, m.cz, 4) * 0.25);
+      }
     }
 
     // Baked AO from terrace heights: cells hemmed in by taller neighbors
@@ -645,12 +666,28 @@ export class Overworld {
           put(s.x, s.y + 0.58, s.z, 0.6, 0.28, 0.6, 0xef5350);
         }
       },
-      (put, s, rand, i) => { // Sky Islands: bright trees + flowers
-        if (i < 4) tree(put, s.x, s.y, s.z, 0x3f9e3a, 0x8ed86e);
-        else flower(put, s.x, s.y, s.z, i);
+      (put, s, rand, i, glow) => { // Pepper Volcano: cones, chili plants, embers
+        if (i < 3) { // mini stepped cinder cone with a molten glow on top
+          put(s.x, s.y + 0.35, s.z, 1.9, 0.7, 1.9, 0x4a3a34, rand() * 0.5);
+          put(s.x, s.y + 0.95, s.z, 1.3, 0.55, 1.3, 0x5c4438);
+          put(s.x, s.y + 1.42, s.z, 0.8, 0.45, 0.8, 0x3a2d28);
+          glow(s.x, s.y + 1.7, s.z, 0.5, 0.16, 0.5, 0xff9a3c);
+        } else if (i < 9) { // chili plant: leafy bush hung with bright peppers
+          put(s.x, s.y + 0.32, s.z, 0.95, 0.6, 0.95, 0x3f9e3a, rand() * 0.6);
+          put(s.x, s.y + 0.72, s.z, 0.6, 0.4, 0.6, 0x4cb545);
+          const pep = [0xe23b2e, 0xff8c42, 0xffd93d];
+          for (let k = 0; k < 3; k++) {
+            const a = (i + k) * 2.1;
+            put(s.x + Math.cos(a) * 0.42, s.y + 0.38 + (k & 1) * 0.28,
+              s.z + Math.sin(a) * 0.42, 0.18, 0.3, 0.18, pep[(i + k) % 3], a);
+          }
+        } else { // ember rock: dark basalt boulder with a glowing crack
+          rock(put, s.x, s.y, s.z, 0x3c332e);
+          glow(s.x + 0.15, s.y + 0.52, s.z + 0.1, 0.16, 0.12, 0.34, 0xff7031, 0.7);
+        }
       },
     ];
-    const counts = [14, 14, 13, 13, 10];
+    const counts = [14, 14, 13, 13, 12];
     WORLDS.forEach((w, wi) => {
       const rand = mulberry32(wi * 131 + 17);
       const put = decorPut(wi);
@@ -658,24 +695,76 @@ export class Overworld {
       spots(wi, counts[wi], rand).forEach((s, i) => emitters[wi](put, s, rand, i, glow));
     });
 
-    { // Sky Islands extras: rainbow arc + clouds below the floating region.
-      const put = decorPut(4);
+    { // Pepper Volcano extras: baked volcano landmarks, crater smoke, embers.
+      const glow = glowPut(4);
       const rz = 4 * ROW_Z;
-      const bands = [0xff5252, 0xff9800, 0xffd93d, 0x69f0ae, 0x40c4ff, 0x7986cb, 0xba68c8];
-      bands.forEach((hex, bi) => {
-        const r = 4.6 - bi * 0.32;
-        for (let k = 0; k <= 10; k++) {
-          const a = (k / 10) * Math.PI;
-          put(-9 + Math.cos(a) * r, 0.4 + Math.sin(a) * r * 0.85, rz - 3.4,
-            0.34, 0.34, 0.3, hex);
-        }
-      });
-      const crand = mulberry32(777);
-      for (let k = 0; k < 5; k++) {
-        const x = -16 + crand() * 32;
-        const z = rz - 3 + crand() * 6;
-        put(x, -1.7, z, 2.4 + crand() * 1.5, 0.7, 1.6 + crand(), 0xffffff);
-        put(x + 1.2, -1.5, z + 0.4, 1.5, 0.6, 1.2, 0xf2f8ff);
+
+      // Glowing slabs float in the lava-pool holes buildTerrain() carved,
+      // just above the sea line so the melt reads as pooled lava, not water.
+      for (const lp of this.lavaPools) {
+        glow(lp.x, -0.45, lp.z, 1.06, 0.12, 1.06,
+          hash2(lp.x, lp.z, 9) < 0.5 ? 0xff8c2e : 0xffa63d,
+          hash2(lp.x, lp.z, 10) * 0.3);
+      }
+
+      // Two baked pepper-volcano models (public/models/pepper-volcano.json,
+      // bottom-center anchor, ~5.8 units tall at scale 1) anchor the region.
+      // Groups position synchronously and the meshes attach when the fetch
+      // lands (same pattern as makeCritter in game.js); the molten `lava`
+      // part gets its own emissive material so the crater glows. Lock tints
+      // reach these through this.voxDecor (see applyLockTints).
+      this.voxDecor = [];
+      const volcano = (x, z, scale) => {
+        const g = new THREE.Group();
+        g.position.set(x, this.groundH.get(x + ',' + z) ?? 0, z);
+        g.scale.setScalar(scale);
+        this.scene.add(g);
+        const entry = { region: 4, mats: [] };
+        this.voxDecor.push(entry);
+        loadVoxModel(`${import.meta.env.BASE_URL}models/pepper-volcano.json`)
+          .then((model) => {
+            const lavaMat = new THREE.MeshLambertMaterial({
+              vertexColors: true, emissive: 0xff7a1e, emissiveIntensity: 0.5,
+            });
+            const { group, parts } = buildVoxMesh(model, { materials: { lava: lavaMat } });
+            g.add(group);
+            for (const name in parts) entry.mats.push(parts[name].material);
+            this.applyLockTints(); // re-tint now that the materials exist
+          })
+          .catch((err) => console.error('pepper-volcano model failed to load:', err));
+        return g;
+      };
+      const big = volcano(-9, rz - 3, 0.62); // landmark where the rainbow stood
+      volcano(12, rz - 2, 0.4); // little sibling down the row
+
+      // 4 smoke puffs cycle up out of the big crater — same drift idea as
+      // the sky clouds, but rising and thinning instead of scrolling.
+      // tick() advances them via this.volcanoSmoke.
+      this.volcanoSmoke = [];
+      for (let k = 0; k < 4; k++) {
+        const m = new THREE.Mesh(boxGeo, new THREE.MeshLambertMaterial({
+          color: 0x9a938e, emissive: 0x6e6862, emissiveIntensity: 0.3,
+          transparent: true, opacity: 0,
+        }));
+        m.rotation.y = k * 0.7;
+        this.scene.add(m);
+        this.volcanoSmoke.push({
+          mesh: m, phase: k / 4,
+          x: big.position.x, z: big.position.z,
+          lip: big.position.y + 5.8 * 0.62 - 0.4, // just inside the crater rim
+        });
+      }
+
+      // A few ember motes glowing among the basalt around the big volcano.
+      const erand = mulberry32(4747);
+      for (let k = 0; k < 4; k++) {
+        const a = erand() * Math.PI * 2;
+        const ex = Math.round(big.position.x + Math.cos(a) * (2.5 + erand() * 2));
+        const ez = Math.round(big.position.z + Math.sin(a) * (1.5 + erand() * 2));
+        const ey = this.groundH.get(ex + ',' + ez);
+        if (ey === undefined) continue; // fell in the sea or a lava pool
+        glow(ex, ey + 0.1, ez, 0.16, 0.12, 0.16,
+          k & 1 ? 0xffb347 : 0xff7031, a);
       }
     }
 
@@ -1178,6 +1267,12 @@ export class Overworld {
     apply(this.groundMesh, this.groundMeta);
     apply(this.decorMesh, this.decorMeta);
     apply(this.glowMesh, this.glowMeta);
+    // Vox-model decor (the pepper volcanoes): baked colors live in vertex
+    // attributes, so the lock tint is one grey multiplier per material.
+    for (const d of this.voxDecor) {
+      const f = this.lockFactor(d.region);
+      for (const m of d.mats) m.color.setScalar(f);
+    }
     // "?" signs show only over locked regions.
     const zero = new THREE.Matrix4().makeScale(0.0001, 0.0001, 0.0001);
     this.signMeta.forEach((s, i) => {
@@ -1618,6 +1713,22 @@ export class Overworld {
     for (const c of this.mapClouds) {
       c.position.x += c.userData.drift * dt;
       if (c.position.x > b.maxX + 26) c.position.x = b.minX - 26;
+    }
+
+    // Pepper Volcano smoke: each puff climbs out of the crater, swells,
+    // drifts a touch downwind and thins to nothing, then respawns at the
+    // lip — staggered phases keep the column from ever emptying.
+    for (const p of this.volcanoSmoke) {
+      const u = (t * 0.16 + p.phase) % 1;
+      p.mesh.position.set(
+        p.x + Math.sin(u * 4 + p.phase * 9) * 0.3 + u * 0.9,
+        p.lip + u * 3.4,
+        p.z + Math.sin(u * 3 + p.phase * 5) * 0.25
+      );
+      p.mesh.scale.setScalar(0.5 + u * 1.1);
+      // sin ramp: fade in off the lip, fade out before the wrap.
+      p.mesh.material.opacity = 0.8 * Math.sin(Math.min(1, u * 1.15) * Math.PI);
+      p.mesh.rotation.y += dt * 0.5;
     }
 
     // Living sea: shimmer, foam, glints, ducks and the hopping fish.

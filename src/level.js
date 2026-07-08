@@ -6,6 +6,7 @@
 
 import * as THREE from 'three';
 import { voxelGeo, chamferVoxelGeo, chamferBox } from './voxelgeo.js';
+import { loadVoxModel, buildVoxMesh } from './voxmodel.js';
 
 // skyTop/skyBot drive the gradient skydome; fog doubles as the dome's
 // horizon band so distance melts into the sky. The light rig is a
@@ -47,13 +48,13 @@ export const PALETTES = [
     hemiSky: 0x8c86c8, hemiGround: 0x2e3a66, sunTint: 0xb9c4ff,
     sun: 0xe8ecff, cloud: 0x6a6088, night: true,
   },
-  { // Sky Islands — high clear air
-    top: [0x9be07a, 0x8ed86e], dirt: [0x9c7748, 0x8f6b3f],
-    plat: [0xffd54a, 0xf5c93e], hill: 0x84cd65, hill2: 0xbde8ff,
-    sky: 0x6fc3ff, fog: 0xb9e2ff,
-    skyTop: 0x2f8fe6, skyBot: 0xbfe6ff,
-    hemiSky: 0xfff0d0, hemiGround: 0x6aa4c8, sunTint: 0xffe2ae,
-    sun: 0xfff0a8, cloud: 0xffffff,
+  { // Pepper Volcano — ember dusk over basalt, glowing-rock platforms
+    top: [0x6b5a5e, 0x605054], dirt: [0x453a40, 0x3c3238],
+    plat: [0xff8c3e, 0xf07c30], hill: 0x7a3a2e, hill2: 0x9c5a3a,
+    sky: 0xe8874a, fog: 0xf2a868,
+    skyTop: 0xb84a32, skyBot: 0xffc06a,
+    hemiSky: 0xffd9a8, hemiGround: 0x7a4a3c, sunTint: 0xffb070,
+    sun: 0xffcf7a, cloud: 0x9a8078,
   },
 ];
 
@@ -369,13 +370,33 @@ export const PROPS = [
     }
     put(x, y + 0.15, -3.5, 1.6, 0.5, 1.6, 0x54545f);
   },
-  (put, x, y, rand) => { // floating island bush
-    const fy = y + 2.2 + rand() * 1.5;
+  (put, x, y, rand) => { // Pepper Volcano: mini cones, chili plants, lava pools
     const j = (rand() - 0.5) * 0.08;
-    put(x, fy, -4, 1.4, 0.5, 1.4, 0x8ed86e, 0, j);
-    put(x, fy - 0.5, -4, 1, 0.6, 1, 0x9c7748);
-    put(x, fy + 0.55, -4, 0.7, 0.6, 0.7, 0x3f9e3a, 0, j);
-    put(x + 0.45, fy + 0.45, -3.7, 0.45, 0.4, 0.45, 0x4cb545, 0, j + 0.04);
+    const kind = rand();
+    if (kind < 0.4) { // mini volcano: basalt tiers, chili-red rim, glowing cap
+      put(x, y + 0.5, -3.5, 2.0, 1.0, 2.0, 0x4a3a3e, 0, j);
+      put(x, y + 1.35, -3.5, 1.4, 0.75, 1.4, 0x5a4044, 0, j + 0.03);
+      put(x, y + 2.0, -3.5, 0.9, 0.6, 0.9, 0xc0392b, 0, j);
+      put(x, y + 2.42, -3.5, 0.55, 0.3, 0.55, 0xff8c3e, 1); // lava cap
+      put(x, y + 2.6, -3.5, 0.26, 0.18, 0.26, 0xffd23e, 1); // molten core
+      put(x + 0.55, y + 1.7, -3.28, 0.2, 0.5, 0.2, 0xff7a2e, 1); // dribble
+      if (rand() < 0.6) put(x - 0.62, y + 1.0, -3.35, 0.18, 0.6, 0.18, 0xff8c3e, 1);
+    } else if (kind < 0.75) { // chili plant: green bush, 2-3 bright peppers
+      put(x, y + 0.5, -3.3, 1.3, 1.0, 1.3, 0x3f9e3a, 0, j);
+      const cols = [0xe23b2e, 0xff7a2e, 0xffc23e];
+      const nP = 2 + ((rand() * 2) | 0);
+      for (let i = 0; i < nP; i++) {
+        const px = x + (i - (nP - 1) / 2) * 0.55;
+        const py = y + 0.85 + rand() * 0.35;
+        put(px, py, -3.15, 0.35, 0.5, 0.35, cols[(rand() * 3) | 0]);
+        put(px, py + 0.34, -3.15, 0.12, 0.16, 0.12, 0x2e7d32); // stem nub
+      }
+    } else { // lava pool: glowing slab, yellow core, dark ember rocks
+      put(x, y + 0.1, -3.4, 1.8, 0.16, 1.4, 0xff7a2e, 1);
+      put(x + 0.2, y + 0.19, -3.4, 0.5, 0.12, 0.4, 0xffd23e, 1);
+      put(x - 1.1, y + 0.2, -3.3, 0.4, 0.35, 0.4, 0x3c3238, 0, j);
+      put(x + 1.15, y + 0.18, -3.55, 0.35, 0.3, 0.35, 0x453a40, 0, j);
+    }
   },
 ];
 
@@ -580,6 +601,19 @@ export class LevelScene {
       scene.add(gp);
       this.clouds.push(gp);
     }
+
+    // Baked vox scenery (theme 4: big pepper-volcano cones behind the track).
+    // Group + shared materials exist synchronously; meshes attach when the
+    // cached fetch resolves (same pattern as makeCritter in game.js). One
+    // lava material shared by every instance so the crater glow — and its
+    // per-frame pulse — costs a single uniform write.
+    this.voxScenery = new THREE.Group();
+    scene.add(this.voxScenery);
+    this.voxBuildId = 0; // bumps per build; stale fetches see a mismatch and bail
+    this.lavaMat = new THREE.MeshLambertMaterial({
+      vertexColors: true, emissive: 0xff6a1a, emissiveIntensity: 0.5,
+    });
+    this.lavaPulse = 0;
   }
 
   build(data) {
@@ -736,10 +770,9 @@ export class LevelScene {
       prop(put, cx + rand() * 3, g, rand);
     }
 
-    // Decoration scatter along the track's back row: grass tufts, flowers,
-    // pebbles and the odd mushroom, themed per world. Deterministic (same
-    // rand stream), sparse, and merged into the one instanced mesh.
-    const FLOWER = [0xff6b6b, 0xffd54a, 0xff8ad8, 0x7ec8ff, 0xfff6f0];
+    // Decoration scatter along the track's back row: tufts, pebbles, sprouts
+    // and glowing nubs, themed per world. Deterministic (same rand stream),
+    // sparse, and merged into the one instanced mesh.
     const tuft = (dx, dy, dz, c) => {
       for (let i = 0; i < 3; i++) {
         put(dx + (i - 1) * 0.14, dy + 0.14 + rand() * 0.1, dz, 0.09,
@@ -774,16 +807,16 @@ export class LevelScene {
           put(dx, dy + 0.15, dz, 0.14, 0.3, 0.14, 0xcfc4e8);
           put(dx, dy + 0.38, dz, 0.42, 0.18, 0.42, k < 0.3 ? 0x7ef0ff : 0xd07eff, 1);
         } else pebble(dx, dy, dz, 0x6a6a78);
-      } else if (k < 0.42) { // sky islands
-        tuft(dx, dy, dz, 0x5cbf4e);
-      } else if (k < 0.72) { // flower
-        put(dx, dy + 0.18, dz, 0.08, 0.36, 0.08, 0x3f9e3a);
-        put(dx, dy + 0.42, dz, 0.24, 0.22, 0.24, FLOWER[(rand() * FLOWER.length) | 0]);
-      } else if (k < 0.9) {
-        pebble(dx, dy, dz, 0x9aa0a6);
-      } else { // mushroom
-        put(dx, dy + 0.15, dz, 0.16, 0.3, 0.16, 0xf2e8d8);
-        put(dx, dy + 0.38, dz, 0.44, 0.2, 0.44, 0xe05a4a);
+      } else if (k < 0.3) { // pepper volcano: glowing ember pebble
+        put(dx, dy + 0.11, dz, 0.26 + rand() * 0.1, 0.2, 0.26, 0xff8c3e, 1);
+      } else if (k < 0.6) { // charcoal pebble
+        pebble(dx, dy, dz, 0x4a4044);
+      } else if (k < 0.85) { // chili sprout
+        put(dx, dy + 0.16, dz, 0.1, 0.32, 0.1, 0x3f9e3a);
+        put(dx, dy + 0.44, dz, 0.2, 0.26, 0.2, 0xe23b2e);
+      } else { // flame nub
+        put(dx, dy + 0.14, dz, 0.22, 0.28, 0.22, 0xff7a2e, 1);
+        put(dx, dy + 0.42, dz, 0.13, 0.26, 0.13, 0xffd23e, 1);
       }
     };
     for (let cx = 3; cx < len - 3; cx += 3 + ((rand() * 5) | 0)) {
@@ -826,6 +859,40 @@ export class LevelScene {
     // Clouds spread near the start; they wrap as the player advances.
     for (const c of this.clouds) {
       c.position.set(Math.random() * 60 - 10, 8 + Math.random() * 4, -7 - Math.random() * 5);
+    }
+
+    // Vox scenery. Children are removed, never disposed: the geometries are
+    // cached per-model in voxmodel.js and shared across builds/instances.
+    this.voxBuildId++;
+    this.voxScenery.clear();
+    if (data.theme === 4) {
+      const id = this.voxBuildId;
+      // Dedicated stream: consuming `rand` here would reshuffle every other
+      // theme decor placement above.
+      const vr = mulberry32(len * 131 + 4177);
+      // 2-3 cones spread along the level. Both depth slots sit between the
+      // prop apron (z ~ -3.5) and the near hill band (z = -12, 5-8 units
+      // tall): anything behind the hills is swallowed whole at this low
+      // camera angle, so "far" is a half-step back with a bigger scale.
+      const spots = vr() < 0.5 ? [0.22, 0.72] : [0.15, 0.5, 0.85];
+      const placements = spots.map((t, i) => ({
+        x: len * t + (vr() - 0.5) * 10,
+        z: i & 1 ? -10.5 : -8,
+        s: (i & 1 ? 1.15 : 0.9) + vr() * 0.25,
+      }));
+      loadVoxModel(`${import.meta.env.BASE_URL}models/pepper-volcano.json`)
+        .then((model) => {
+          if (id !== this.voxBuildId) return; // rebuilt while loading
+          for (const pl of placements) {
+            const { group } = buildVoxMesh(model, { materials: { lava: this.lavaMat } });
+            // Bottom-center anchor; sink slightly into the hill band so the
+            // base never floats over a dip in the stepped ridgelines.
+            group.position.set(pl.x, -0.6, pl.z);
+            group.scale.setScalar(pl.s);
+            this.voxScenery.add(group);
+          }
+        })
+        .catch((err) => console.error('pepper-volcano scenery failed to load:', err));
     }
   }
 
@@ -870,6 +937,11 @@ export class LevelScene {
       c.position.x += c.userData.drift * dt;
       if (c.position.x < playerX - 45) c.position.x += 90;
       if (c.position.x > playerX + 45) c.position.x -= 90;
+    }
+    // Crater glow breathes; one shared material, so this is a single write.
+    if (this.voxScenery.children.length) {
+      this.lavaPulse += dt;
+      this.lavaMat.emissiveIntensity = 0.45 + Math.sin(this.lavaPulse * 2.4) * 0.15;
     }
   }
 

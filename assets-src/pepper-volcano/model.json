@@ -1,0 +1,28 @@
+{
+  "name": "pepper-volcano",
+  "voxelSize": 0.2,
+  "anchor": "bottom-center",
+  "parts": [
+    {
+      "name": "body",
+      "file": "body.vox"
+    },
+    {
+      "name": "lava",
+      "file": "lava.vox",
+      "pivot": [
+        13,
+        26,
+        -13
+      ]
+    },
+    {
+      "name": "leaf",
+      "file": "leaf.vox"
+    },
+    {
+      "name": "trim",
+      "file": "trim.vox"
+    }
+  ]
+}

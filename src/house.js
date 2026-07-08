@@ -31,7 +31,7 @@ const DOOR_HALF = 2.6;   // doorway waypoints clamp to |x| <= this
 const WALK_SPEED = 3.6;  // units/s
 
 const inRect = (r, x, z) => x > r.minX && x < r.maxX && z > r.minZ && z < r.maxZ;
-const TROPHY_TINTS = [0xffd54a, 0xffc233, 0xffe082, 0xf5b942, 0xffdb6e];
+const TROPHY_TINTS = [0xffd54a, 0xffc233, 0xffe082, 0xf5b942, 0xff8c3e];
 
 function lambert(hex, emissive = 0x000000) {
   return new THREE.MeshLambertMaterial({ color: hex, emissive });
@@ -687,19 +687,19 @@ export class House {
   }
 
   makeDragonKite(anims) {
-    // Cloud-dragon kite tugging at a stake, always flying in the yard corner.
+    // Pepper-dragon kite tugging at a stake, always flying in the yard corner.
     const g = new THREE.Group();
     g.add(box(lambert(0x8d5a2b), 0, 0.25, 0, 0.14, 0.5, 0.14)); // stake
     const kite = new THREE.Group();
-    const sail = box(lambert(0xbfe4ff, 0x223244), 0, 0, 0, 1.1, 1.1, 0.08, 0);
+    const sail = box(lambert(0xd63a2a, 0x3a1008), 0, 0, 0, 1.1, 1.1, 0.08, 0);
     sail.rotation.z = Math.PI / 4; // diamond
     kite.add(sail);
-    kite.add(box(lambert(0x5b8dd9), 0, 0.1, 0.06, 0.34, 0.3, 0.06)); // dragon face
+    kite.add(box(lambert(0x3f9e3a), 0, 0.1, 0.06, 0.34, 0.3, 0.06)); // stem-nub crest
     kite.add(box(lambert(0x222222), -0.07, 0.14, 0.1, 0.06, 0.06, 0.04));
     kite.add(box(lambert(0x222222), 0.07, 0.14, 0.1, 0.06, 0.06, 0.04));
     const tails = [];
     for (let k = 0; k < 3; k++) { // ribbon tail
-      const bow = box(lambert([0xe25b5b, 0xffd54a, 0x69d06a][k]),
+      const bow = box(lambert([0xff9a3c, 0xffb25a, 0xff7a2e][k]),
         0, -0.95 - k * 0.35, 0, 0.3, 0.12, 0.05);
       kite.add(bow);
       tails.push(bow);

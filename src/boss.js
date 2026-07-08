@@ -21,7 +21,7 @@ export const BOSSES = [
   { name: 'Syrup Serpent', color: 0x8a4a1a },
   { name: 'Frost Yeti', color: 0xeef6ff },
   { name: 'Crystal Golem', color: 0x9f6fd4 },
-  { name: 'Cloud Dragon', color: 0xbfe4ff },
+  { name: 'Pepper Dragon', color: 0xff7a2e },
 ];
 
 export function buildBoss(wi) {
@@ -84,7 +84,7 @@ export function buildBoss(wi) {
     armor = [[-0.96, 1.45, 0.8], [-0.48, 1.45, 0.83], [0, 1.45, 0.86],
       [0.48, 1.45, 0.83], [0.96, 1.45, 0.8]];
     top = 5.2;
-  } else { // Cloud Dragon: sky-blue dragon riding a cloud puff
+  } else { // Pepper Dragon: chili-red dragon riding a smoke puff
     ready = voxBoss('boss-dragon', ['wingL', 'wingR']);
     armor = [[-0.76, 2.0, 0.75], [-0.38, 2.0, 0.78], [0, 2.0, 0.8],
       [0.38, 2.0, 0.78], [0.76, 2.0, 0.75]];
