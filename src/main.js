@@ -562,7 +562,6 @@ ui.init({
     showMap();
     map.walkTo(map.tokenNav); // pop the current level's banner right away
   },
-  onCharacter: () => showCharacter(),
   onCharacterDone: () => closeCharacter(),
   onSwitchPlayer: () => showPlayers(),
   onPlayersBack: () => showTitle(),
