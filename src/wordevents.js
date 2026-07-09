@@ -13,41 +13,113 @@ import {
 
 const boxGeo = voxelGeo;
 
+// Per-style palette: frame wood, text ink, face gradient (top → bottom).
+// 'reveal' shows the missed answer (the word itself, in green); 'check' is
+// the big ✓ on a correct bonk; 'gray' marks eliminated/dead options.
+const SIGN_STYLES = {
+  normal: { frame: '#7a4a22', ink: '#2b211a', face: ['#fffdf4', '#f0e5cd'] },
+  gray: { frame: '#8f8f8f', ink: '#7c7c7c', face: ['#e3e3e3', '#c8c8c8'] },
+  check: { frame: '#2f9e42', ink: '#2f9e42', face: ['#f5fdf2', '#ddf0d6'] },
+  reveal: { frame: '#2f9e42', ink: '#2f9e42', face: ['#f5fdf2', '#ddf0d6'] },
+};
+
+function roundedRect(g, x, y, w, h, r) {
+  g.beginPath();
+  g.moveTo(x + r, y);
+  g.arcTo(x + w, y, x + w, y + h, r);
+  g.arcTo(x + w, y + h, x, y + h, r);
+  g.arcTo(x, y + h, x, y, r);
+  g.arcTo(x, y, x + w, y, r);
+  g.closePath();
+}
+
 function drawSign(canvas, word, style = 'normal') {
   const g = canvas.getContext('2d');
   const W = canvas.width;
   const H = canvas.height;
-  g.fillStyle = style === 'gray' ? '#b9b9b9' : '#ffffff';
-  g.fillRect(0, 0, W, H);
-  g.lineWidth = 10;
-  // 'reveal' shows the missed answer: the word itself, in green.
-  const green = style === 'check' || style === 'reveal';
-  g.strokeStyle = green ? '#2f9e42' : '#000000';
-  g.strokeRect(6, 6, W - 12, H - 12);
-  g.fillStyle = green ? '#2f9e42' : style === 'gray' ? '#7c7c7c' : '#000000';
+  const s = SIGN_STYLES[style] || SIGN_STYLES.normal;
+  g.clearRect(0, 0, W, H);
+
+  // Rounded plaque; canvas stays transparent outside it so the sign has a
+  // real silhouette in the world instead of a hard white rectangle.
+  const bw = 16; // frame stroke width
+  const x = 14, y = 8, w = W - 28, h = H - 30, r = 36;
+
+  // Soft drop shadow under the plaque so it reads as an object in the scene.
+  g.save();
+  g.shadowColor = 'rgba(38, 24, 8, 0.3)';
+  g.shadowBlur = 14;
+  g.shadowOffsetY = 11;
+  roundedRect(g, x, y, w, h, r);
+  const grad = g.createLinearGradient(0, y, 0, y + h);
+  grad.addColorStop(0, s.face[0]);
+  grad.addColorStop(1, s.face[1]);
+  g.fillStyle = grad;
+  g.fill();
+  g.restore();
+
+  // Chunky wooden frame with an inner bevel highlight.
+  roundedRect(g, x + bw / 2, y + bw / 2, w - bw, h - bw, r - bw / 2);
+  g.lineWidth = bw;
+  g.strokeStyle = s.frame;
+  g.stroke();
+  roundedRect(g, x + bw + 2, y + bw + 2, w - 2 * (bw + 2), h - 2 * (bw + 2), r - bw);
+  g.lineWidth = 5;
+  g.strokeStyle = 'rgba(255, 255, 255, 0.55)';
+  g.stroke();
+
+  // Corner rivets, tucked into the frame corners away from the letters.
+  const rv = 7;
+  const inset = bw + 15;
+  g.fillStyle = s.frame;
+  for (const [cx, cy] of [
+    [x + inset, y + inset], [x + w - inset, y + inset],
+    [x + inset, y + h - inset], [x + w - inset, y + h - inset],
+  ]) {
+    g.beginPath();
+    g.arc(cx, cy, rv, 0, Math.PI * 2);
+    g.fill();
+    g.fillStyle = 'rgba(255, 255, 255, 0.45)';
+    g.beginPath();
+    g.arc(cx - 2, cy - 2, rv * 0.35, 0, Math.PI * 2);
+    g.fill();
+    g.fillStyle = s.frame;
+  }
+
+  // The word: big, dark, dead-center — legibility beats decoration.
+  g.fillStyle = s.ink;
   const text = style === 'check' ? '✓' : word;
-  let size = style === 'check' ? H * 0.8 : H * 0.62;
-  const font = (s) => `bold ${s}px 'Arial Rounded MT Bold', 'Comic Sans MS', Arial, sans-serif`;
+  let size = style === 'check' ? H * 0.72 : H * 0.56;
+  const font = (sz) => `bold ${sz}px 'Arial Rounded MT Bold', 'Comic Sans MS', Arial, sans-serif`;
   g.font = font(size);
-  while (g.measureText(text).width > W - 44 && size > 24) {
+  while (g.measureText(text).width > w - 2 * (bw + 26) && size > 24) {
     size -= 6;
     g.font = font(size);
   }
   g.textAlign = 'center';
   g.textBaseline = 'middle';
-  g.fillText(text, W / 2, H / 2 + 4);
+  g.save();
+  g.shadowColor = 'rgba(38, 24, 8, 0.18)';
+  g.shadowOffsetY = 4;
+  g.fillText(text, W / 2, y + h / 2 + 4);
+  g.restore();
 }
 
 function makeSign(w, h) {
   const canvas = document.createElement('canvas');
-  canvas.width = 288;
-  canvas.height = 144;
+  canvas.width = 512;
+  canvas.height = 256;
   const tex = new THREE.CanvasTexture(canvas);
   tex.colorSpace = THREE.SRGBColorSpace;
-  tex.anisotropy = 4;
+  tex.anisotropy = 8;
   const mesh = new THREE.Mesh(
     new THREE.PlaneGeometry(w, h),
-    new THREE.MeshBasicMaterial({ map: tex, side: THREE.DoubleSide })
+    new THREE.MeshBasicMaterial({
+      map: tex,
+      side: THREE.DoubleSide,
+      transparent: true,
+      alphaTest: 0.02,
+    })
   );
   mesh.userData.canvas = canvas;
   mesh.userData.tex = tex;

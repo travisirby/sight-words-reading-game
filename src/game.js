@@ -467,9 +467,9 @@ export class Game {
     const word = this.activeEv ? this.activeEv.word : this.stars && this.stars.word;
     this.results.push({ word, firstTry });
     store.recordWordResult(word, firstTry);
-    // Got it eventually, but only on the last (3rd) guess: red like a miss.
-    // First try → green, 2nd try → yellow.
-    const cls = attempts >= 2 ? 'red' : firstTry ? 'green' : 'yellow';
+    // First try → green, 2nd try → yellow, 3rd try → orange.
+    // Red is reserved for running out of tries entirely (onEventFail).
+    const cls = attempts >= 2 ? 'orange' : firstTry ? 'green' : 'yellow';
     this.cb.onDot(this.results.length - 1, cls);
     if (this.bossFight) this.bossFight.hit(); // armor block pops off
     if (this.secret) { // party mode: every word is a firework + coin fountain
