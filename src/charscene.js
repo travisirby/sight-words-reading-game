@@ -25,10 +25,13 @@ const css = (hex) => '#' + hex.toString(16).padStart(6, '0');
 function makeWordBlock(word, bgHex) {
   const paint = (c, text) => {
     const g = c.getContext('2d');
-    g.fillStyle = css(bgHex);
+    // Painted darker than the target color: ambient + sun total ~1.4x on
+    // camera-facing faces, which clips the true toy colors to pastel.
+    const f = 0.72;
+    g.fillStyle = `rgb(${(bgHex >> 16 & 255) * f | 0},${(bgHex >> 8 & 255) * f | 0},${(bgHex & 255) * f | 0})`;
     g.fillRect(0, 0, 128, 128);
     g.fillStyle = 'rgba(255,255,255,0.85)';
-    g.fillRect(12, 12, 104, 104);
+    g.fillRect(20, 20, 88, 88); // frame thick enough to read colored on screen
     if (text) {
       g.fillStyle = '#2c3e75';
       g.font = 'bold 64px sans-serif';
@@ -247,7 +250,7 @@ export class CharScene {
         put(x + 0.4, 0.73, z + 0.1, 0.5, 0.5, 0.5, 0xe23b2e);
         put(x - 0.45, 0.48, z + 0.2, 0.45, 0.45, 0.45, 0xef5343);
       };
-      bush(4.8, -5.5);
+      bush(-6.8, -7); // left half only — screen-right it poked up behind PLAY
       bush(-3.2, -10);
       bush(-7.5, -17);
       // Parmesan sprinkles scattered on the grass.
@@ -287,7 +290,7 @@ export class CharScene {
       const defs = [
         ['the', 0xffd93d, -2.2, -3.0, 0.6, 0.35],
         ['and', 0xff6b6b, -3.5, -5.0, 0.55, -0.5],
-        ['see', 0x6bffb8, 2.4, -3.5, 0.55, 0.25],
+        ['see', 0x6bffb8, 3.9, -1.4, 0.55, 0.25], // nearer/right: clear of PLAY overlay
         ['play', 0x74b9ff, -2.6, -8.0, 0.5, -0.3],
       ];
       for (const [word, hex, x, z, s, ry] of defs) {

@@ -91,15 +91,30 @@ html, body {
 }
 
 /* ---------- title ---------- */
+/* Title + PLAY ride in one centered column so the button sits composed
+   under the letter rows instead of ragged against the h1's right edge. */
+.title-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 26px;
+}
+#screen-title .title-stack { pointer-events: none; }
+.title-stack > * { pointer-events: auto; }
 /* Each letter is a tiny voxel block: flat colored tile, beveled top face,
    hard extruded side — the title is literally built from world blocks. */
 .game-title {
   font-size: clamp(22px, 3.6vw, 40px);
-  line-height: 1.5;
+  line-height: 1.62; /* room for the bob + extruded side between rows */
   text-align: center;
   letter-spacing: 0;
   color: #fff;
   text-shadow: 2px 2px 0 rgba(0,0,0,0.3);
+  animation: title-pop 0.55s cubic-bezier(0.34, 1.56, 0.64, 1) backwards;
+}
+@keyframes title-pop {
+  from { transform: scale(0.4); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
 }
 .game-title span {
   display: inline-block;
@@ -107,7 +122,7 @@ html, body {
   border: 3px solid #2c3e75;
   border-radius: 6px;
   padding: 0.04em 0.22em;
-  margin: 0 1px;
+  margin: 0 2px;
   box-shadow:
     inset 0 3px 0 rgba(255,255,255,0.4),
     inset 0 -3px 0 rgba(0,0,0,0.16),
@@ -122,15 +137,28 @@ html, body {
   50% { transform: translateY(-7px); }
 }
 /* PLAY breathes gently to draw the eye; :active kills the animation so the
-   press-down transform on .btn still lands. */
-#btn-play { animation: play-pulse 2s ease-in-out infinite; }
+   press-down transform on .btn still lands. Warm orange so it pops against
+   the green meadow (grass-green blended straight into it). The one-shot
+   fade staggers the chrome in behind the title pop. */
+#btn-play {
+  background: #ff9f43;
+  --side: #c9741e;
+  animation:
+    play-pulse 2s ease-in-out infinite,
+    chrome-in 0.5s ease-out 0.25s backwards;
+}
 #btn-play:active { animation: none; }
+#btn-settings { animation: chrome-in 0.5s ease-out 0.45s backwards; }
 @keyframes play-pulse {
   0%, 100% { transform: scale(1); }
   50% { transform: scale(1.04); }
 }
+@keyframes chrome-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
 @media (prefers-reduced-motion: reduce) {
-  .game-title span, #btn-play { animation: none; }
+  .game-title, .game-title span, #btn-play, #btn-settings { animation: none; }
 }
 
 #version-tag {
@@ -216,8 +244,13 @@ html, body {
   color: #2c3e75;
   font-size: 40px;
 }
+/* Opens from the corner gear; centered like a proper modal rather than
+   inheriting whatever spot the flex column would have given it. */
 #settings-panel {
   position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
 }
 
 /* ---------- player select ---------- */
