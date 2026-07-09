@@ -87,8 +87,11 @@ export function init(h) {
   bindSpeak($('btn-house-back'), 'Back', () => h.onHouseBack());
   bindSpeak($('btn-house-shop'), 'Shop!', () => toggleShop(true));
   bindSpeak($('btn-shop-close'), 'Close', () => toggleShop(false));
+  bindSpeak($('btn-house-music'), 'Music!', () => toggleMusicPanel(true));
+  bindSpeak($('btn-music-close'), 'Close', () => toggleMusicPanel(false));
   bindSpeak($('btn-ceremony-map'), 'Map', () => h.onCeremonyDone());
   onBuyItem = h.onBuyItem;
+  onPickMusic = h.onPickMusic;
 
   // Mic: press-and-hold.
   bindHold($('btn-mic'), h.onMicDown, h.onMicUp);
@@ -634,13 +637,58 @@ export function setMicListening(on) {
 // ---------- my house / shop ----------
 
 let onBuyItem = null;
+let onPickMusic = null;
 let toastTimer = null;
 let pendingItem = null; // item awaiting the yes/no read in the confirm bar
+let musicOpts = { choices: [], current: 'house' }; // set on each showHouse
 
 function toggleShop(open) {
   $('shop-panel').classList.toggle('hidden', !open);
   closeShopConfirm();
-  if (open) refreshShop();
+  if (open) {
+    $('music-panel').classList.add('hidden'); // one bottom sheet at a time
+    refreshShop();
+  }
+}
+
+// ---------- house jukebox ----------
+
+function toggleMusicPanel(open) {
+  $('music-panel').classList.toggle('hidden', !open);
+  if (open) {
+    $('shop-panel').classList.add('hidden');
+    refreshMusicList();
+  }
+}
+
+// Rebuilt on every open/pick — the list is tiny and this keeps the note
+// marker on the playing track without bookkeeping.
+function refreshMusicList() {
+  const list = $('music-list');
+  list.innerHTML = '';
+  for (const c of musicOpts.choices) {
+    const playing = c.track === musicOpts.current;
+    const btn = document.createElement('button');
+    btn.className = 'music-item' + (playing ? ' playing' : '');
+    const icon = document.createElement('span');
+    icon.className = 'shop-icon';
+    icon.appendChild(iconEl(c.icon || 'music', 40));
+    const name = document.createElement('span');
+    name.className = 'music-name';
+    name.textContent = c.name;
+    const note = document.createElement('span');
+    note.className = 'music-note';
+    if (playing) note.appendChild(iconEl('music', 26));
+    btn.append(icon, name, note);
+    btn.addEventListener('click', () => {
+      sfxClick();
+      musicOpts.current = c.track;
+      speak(c.name, { rate: 1.0 }); // tapping is a mini reading moment too
+      onPickMusic && onPickMusic(c.track);
+      refreshMusicList();
+    });
+    list.appendChild(btn);
+  }
 }
 
 function closeShopConfirm() {
@@ -684,12 +732,15 @@ function openShopConfirm(item) {
   } });
 }
 
-export function showHouse() {
+export function showHouse(music = null) {
   showScreen('house');
   toggleShop(false);
+  toggleMusicPanel(false);
+  if (music) musicOpts = music; // { choices, current } from main.js
   refreshWallet();
   $('btn-house-back').classList.remove('hidden');
   $('btn-house-shop').classList.remove('hidden');
+  $('btn-house-music').classList.remove('hidden');
   $('ceremony-panel').classList.add('hidden');
 }
 
@@ -698,9 +749,11 @@ export function showHouse() {
 export function showCeremony() {
   showScreen('house');
   toggleShop(false);
+  toggleMusicPanel(false);
   refreshWallet();
   $('btn-house-back').classList.add('hidden');
   $('btn-house-shop').classList.add('hidden');
+  $('btn-house-music').classList.add('hidden');
   $('ceremony-panel').classList.remove('hidden');
 }
 

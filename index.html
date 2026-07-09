@@ -310,10 +310,26 @@
       <span class="totals-item"><span data-icon="coin" data-icon-size="26"></span> <span id="house-coins">0</span></span>
       <span class="totals-item"><span data-icon="gem" data-icon-size="26"></span> <span id="house-gems">0</span></span>
     </div>
+    <button id="btn-house-music" class="btn btn-round corner-top-right" aria-label="Music">
+      <span data-icon="music" data-icon-size="48"></span>
+    </button>
     <button id="btn-house-shop" class="btn btn-huge btn-shop btn-with-icon">
       <span data-icon="shop" data-icon-size="44"></span>
       <span class="btn-label">SHOP</span>
     </button>
+    <!-- Jukebox: pick which theme plays at the house (unlocked worlds only) -->
+    <div id="music-panel" class="hidden">
+      <div id="music-header">
+        <span class="heading-with-icon">
+          <span data-icon="music" data-icon-size="28"></span>
+          <span>Pick your music!</span>
+        </span>
+        <button id="btn-music-close" class="btn btn-round" aria-label="Close music">
+          <span data-icon="close" data-icon-size="40"></span>
+        </button>
+      </div>
+      <div id="music-list"></div>
+    </div>
     <div id="shop-panel" class="hidden">
       <div id="shop-header">
         <span class="heading-with-icon">
