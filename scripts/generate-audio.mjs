@@ -52,6 +52,31 @@ const MUSIC = {
     ms: 45000,
     prompt: `${STYLE} A mischievous, comedic castle-boss theme. Minor key but silly rather than scary: sneaky tuba, staccato strings, bouncy percussion, cartoon villain energy a 6 year old would giggle at.`,
   },
+  finale: {
+    ms: 60000,
+    prompt: `${STYLE} An intense final-world running theme for the last stretch of the adventure. Fast and driving, minor key, urgent pumping bass, bold heroic brass and chiptune leads over pounding drums — epic and exciting like a lava-world showdown, but still fun and kid-friendly rather than frightening.`,
+  },
+  // ---- per-world level themes (worlds 0-4; world 5 uses `finale`) ----
+  pasta: {
+    ms: 60000,
+    prompt: `${STYLE} A sunny, bouncy overworld running theme for a cheerful pasta-and-tomato world. Playful mandolin and accordion, skipping pizzicato strings and light hand percussion, warm major key — like a happy stroll through rolling spaghetti hills.`,
+  },
+  waffle: {
+    ms: 60000,
+    prompt: `${STYLE} A warm, golden, lazy desert running theme for a waffle-and-syrup world. Relaxed shuffle groove, twangy plucked guitar and gentle harmonica, honeyed and sunny, a cute kid-friendly nod to a spaghetti-western.`,
+  },
+  snow: {
+    ms: 60000,
+    prompt: `${STYLE} A light, twinkling, icy running theme for a snowcone island world. Sparkling glockenspiel and bells over a gentle bouncy beat, cool and refreshing and crystalline, wintry but bright and playful.`,
+  },
+  swamp: {
+    ms: 60000,
+    prompt: `${STYLE} A squishy, funky swamp running theme for a purple cabbage bog. Bubbly rubbery bass, muted quirky plucks and comedic bloops and pops, playful and a little mysterious — gooey and fun, never scary.`,
+  },
+  caves: {
+    ms: 60000,
+    prompt: `${STYLE} A mysterious, sparkling crystal-cave running theme. Echoing crystalline bells, soft chimes and glassy mallets over a gentle beat, spacious and glittery with a sense of wonder and discovery — minor-tinged but magical, not scary.`,
+  },
   house: {
     ms: 45000,
     prompt: `${STYLE} A cozy home-sweet-home theme. Music box and soft felt piano, slow and warm with a lullaby feel, gentle and safe.`,

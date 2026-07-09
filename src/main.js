@@ -33,6 +33,17 @@ music.setMusicEnabled(store.get().music);
 const LEVEL_COUNTS = WORLDS.map((w) => w.levels.length);
 store.clampFrontier(LEVEL_COUNTS);
 
+// Per-world level music, indexed by world. The last world uses `finale`
+// (which also covers its castle); other worlds' castles share `boss`.
+const WORLD_TRACKS = ['pasta', 'waffle', 'snow', 'swamp', 'caves', 'finale'];
+
+function levelTrack(worldIdx, secret, boss) {
+  if (secret) return 'secret';
+  if (worldIdx === WORLDS.length - 1) return 'finale';
+  // `level` is the generic fallback for any world without its own track.
+  return boss ? 'boss' : (WORLD_TRACKS[worldIdx] || 'level');
+}
+
 let current = { world: 0, level: 0, secret: false };
 let selected = null; // node info from the map banner
 let lastRun = null; // { results, coins, gems, stars, keyFound }
@@ -75,6 +86,10 @@ const map = new Overworld(renderer, {
     selected = info;
     speak(info.name, { rate: 1.0 });
     ui.showLevelBanner(info);
+    // Warm this node's track while the level card sits open, so it's ready
+    // the moment they tap Play (no cold-fetch silence on slow connections).
+    const boss = !info.secret && info.level === LEVEL_COUNTS[info.world];
+    music.prefetch(levelTrack(info.world, info.secret, boss));
   },
   onDismiss: () => {
     selected = null;
@@ -329,7 +344,10 @@ function startLevel(worldIdx, levelIdx, secret = false) {
   lastRun = null; // the summary's delayed 3-star line checks this to stand down
   map.exit();
   mode = 'game';
-  music.play(boss ? 'boss' : secret ? 'secret' : 'level');
+  // Each world has its own level theme; the final world's intense `finale`
+  // covers both its levels and its castle. Castle fights in the other worlds
+  // share the comedic `boss` theme, and secret runs keep their own track.
+  music.play(levelTrack(worldIdx, secret, boss));
   music.setDimmed(false);
   sfxLevelStart();
   game.startRun(worldIdx, levelIdx, { secret, boss });

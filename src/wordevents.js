@@ -238,7 +238,7 @@ export class BlocksEvent {
     api.addCoins(firstTry ? 4 : 3);
     if (firstTry && api.praiseFirstTry) api.praiseFirstTry();
     else api.praise();
-    api.onCorrect(firstTry);
+    api.onCorrect(firstTry, this.attempts);
     this.explodeT = 2.2; // let the ✓ sit a moment, then burst all boxes
   }
 
@@ -411,7 +411,7 @@ export class DoorsEvent {
       const firstTry = this.attempts === 0;
       if (firstTry && api.praiseFirstTry) api.praiseFirstTry();
       else api.praise();
-      api.onCorrect(firstTry);
+      api.onCorrect(firstTry, this.attempts);
     } else {
       this.attempts++;
       d.dead = true;

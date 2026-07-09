@@ -10,7 +10,7 @@ import { KID_H } from './player.js';
 import { disposeGroup } from './wordevents.js';
 import { loadVoxModel, buildVoxMesh } from './voxmodel.js';
 import {
-  sfxStomp, sfxRoar, sfxGiggle, sfxArmorPop, sfxCoin, sfxFireworks,
+  sfxStomp, sfxRoar, sfxTaunt, sfxArmorPop, sfxCoin, sfxFireworks,
 } from './audio.js';
 
 const boxGeo = voxelGeo;
@@ -237,7 +237,7 @@ export class BossFight {
   taunt() {
     if (this.state !== 'idle' && this.state !== 'dizzy') return;
     this.clearHeld();
-    sfxGiggle();
+    sfxTaunt();
     this.state = 'taunt';
     this.t = 0;
   }
@@ -297,7 +297,7 @@ export class BossFight {
         pr.on = false;
         pr.m.visible = false;
         this.effects.sparkle(new THREE.Vector3(pr.x, pr.y, 0));
-        api.stumble();
+        api.hurt(new THREE.Vector3(pr.x, pr.y, 0));
       }
       pr.m.position.set(pr.x, pr.y, 0);
     }

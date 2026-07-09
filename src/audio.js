@@ -243,12 +243,20 @@ export function sfxRoar() {
   tone({ type: 'sawtooth', from: 500, to: 200, dur: 0.4, at: 0.05, vol: 0.12 });
 }
 
-// Boss giggle-taunt after a wrong answer.
+// Boss giggle-taunt (used only in scripted cutscenes now).
 export function sfxGiggle() {
   if (sample('giggle')) return;
   [880, 1100, 880, 1320].forEach((f, i) => {
     tone({ type: 'triangle', from: f, to: f * 1.2, dur: 0.09, at: i * 0.09, vol: 0.22 });
   });
+}
+
+// Boss reaction to a wrong answer in battle: a goofy "womp-womp" wobble.
+// Deliberately NOT a laugh — the giggle sounded like the boss mocking the kid.
+export function sfxTaunt() {
+  tone({ type: 'triangle', from: 400, to: 300, dur: 0.16, vol: 0.22 });
+  tone({ type: 'triangle', from: 300, to: 210, dur: 0.22, at: 0.15, vol: 0.2 });
+  tone({ type: 'sine', from: 200, to: 140, dur: 0.2, at: 0.15, vol: 0.12 });
 }
 
 // Armor block pops off: crunch + rising chime.

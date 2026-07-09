@@ -32,7 +32,7 @@ export const PALETTES = [
     hemiSky: 0xffe8c0, hemiGround: 0x9a86a0, sunTint: 0xffd494,
     sun: 0xffd27a, cloud: 0xfff3dd,
   },
-  { // Snowy Peaks — crisp ice tones
+  { // Snowcones Islands — crisp ice tones
     top: [0xf4f8fc, 0xe6eef7], dirt: [0xb8cee0, 0xaac2d6],
     plat: [0x9fc4e8, 0x92b8dd], hill: 0xcfe0f0, hill2: 0xe8f2fa,
     sky: 0xa8c8e8, fog: 0xdbe9f7,
@@ -287,9 +287,44 @@ export function generateLevel({ seed, wordCount, theme, secret = false, hasKey =
     }
   }
 
+  // ---- volcano lava strips (theme 5 only) ----
+  // Flowing-lava hazards laid across the track: leap them for a clean run or
+  // take a coin-scattering singe. Placed only on flat, obstacle-free ground
+  // (2-3 wide) so a single jump always clears them, and kept out of the
+  // intro runway, event zones, platform/key spans and the flag approach.
+  const hazards = [];
+  if (theme === 5) {
+    const flatSpan = (a, b) => {
+      if (a < 1 || b + 1 >= groundY.length) return false;
+      for (let c = a - 1; c <= b + 1; c++) if (groundY[c] !== groundY[a]) return false;
+      return true;
+    };
+    const nearEvent = (a, b) => events.some((e) => {
+      const hi = (e.type === 'doors' ? e.wallX : e.x + 36) + 4;
+      return b >= e.x - 4 && a <= hi;
+    });
+    const nearPlat = (a, b) => platforms.some((pl) => b >= pl.x0 - 2 && a <= pl.x1 + 2);
+    const nearCritter = (a, b) => placedCritters.some((c) => b >= c.x0 - 2 && a <= c.x1 + 2);
+    const nearKey = (a) => key && Math.abs(key.x - a) < 5;
+    let hx = 16;
+    // Cap at the render pool size (this.lavaStrips) so a hazard never exists
+    // without a visible strip — invisible lava that still burns is a trap.
+    while (hx < starX - 8 && hazards.length < 6) {
+      const w = 2 + ((rand() * 2) | 0); // 2-3 columns
+      const a = hx, b = hx + w - 1;
+      if (flatSpan(a, b) && !nearEvent(a, b) && !nearPlat(a, b) &&
+          !nearCritter(a, b) && !nearKey(a)) {
+        hazards.push({ x0: a, x1: b, y: groundY[a] });
+        hx = b + 12 + ((rand() * 8) | 0);
+      } else {
+        hx += 3;
+      }
+    }
+  }
+
   return {
     groundY, platforms, coins, critters: placedCritters, events, key,
-    starX, flagX, length: x(), theme, secret,
+    starX, flagX, length: x(), theme, secret, hazards,
   };
 }
 
@@ -726,6 +761,21 @@ export class LevelScene {
       new THREE.MeshLambertMaterial({ color, vertexColors: true })
     );
     this.lavaPulse = 0;
+    // Volcano lava-hazard strips: a small pool of glowing molten slabs laid
+    // flush across the track (theme 5). One shared emissive material, pulsed
+    // per frame; positioned per build, hidden off-theme.
+    this.lavaStripMat = new THREE.MeshLambertMaterial({
+      color: 0xff5a1a, emissive: 0xff6a1a, emissiveIntensity: 0.6,
+    });
+    this.lavaStripGroup = new THREE.Group();
+    scene.add(this.lavaStripGroup);
+    this.lavaStrips = [];
+    for (let i = 0; i < 6; i++) {
+      const mesh = new THREE.Mesh(boxGeo, this.lavaStripMat);
+      mesh.visible = false;
+      this.lavaStripGroup.add(mesh);
+      this.lavaStrips.push(mesh);
+    }
     // Monolith tints: one shared material per chili color — the model's
     // near-white tintable body multiplies with these, AO intact.
     this.monolithMats = [0xe23b2e, 0xff7a2e, 0xffc23e].map(
@@ -1084,6 +1134,20 @@ export class LevelScene {
     this.voxBuildId++;
     this.voxScenery.clear();
     for (const puff of this.smokePuffs) puff.visible = false;
+    // Lava-hazard strips: laid flush across the track over each hazard span
+    // (theme 5 fills data.hazards; every other theme leaves them hidden).
+    for (let i = 0; i < this.lavaStrips.length; i++) {
+      const m = this.lavaStrips[i];
+      const h = data.hazards && data.hazards[i];
+      if (h) {
+        const w = h.x1 - h.x0 + 1;
+        m.position.set((h.x0 + h.x1) / 2, h.y + 0.12, 0.15);
+        m.scale.set(w + 0.7, 0.36, 1.7);
+        m.visible = true;
+      } else {
+        m.visible = false;
+      }
+    }
     if (data.theme === 0) {
       const id = this.voxBuildId;
       // Dedicated stream: consuming `rand` here would reshuffle every other
@@ -1117,6 +1181,33 @@ export class LevelScene {
           }
         })
         .catch((err) => console.error('spaghetti-pile scenery failed to load:', err));
+    } else if (data.theme === 2) {
+      const id = this.voxBuildId;
+      // Dedicated stream: consuming `rand` here would reshuffle every other
+      // theme decor placement above.
+      const vr = mulberry32(len * 137 + 5171);
+      // Big voxel snowcone mountains: one towering peak set deep enough to
+      // clear the hill ridgeline (z -14, ~11 units tall at scale ~1.9),
+      // flanked by 2-3 mid scoops in the safe -4..-11 band. Far copies are
+      // larger so the depth reads; a fixed -0.6 sink keeps them grounded.
+      const cones = [{ x: len * (0.35 + vr() * 0.3), z: -14, s: 1.9 + vr() * 0.4 }];
+      const spots = vr() < 0.5 ? [0.15, 0.82] : [0.12, 0.5, 0.9];
+      spots.forEach((t, i) => cones.push({
+        x: len * t + (vr() - 0.5) * 8,
+        z: i & 1 ? -10.5 : -7.5,
+        s: (i & 1 ? 1.2 : 0.95) + vr() * 0.25,
+      }));
+      loadVoxModel(`${import.meta.env.BASE_URL}models/snowcone-mountain.json`)
+        .then((model) => {
+          if (id !== this.voxBuildId) return; // rebuilt while loading
+          for (const pl of cones) {
+            const { group } = buildVoxMesh(model);
+            group.position.set(pl.x, -0.6, pl.z);
+            group.scale.setScalar(pl.s);
+            this.voxScenery.add(group);
+          }
+        })
+        .catch((err) => console.error('snowcone-mountain scenery failed to load:', err));
     } else if (data.theme === 3) {
       const id = this.voxBuildId;
       // Dedicated stream: consuming `rand` here would reshuffle every other
@@ -1290,6 +1381,8 @@ export class LevelScene {
     this.lavaPulse += dt;
     const glow = 0.45 + Math.sin(this.lavaPulse * 2.4) * 0.15;
     this.lavaMat.emissiveIntensity = glow;
+    // Hazard strips flicker a touch faster/brighter so they read as "hot".
+    this.lavaStripMat.emissiveIntensity = 0.55 + Math.sin(this.lavaPulse * 3.3) * 0.28;
     this.swampMat.emissiveIntensity = glow;
     // Smoke: each puff loops a rise-drift-swell-fade cycle over its crater.
     if (this.data && this.data.theme === 5) {
