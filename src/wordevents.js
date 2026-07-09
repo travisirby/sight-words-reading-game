@@ -338,7 +338,7 @@ export class DoorsEvent {
       sign.position.set(-2.3, tier + 1.15, 1.3);
       setSign(sign, words[i], 'normal');
       this.group.add(sign);
-      return { hinge, sign, word: words[i], tier, dead: false, shakeT: 0, openT: -1 };
+      return { hinge, sign, word: words[i], tier, shakeT: 0, openT: -1 };
     });
   }
 
@@ -382,10 +382,10 @@ export class DoorsEvent {
       else api.praise();
       api.onCorrect(firstTry, this.attempts);
     } else {
+      // A wrong door stays readable (no gray-out): the kid has to consider
+      // and re-read every word on the next pass, not just the leftovers.
       this.attempts++;
-      d.dead = true;
       d.shakeT = 0.4;
-      setSign(d.sign, d.word, 'gray');
       sfxWrong();
       if (api.onWrong) api.onWrong();
       this.cooldown = 1.4;
@@ -402,7 +402,7 @@ export class DoorsEvent {
   debugResolve(correct, api) {
     if (this.opened !== -1) return;
     const i = this.doors.findIndex((d) =>
-      !d.dead && (correct ? d.word === this.word : d.word !== this.word));
+      correct ? d.word === this.word : d.word !== this.word);
     if (i >= 0) this.resolveTier(i, api);
   }
 
