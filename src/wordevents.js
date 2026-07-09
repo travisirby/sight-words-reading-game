@@ -77,8 +77,8 @@ export function disposeGroup(group) {
 // ---------- ? BLOCKS ----------
 
 // Listen beat after a miss: drives the no-no wobble while the narrator
-// re-says the word. Blocks stay bonkable throughout (a wrong bonk knocks
-// the kid down, so a fresh jump is needed for another hit anyway).
+// re-says the word. Blocks stay bonkable throughout (a wrong bonk bounces
+// the kid back to before the first block, so he has to walk the row again).
 const MISS_LOCK = 1.5;
 const SPIN_DUR = 0.7; // full-turn shuffle spin; words swap while facing away
 const MAX_TRIES = 3; // wrong bonks before the event fails and the run moves on
@@ -267,6 +267,9 @@ export class BlocksEvent {
       return;
     }
     speak(`Almost! The word is: ${this.word}. Try again!`, { rate: 0.9 });
+    // Push back to before the first block: the kid has to walk the row
+    // again and pick a block on purpose, not just re-jump in place.
+    api.bounceBack(this.firstX - 4);
     this.lockT = MISS_LOCK;
     this.swapPending = true;
     for (const k of this.blocks) k.spinT = SPIN_DUR;
