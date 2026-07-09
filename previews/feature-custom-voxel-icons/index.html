@@ -6,8 +6,8 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <title>Super Kids Sight Words Adventure</title>
-  <script type="module" crossorigin src="./assets/index-DcYzOOqR.js"></script>
-  <link rel="stylesheet" crossorigin href="./assets/index-7iG9-W_B.css">
+  <script type="module" crossorigin src="./assets/index-DBm_h5X9.js"></script>
+  <link rel="stylesheet" crossorigin href="./assets/index-D2gWL8UY.css">
 </head>
 <body>
   <!-- 3D canvas mounts here -->
@@ -15,20 +15,22 @@
 
   <!-- ============ TITLE SCREEN (3D char preview behind; DOM chrome only) ============ -->
   <div id="screen-title" class="screen">
-    <h1 class="game-title">
-      <span>S</span><span>U</span><span>P</span><span>E</span><span>R</span>
-      <span>K</span><span>I</span><span>D</span><span>S</span>
-      <br />
-      <span>S</span><span>I</span><span>G</span><span>H</span><span>T</span>
-      <span>W</span><span>O</span><span>R</span><span>D</span><span>S</span>
-      <br />
-      <span>A</span><span>D</span><span>V</span><span>E</span><span>N</span><span>T</span><span>U</span><span>R</span><span>E</span>
-    </h1>
-    <button id="btn-play" class="btn btn-huge btn-with-icon">
-      <span data-icon="play" data-icon-size="44"></span>
-      <span class="btn-label">PLAY</span>
-    </button>
-    <button id="btn-settings" class="btn btn-round" aria-label="Settings">
+    <div class="title-stack">
+      <h1 class="game-title">
+        <span>S</span><span>U</span><span>P</span><span>E</span><span>R</span>
+        <span>K</span><span>I</span><span>D</span><span>S</span>
+        <br />
+        <span>S</span><span>I</span><span>G</span><span>H</span><span>T</span>
+        <span>W</span><span>O</span><span>R</span><span>D</span><span>S</span>
+        <br />
+        <span>A</span><span>D</span><span>V</span><span>E</span><span>N</span><span>T</span><span>U</span><span>R</span><span>E</span>
+      </h1>
+      <button id="btn-play" class="btn btn-huge btn-with-icon">
+        <span data-icon="play" data-icon-size="44"></span>
+        <span class="btn-label">PLAY</span>
+      </button>
+    </div>
+    <button id="btn-settings" class="btn btn-round corner-top-right" aria-label="Settings">
       <span data-icon="settings" data-icon-size="52"></span>
     </button>
     <div id="settings-panel" class="panel hidden">
