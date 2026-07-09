@@ -7,6 +7,12 @@ export default {
     "map": "music-map.mp3",
     "level": "music-level.mp3",
     "boss": "music-boss.mp3",
+    "finale": "music-finale.mp3",
+    "pasta": "music-pasta.mp3",
+    "waffle": "music-waffle.mp3",
+    "snow": "music-snow.mp3",
+    "swamp": "music-swamp.mp3",
+    "caves": "music-caves.mp3",
     "house": "music-house.mp3",
     "victory": "music-victory.mp3"
   },

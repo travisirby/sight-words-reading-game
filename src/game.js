@@ -165,7 +165,7 @@ export class Game {
       addCoins: (n) => this.addCoins(n),
       bounceBack: (toX) => this.bounceBack(toX),
       speakWord: () => this.repeatWord(),
-      onCorrect: (firstTry) => this.onEventCorrect(firstTry),
+      onCorrect: (firstTry, attempts) => this.onEventCorrect(firstTry, attempts),
       onFail: () => this.onEventFail(),
       onWrong: () => {
         // A miss re-teaches the word (listen beat + reshuffle), so restart
@@ -174,12 +174,17 @@ export class Game {
         this.autoRepeats = 0;
         if (this.bossFight) this.bossFight.taunt();
       },
-      stumble: () => { // boss projectile brush: same gentle cost as a critter
+      // Wrong-answer bonk: a soft stumble that only nips 1 coin — a reading
+      // miss shouldn't sting like a platforming hit.
+      stumble: () => {
         sfxWrong();
         this.player.stumble();
         this.stumbleMul = 0.4;
         this.addCoins(-1);
       },
+      // Physical hit (a boss's flung block): Sonic-style coin scatter. Uses
+      // the given world position, defaulting to the kid.
+      hurt: (pos) => this.hurt(pos || new THREE.Vector3(this.player.x, this.player.y, 0)),
     };
   }
 
@@ -240,6 +245,7 @@ export class Game {
     this.repeatTipT = 0; // countdown to the one-time 🔊-button tutorial tip
     this.bounce = null;
     this.stumbleMul = 1;
+    this.lavaCool = 0;
     this.flagT = 0;
     this.doneTimer = 0;
     this.trailT = 0; // secret-mode sparkle trail cadence
@@ -457,11 +463,14 @@ export class Game {
     }
   }
 
-  onEventCorrect(firstTry) {
+  onEventCorrect(firstTry, attempts = firstTry ? 0 : 1) {
     const word = this.activeEv ? this.activeEv.word : this.stars && this.stars.word;
     this.results.push({ word, firstTry });
     store.recordWordResult(word, firstTry);
-    this.cb.onDot(this.results.length - 1, firstTry ? 'green' : 'yellow');
+    // Got it eventually, but only on the last (3rd) guess: red like a miss.
+    // First try → green, 2nd try → yellow.
+    const cls = attempts >= 2 ? 'red' : firstTry ? 'green' : 'yellow';
+    this.cb.onDot(this.results.length - 1, cls);
     if (this.bossFight) this.bossFight.hit(); // armor block pops off
     if (this.secret) { // party mode: every word is a firework + coin fountain
       const p = this.player;
@@ -524,6 +533,21 @@ export class Game {
     this.runCoins = Math.max(0, this.runCoins + n);
     store.addCoins(n);
     this.cb.onCoins(this.runCoins);
+  }
+
+  // Getting hurt in the platforming (a critter, a boss's flung block): the kid
+  // stumbles and — Sonic-style — coins spray out and are lost. Capped at what
+  // was collected this run, so an early hit before any coins costs nothing.
+  hurt(pos, coins = 4) {
+    sfxWrong();
+    this.player.stumble();
+    this.stumbleMul = 0.4;
+    const lost = Math.min(this.runCoins, coins);
+    if (lost > 0) {
+      this.addCoins(-lost);
+      this.effects.coinScatter(pos.clone ? pos.clone() : pos, lost);
+      this.effects.floatText(new THREE.Vector3(pos.x, pos.y + 1.8, 0), `-${lost}`);
+    }
   }
 
   bounceBack(toX) {
@@ -605,11 +629,8 @@ export class Game {
         this.addCoins(2);
         p.bounce(7.5);
       } else if (p.y < cy + 0.8 && p.grounded) {
-        // Walked into it: stumble, critter is knocked aside and despawns.
-        sfxWrong();
-        p.stumble();
-        this.stumbleMul = 0.4;
-        this.addCoins(-1);
+        // Walked into it: stumble, coins scatter, critter is knocked aside.
+        this.hurt(c.g.position.clone());
         c.state = 'bonked';
         c.squashT = 0.5;
         c.dir = p.x < c.x ? 1 : -1;
@@ -702,6 +723,21 @@ export class Game {
       this.effects.floatText(pos, `+${coinVal}`);
     }
 
+    // Volcano lava strips: leap them for a clean run, or take a coin-
+    // scattering singe and a hop back out. A short cooldown keeps a single
+    // touch from draining coins every frame while standing in it.
+    this.lavaCool = Math.max(0, this.lavaCool - dt);
+    if (this.data && this.data.hazards && p.grounded && this.lavaCool <= 0) {
+      for (const h of this.data.hazards) {
+        if (p.x >= h.x0 - 0.4 && p.x <= h.x1 + 0.4) {
+          this.hurt(new THREE.Vector3(p.x, h.y + 0.3, 0), 2);
+          p.bounce(6);
+          this.lavaCool = 1.1;
+          break;
+        }
+      }
+    }
+
     // Secret mode: the kid runs with a sparkle trail.
     if (this.secret && !this.choice && this.speed > 2) {
       this.trailT -= dt;
@@ -767,6 +803,23 @@ export class Game {
         sfxFireworks();
         speakLine('levelComplete');
         this.effects.fireworks(new THREE.Vector3(p.x, 3, 0));
+        // Mario-style flagpole grab: the higher up the pole the kid is when
+        // they reach it, the bigger the bonus. The pole stands ~8 tall; a
+        // well-timed double jump tops out around 6. Grab it at a run (on the
+        // ground) and there's no penalty — just no bonus.
+        const gy = this.level.groundTopAt(this.data.flagX);
+        const grabH = p.y - gy;
+        const bonus = grabH >= 5 ? 10 : grabH >= 3 ? 5 : grabH >= 1.5 ? 2 : 0;
+        if (bonus > 0) {
+          this.addCoins(bonus);
+          this.effects.floatText(new THREE.Vector3(p.x, p.y + 1.6, 0), `+${bonus}`);
+          this.effects.fireworks(new THREE.Vector3(p.x + 1.5, p.y + 2, 0));
+          if (grabH >= 5) { // topped it out — extra celebration
+            sfxKeyJingle();
+            this.effects.confetti(new THREE.Vector3(p.x, p.y + 1, 0));
+            this.effects.floatText(new THREE.Vector3(p.x, p.y + 2.8, 0), 'TOP!');
+          }
+        }
       }
     } else if (this.phase === 'flag') {
       // Slide down the pole.

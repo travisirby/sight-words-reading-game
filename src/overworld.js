@@ -456,8 +456,8 @@ export class Overworld {
           // knockout so the sine pattern doesn't visibly tile. buildProps()
           // drops a glowing slab into each hole.
           if (wi === 5 && !onPath &&
-              Math.sin(cx * 0.9 + 2) * Math.sin(cz * 0.8) < -0.8 &&
-              hash2(cx, cz, 7) < 0.6) {
+              Math.sin(cx * 0.9 + 2) * Math.sin(cz * 0.8) < -0.62 &&
+              hash2(cx, cz, 7) < 0.72) {
             this.lavaPools.push({ x: cx, z: cz });
             continue;
           }
@@ -703,7 +703,7 @@ export class Overworld {
           put(s.x + 0.2, s.y + 1.45, s.z, 0.14, 0.3, 0.14, 0x3f9e3a);
         } else rock(put, s.x, s.y, s.z, 0x5a3520); // chocolate chunk
       },
-      (put, s, rand, i) => { // Snowy Peaks: snowy trees, snowman, ice
+      (put, s, rand, i) => { // Snowcones Islands: snowy trees, snowman, ice
         if (i < 4) {
           put(s.x, s.y + 0.55, s.z, 0.32, 1.1, 0.32, 0x6b4a2a);
           put(s.x, s.y + 1.55, s.z, 1.4, 1.0, 1.4, 0x2e7d4f);
@@ -816,6 +816,40 @@ export class Overworld {
       pile([[10, rz + 3], [11, rz + 2], [9, rz + 3]], 0.5);
     }
 
+    { // Snowcones Islands extras: giant snowcone landmarks anchor the row.
+      // Baked model (public/models/snowcone-mountain.json, bottom-center
+      // anchor, ~6 units tall at scale 1). Same synchronous-group /
+      // async-mesh pattern as the other regions; lock tints reach it
+      // through this.voxDecor (see applyLockTints).
+      const rz = 2 * ROW_Z;
+      const srand = mulberry32(20627);
+      const snowcone = (spotList, scale) => {
+        for (const [x, z] of spotList) {
+          const y = this.groundH.get(x + ',' + z);
+          if (y === undefined || this.flatCells.has(x + ',' + z)) continue;
+          const g = new THREE.Group();
+          g.position.set(x, y - 0.1, z);
+          g.rotation.y = srand() * Math.PI * 2;
+          g.scale.setScalar(scale + srand() * 0.08);
+          this.scene.add(g);
+          const entry = { region: 2, mats: [] };
+          this.voxDecor.push(entry);
+          loadVoxModel(`${import.meta.env.BASE_URL}models/snowcone-mountain.json`)
+            .then((model) => {
+              if (voxBuildId !== this.voxBuildId) return;
+              const { group, parts } = buildVoxMesh(model);
+              g.add(group);
+              for (const name in parts) entry.mats.push(parts[name].material);
+              this.applyLockTints(); // re-tint now that the materials exist
+            })
+            .catch((err) => console.error('snowcone-mountain model failed to load:', err));
+          return;
+        }
+      };
+      snowcone([[-12, rz + 3], [-13, rz + 3], [-11, rz + 3]], 0.6);
+      snowcone([[11, rz + 3], [10, rz + 3], [12, rz + 2]], 0.42);
+    }
+
     { // Purple Cabbage Swamp extras: magenta pools, giant cabbages, bubbles.
       const poolGlow = poolPut(3);
       const rz = 3 * ROW_Z;
@@ -905,9 +939,11 @@ export class Overworld {
       // Glowing slabs float in the lava-pool holes buildTerrain() carved,
       // just above the sea line so the melt reads as pooled lava, not water.
       for (const lp of this.lavaPools) {
+        // Redder, hotter molten tones (was orange) so the pools read as
+        // dangerous flowing lava rather than warm glow.
         glow(lp.x, -0.45, lp.z, 1.06, 0.12, 1.06,
-          hash2(lp.x, lp.z, 9) < 0.5 ? 0xff8c2e : 0xffa63d,
-          hash2(lp.x, lp.z, 10) * 0.3);
+          hash2(lp.x, lp.z, 9) < 0.5 ? 0xff3b14 : 0xff6a22,
+          0.2 + hash2(lp.x, lp.z, 10) * 0.35);
       }
 
       // Two baked pepper-volcano models (public/models/pepper-volcano.json,
