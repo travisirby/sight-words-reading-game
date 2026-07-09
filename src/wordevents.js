@@ -1,7 +1,8 @@
-// The three word-event types: ? BLOCKS (bonk from below), WORD DOORS
-// (tiered wall) and FLAG STARS (end-of-level review). Visuals are built on
-// activation and disposed when passed, so at most one event's canvas
-// textures are alive at a time. All signs face +z (the camera).
+// The four word-event types: ? BLOCKS (bonk from below), WORD BRIDGES
+// (stomp a floor switch), WORD DOORS (tiered wall), and FLAG STARS
+// (end-of-level review). Visuals are built on activation and disposed when
+// passed, so at most one event's canvas textures are alive at a time. All
+// signs face +z (the camera).
 
 import * as THREE from 'three';
 import { voxelGeo } from './voxelgeo.js';
@@ -310,6 +311,221 @@ export class BlocksEvent {
   }
 
   dispose() {
+    disposeGroup(this.group);
+  }
+}
+
+// ---------- WORD BRIDGE ----------
+
+// A different physical verb from the overhead blocks: the kid jumps and
+// lands on one of three broad floor switches. A correct stomp raises a real
+// walkable bridge across the ravine; a miss reshuffles the signs and returns
+// the kid to the listening spot without taking a coin.
+export class BridgeEvent {
+  constructor(scene, level, { x, bridgeX, bridgeEndX, groundY, word, distractors }) {
+    this.type = 'bridge';
+    this.word = word;
+    this.x = x;
+    this.bridgeX = bridgeX;
+    this.bridgeEndX = bridgeEndX;
+    this.groundY = groundY;
+    this.level = level;
+    this.done = false;
+    this.attempts = 0;
+    this.cooldown = 0;
+    this.buildT = -1;
+    this.wasGrounded = true;
+    this.pool = [word, ...distractors];
+
+    this.group = new THREE.Group();
+    scene.add(this.group);
+
+    // The bridge pieces wait visibly at the bottom of the ravine, then rise
+    // one after another. Collision is enabled immediately on resolution;
+    // the approach runway gives the animation time to finish before the kid
+    // reaches the first plank.
+    this.bridgePieces = [];
+    const bridgeMats = [
+      new THREE.MeshLambertMaterial({ color: 0xc88945 }),
+      new THREE.MeshLambertMaterial({ color: 0xe0aa62 }),
+    ];
+    for (let px = bridgeX; px <= bridgeEndX; px++) {
+      const mesh = new THREE.Mesh(boxGeo, bridgeMats[(px - bridgeX) & 1]);
+      mesh.scale.set(0.94, 0.55, 2.8);
+      mesh.position.set(px, groundY - 4.25, 0);
+      mesh.rotation.z = ((px - bridgeX) & 1 ? -1 : 1) * 0.22;
+      this.group.add(mesh);
+      this.bridgePieces.push({ mesh, index: px - bridgeX });
+    }
+
+    const words = shuffle(this.pool);
+    this.switches = words.map((switchWord, i) => {
+      const holder = new THREE.Group();
+      const px = x + 3 + i * 4;
+      holder.position.x = px;
+
+      const postMat = new THREE.MeshLambertMaterial({ color: 0x5f4936 });
+      const plateMat = new THREE.MeshLambertMaterial({
+        color: 0x57b5e8, emissive: 0x12384e,
+      });
+      const plate = new THREE.Mesh(boxGeo, plateMat);
+      plate.scale.set(2.15, 0.24, 1.8);
+      plate.position.y = groundY + 0.12;
+      const post = new THREE.Mesh(boxGeo, postMat);
+      post.scale.set(0.18, 1.55, 0.18);
+      post.position.set(0, groundY + 0.78, -0.55);
+      const sign = makeSign(2.35, 1.15);
+      sign.position.set(0, groundY + 2.05, 0.15);
+      setSign(sign, switchWord, 'normal');
+      holder.add(plate, post, sign);
+      this.group.add(holder);
+      return {
+        holder, plate, sign, word: switchWord, baseX: px,
+        pressT: 0, shakeT: 0, spinT: 0,
+      };
+    });
+    this.firstX = this.switches[0].baseX;
+    this.lastX = this.switches[this.switches.length - 1].baseX;
+    this.swapPending = false;
+    this.bridgePlatform = null;
+  }
+
+  reshuffleWords() {
+    const current = this.switches.map((s) => s.word);
+    let words = shuffle(this.pool);
+    for (let t = 0; t < 8 && words.every((w, i) => w === current[i]); t++) {
+      words = shuffle(this.pool);
+    }
+    for (let i = 0; i < this.switches.length; i++) {
+      this.switches[i].word = words[i];
+      setSign(this.switches[i].sign, words[i], 'normal');
+    }
+  }
+
+  update(dt, player, api) {
+    this.cooldown = Math.max(0, this.cooldown - dt);
+
+    for (const s of this.switches) {
+      if (s.pressT > 0) s.pressT -= dt;
+      s.plate.scale.y = s.pressT > 0 ? 0.1 : 0.24;
+      s.plate.position.y = this.groundY + (s.pressT > 0 ? 0.05 : 0.12);
+
+      if (s.spinT > 0) {
+        s.spinT -= dt;
+        const p = 1 - Math.max(0, s.spinT) / SPIN_DUR;
+        s.holder.rotation.y = (1 - Math.pow(1 - p, 2)) * Math.PI * 2;
+        if (this.swapPending && p >= 0.5) {
+          this.swapPending = false;
+          this.reshuffleWords();
+        }
+        if (s.spinT <= 0) s.holder.rotation.y = 0;
+      }
+
+      if (s.shakeT > 0) {
+        s.shakeT -= dt;
+        s.holder.position.x = s.baseX + Math.sin(s.shakeT * 45) * 0.1;
+      } else {
+        s.holder.position.x = s.baseX;
+      }
+    }
+
+    if (this.buildT >= 0) {
+      this.buildT += dt;
+      for (const p of this.bridgePieces) {
+        const u = Math.max(0, Math.min(1, (this.buildT - p.index * 0.065) / 0.42));
+        const ease = 1 - Math.pow(1 - u, 3);
+        p.mesh.position.y = this.groundY - 4.25 + ease * 3.95;
+        p.mesh.rotation.z = (1 - ease) * (p.index & 1 ? -0.22 : 0.22);
+      }
+    }
+
+    const landed = !this.wasGrounded && player.grounded;
+    this.wasGrounded = player.grounded;
+    if (this.done || this.cooldown > 0 || !landed) return;
+
+    const pressed = this.switches.find((s) => Math.abs(player.x - s.baseX) < 1.2);
+    if (!pressed) return;
+    pressed.pressT = 0.32;
+    if (pressed.word === this.word) this.resolveCorrect(pressed, api);
+    else this.resolveWrong(pressed, api);
+  }
+
+  startBridge() {
+    if (this.bridgePlatform) return;
+    this.done = true;
+    this.buildT = 0;
+    this.bridgePlatform = {
+      x0: this.bridgeX, x1: this.bridgeEndX, y: this.groundY,
+      thin: true, wordBridge: true,
+    };
+    this.level.data.platforms.push(this.bridgePlatform);
+    sfxDoorOpen();
+  }
+
+  resolveCorrect(s, api) {
+    setSign(s.sign, '', 'check');
+    sfxCorrect();
+    const pos = new THREE.Vector3(s.baseX, this.groundY + 1, 0);
+    api.effects.confetti(pos);
+    api.effects.sparkle(new THREE.Vector3(this.bridgeX, this.groundY + 0.5, 0));
+    const firstTry = this.attempts === 0;
+    api.effects.floatText(new THREE.Vector3(s.baseX, this.groundY + 3, 0), firstTry ? '+4' : '+3');
+    api.addCoins(firstTry ? 4 : 3);
+    if (firstTry && api.praiseFirstTry) api.praiseFirstTry();
+    else api.praise();
+    api.onCorrect(firstTry);
+    this.startBridge();
+  }
+
+  resolveWrong(s, api) {
+    this.attempts++;
+    s.shakeT = 0.4;
+    sfxWrong();
+    if (api.onWrong) api.onWrong();
+    if (this.attempts >= MAX_TRIES) {
+      this.resolveFail(api);
+      return;
+    }
+    this.cooldown = 1.3;
+    this.swapPending = true;
+    for (const k of this.switches) k.spinT = SPIN_DUR;
+    api.bounceBack(this.firstX - 3.5);
+    speak(`Almost! The word is: ${this.word}. Try again!`, { rate: 0.9 });
+  }
+
+  resolveFail(api) {
+    this.swapPending = false;
+    for (const s of this.switches) {
+      if (s.word === this.word) setSign(s.sign, s.word, 'reveal');
+      else setSign(s.sign, s.word, 'gray');
+    }
+    if (api.onFail) api.onFail();
+    this.startBridge();
+  }
+
+  clampX() {
+    return this.done ? Infinity : this.bridgeX - 1.25;
+  }
+
+  debugResolve(correct, api) {
+    if (this.done) return;
+    const s = this.switches.find((k) => correct ? k.word === this.word : k.word !== this.word);
+    if (!s) return;
+    s.pressT = 0.32;
+    if (correct) this.resolveCorrect(s, api);
+    else this.resolveWrong(s, api);
+  }
+
+  passedX() {
+    return this.bridgeEndX + 5;
+  }
+
+  dispose() {
+    if (this.bridgePlatform && this.level.data) {
+      const i = this.level.data.platforms.indexOf(this.bridgePlatform);
+      if (i >= 0) this.level.data.platforms.splice(i, 1);
+      this.bridgePlatform = null;
+    }
     disposeGroup(this.group);
   }
 }
