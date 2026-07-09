@@ -196,14 +196,16 @@
       <span data-icon="key" data-icon-size="48"></span>
     </div>
     <button id="btn-pause" class="btn btn-round btn-pause" aria-label="Pause">
-      <span data-icon="pause" data-icon-size="48"></span>
+      <span data-icon="pause" data-icon-size="40"></span>
     </button>
-    <button id="btn-repeat-word" class="btn btn-repeat" aria-label="Hear word again">
-      <span data-icon="sound" data-icon-size="84"></span>
+    <!-- Hear-it-again: shown only while a spoken word challenge is live -->
+    <button id="btn-repeat-word" class="btn btn-repeat hidden" aria-label="Hear the word again">
+      <span data-icon="ear" data-icon-size="80"></span>
+      <span class="repeat-badge"><span data-icon="replay" data-icon-size="34"></span></span>
     </button>
-    <!-- One-time tutorial callout pointing at the hear-word button -->
+    <!-- One-time tutorial callout pointing at the repeat button -->
     <div id="repeat-tip" class="hidden">
-      <span data-icon="sound" data-icon-size="22"></span>
+      <span data-icon="ear" data-icon-size="24"></span>
       Tap to hear<br />your word again!
     </div>
     <div id="progress-dots"></div>

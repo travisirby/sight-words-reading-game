@@ -138,7 +138,7 @@ export function showScreen(name) {
     $(`screen-${s}`).classList.toggle('hidden', s !== name);
   }
   if (name !== 'map') hideLevelBanner();
-  // No screen means we're in a run — the fairy perches by the 🔊 button.
+  // No screen means we're in a run — the fairy perches by the 👂 button.
   fairy.flyTo(name || 'game');
 }
 
@@ -384,7 +384,14 @@ export function showMoveControls(mode) {
   el.classList.toggle('boost-only', mode === 'boost');
 }
 
-// Flash the 🔊 button whenever the word auto-repeats, so the kid learns
+// The repeat button only shows while a word challenge is live and already
+// announced (game.js syncRepeatButton drives this).
+export function showRepeatButton(on) {
+  $('btn-repeat-word').classList.toggle('hidden', !on);
+  if (!on) showRepeatTip(false); // tip points at the button — never orphan it
+}
+
+// Flash the repeat button whenever the word auto-repeats, so the kid learns
 // which button makes the word speak.
 let repeatPulseTimer = null;
 export function pulseRepeatButton() {
@@ -396,7 +403,7 @@ export function pulseRepeatButton() {
   repeatPulseTimer = setTimeout(() => b.classList.remove('flash'), 1700);
 }
 
-// One-time callout pointing at the 🔊 button (first word event ever).
+// One-time callout pointing at the repeat button (first word event ever).
 let repeatTipTimer = null;
 export function showRepeatTip(on) {
   $('repeat-tip').classList.toggle('hidden', !on);
