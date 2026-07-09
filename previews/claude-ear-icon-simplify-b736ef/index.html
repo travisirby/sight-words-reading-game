@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <title>Super Kids Sight Words Adventure</title>
+  <script type="module" crossorigin src="./assets/index-DS5myeQm.js"></script>
+  <link rel="stylesheet" crossorigin href="./assets/index-D2gWL8UY.css">
+</head>
+<body>
+  <!-- 3D canvas mounts here -->
+  <div id="game-container"></div>
+
+  <!-- ============ TITLE SCREEN (3D char preview behind; DOM chrome only) ============ -->
+  <div id="screen-title" class="screen">
+    <div class="title-stack">
+      <h1 class="game-title">
+        <span>S</span><span>U</span><span>P</span><span>E</span><span>R</span>
+        <span>K</span><span>I</span><span>D</span><span>S</span>
+        <br />
+        <span>S</span><span>I</span><span>G</span><span>H</span><span>T</span>
+        <span>W</span><span>O</span><span>R</span><span>D</span><span>S</span>
+        <br />
+        <span>A</span><span>D</span><span>V</span><span>E</span><span>N</span><span>T</span><span>U</span><span>R</span><span>E</span>
+      </h1>
+      <button id="btn-play" class="btn btn-huge btn-with-icon">
+        <span data-icon="play" data-icon-size="44"></span>
+        <span class="btn-label">PLAY</span>
+      </button>
+    </div>
+    <button id="btn-settings" class="btn btn-round corner-top-right" aria-label="Settings">
+      <span data-icon="settings" data-icon-size="52"></span>
+    </button>
+    <div id="settings-panel" class="panel hidden">
+      <button id="btn-switch-player" class="btn btn-wide btn-with-icon">
+        <span data-icon="players" data-icon-size="38"></span>
+        <span class="btn-label">Switch Player</span>
+      </button>
+      <button id="btn-progress" class="btn btn-wide btn-with-icon">
+        <span data-icon="progress" data-icon-size="38"></span>
+        <span class="btn-label">Progress</span>
+      </button>
+      <button id="btn-toggle-sound" class="btn btn-wide btn-with-icon">
+        <span data-icon="sound" data-icon-size="38"></span>
+        <span class="btn-label">Sound: ON</span>
+      </button>
+      <button id="btn-toggle-music" class="btn btn-wide btn-with-icon">
+        <span data-icon="music" data-icon-size="38"></span>
+        <span class="btn-label">Music: ON</span>
+      </button>
+      <button id="btn-toggle-mic" class="btn btn-wide btn-with-icon">
+        <span data-icon="mic" data-icon-size="38"></span>
+        <span class="btn-label">Mic Round: ON</span>
+      </button>
+      <button id="btn-toggle-unlock" class="btn btn-wide btn-with-icon">
+        <span data-icon="lock" data-icon-size="38"></span>
+        <span class="btn-label">All Levels: OFF</span>
+      </button>
+      <button id="btn-settings-close" class="btn btn-wide btn-with-icon">
+        <span data-icon="close" data-icon-size="38"></span>
+        <span class="btn-label">Close</span>
+      </button>
+    </div>
+    <!-- Chunky nameplate floating by the spinning kid; hidden when unnamed -->
+    <div id="player-nameplate" class="hidden"></div>
+    <div id="version-tag">v2.0</div>
+  </div>
+
+  <!-- ============ PARENT PROGRESS (grown-ups; stats from save) ============ -->
+  <div id="screen-progress" class="screen overlay hidden">
+    <div class="panel progress-panel">
+      <div class="progress-header">
+        <h2 class="heading-with-icon">
+          <span data-icon="progress" data-icon-size="36"></span>
+          <span>Reading Progress</span>
+        </h2>
+        <div id="progress-player" class="progress-sub"></div>
+      </div>
+      <div id="progress-summary" class="progress-summary"></div>
+      <div id="progress-worlds" class="progress-worlds"></div>
+      <div class="progress-section">
+        <h3 class="heading-with-icon">
+          <span data-icon="strength" data-icon-size="26"></span>
+          <span>Needs practice</span>
+        </h3>
+        <div id="progress-practice" class="progress-word-list"></div>
+      </div>
+      <div class="progress-section">
+        <h3 class="heading-with-icon">
+          <span data-icon="star" data-icon-size="26"></span>
+          <span>Mastered</span>
+        </h3>
+        <div id="progress-mastered" class="progress-word-list"></div>
+      </div>
+      <div class="progress-hint">Tip: a word is mastered after 3 first-try correct answers.</div>
+      <div class="panel-row progress-actions">
+        <button id="btn-progress-export" class="btn btn-wide btn-with-icon">
+          <span data-icon="down" data-icon-size="38"></span>
+          <span class="btn-label">Export</span>
+        </button>
+        <button id="btn-progress-close" class="btn btn-wide btn-with-icon">
+          <span data-icon="close" data-icon-size="38"></span>
+          <span class="btn-label">Close</span>
+        </button>
+      </div>
+      <div id="progress-export-toast" class="hidden">Saved!</div>
+    </div>
+  </div>
+
+  <!-- ============ PLAYER SELECT ============ -->
+  <div id="screen-players" class="screen hidden">
+    <button id="btn-players-back" class="btn btn-round corner-top-left" aria-label="Back">
+      <span data-icon="back" data-icon-size="52"></span>
+    </button>
+    <h2 class="players-heading">Who's playing?</h2>
+    <div id="players-list"></div>
+    <!-- Optional-name prompt for a brand new player -->
+    <div id="new-player-panel" class="panel players-panel hidden">
+      <h2 class="heading-with-icon">
+        <span data-icon="sparkle" data-icon-size="32"></span>
+        <span>New Player</span>
+      </h2>
+      <input id="new-player-name" type="text" maxlength="14" placeholder="Type a name…" autocomplete="off" autocapitalize="words" />
+      <div class="panel-row">
+        <button id="btn-new-player-ok" class="btn btn-wide btn-with-icon">
+          <span data-icon="check" data-icon-size="38"></span>
+          <span class="btn-label">OK</span>
+        </button>
+        <button id="btn-new-player-skip" class="btn btn-with-icon">
+          <span data-icon="skip" data-icon-size="38"></span>
+          <span class="btn-label">Skip</span>
+        </button>
+      </div>
+    </div>
+    <!-- Kid-safe delete confirmation: No is the big friendly default -->
+    <div id="confirm-delete-panel" class="panel players-panel hidden">
+      <h2 class="heading-with-icon">
+        <span data-icon="trash" data-icon-size="32"></span>
+        <span>Delete this player?</span>
+      </h2>
+      <div class="confirm-sub">All their progress will be lost.</div>
+      <div class="panel-row">
+        <button id="btn-delete-no" class="btn btn-huge btn-with-icon">
+          <span data-icon="no" data-icon-size="44"></span>
+          <span class="btn-label">No</span>
+        </button>
+        <button id="btn-delete-yes" class="btn btn-danger btn-with-icon">
+          <span data-icon="trash" data-icon-size="38"></span>
+          <span class="btn-label">Yes</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ OVERWORLD MAP (3D; DOM chrome only) ============ -->
+  <div id="screen-map" class="screen map-screen hidden">
+    <button id="btn-map-back" class="btn btn-round corner-top-left" aria-label="Back">
+      <span data-icon="back" data-icon-size="52"></span>
+    </button>
+    <div id="level-banner" class="hidden">
+      <div id="banner-name">Pasta Plains 1</div>
+      <div id="banner-stars" class="icon-star-row"></div>
+      <button id="btn-banner-play" class="btn btn-huge btn-with-icon">
+        <span data-icon="play" data-icon-size="44"></span>
+        <span class="btn-label">PLAY</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- ============ CHARACTER CREATOR (3D preview; DOM chrome only) ============ -->
+  <div id="screen-char" class="screen char-screen hidden">
+    <button id="btn-char-back" class="btn btn-round corner-top-left" aria-label="Back">
+      <span data-icon="back" data-icon-size="52"></span>
+    </button>
+    <h2 class="char-heading heading-with-icon">
+      <span data-icon="players" data-icon-size="36"></span>
+      <span>My Character</span>
+    </h2>
+    <div id="char-panel">
+      <div id="char-rows"></div>
+      <button id="btn-char-done" class="btn btn-huge btn-char-done btn-with-icon">
+        <span data-icon="check" data-icon-size="44"></span>
+        <span class="btn-label">DONE</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- ============ HUD (during run) ============ -->
+  <div id="hud" class="hidden">
+    <div id="hud-coins" class="hud-chip">
+      <span data-icon="coin" data-icon-size="68"></span>
+      <span id="coin-count">0</span>
+    </div>
+    <div id="hud-key" class="hud-chip hidden">
+      <span data-icon="key" data-icon-size="48"></span>
+    </div>
+    <button id="btn-pause" class="btn btn-round btn-pause" aria-label="Pause">
+      <span data-icon="pause" data-icon-size="40"></span>
+    </button>
+    <!-- Hear-it-again: shown only while a spoken word challenge is live -->
+    <button id="btn-repeat-word" class="btn btn-repeat hidden" aria-label="Hear the word again">
+      <span data-icon="ear" data-icon-size="80"></span>
+    </button>
+    <!-- One-time tutorial callout pointing at the repeat button -->
+    <div id="repeat-tip" class="hidden">
+      <span data-icon="ear" data-icon-size="24"></span>
+      Tap to hear<br />your word again!
+    </div>
+    <div id="progress-dots"></div>
+    <!-- Time-freeze steering controls (choice mode only) -->
+    <div id="move-controls" class="hidden">
+      <button id="btn-move-left" class="btn btn-move btn-move-left" aria-label="Left">
+        <span data-icon="back" data-icon-size="68"></span>
+      </button>
+      <button id="btn-move-right" class="btn btn-move btn-move-right" aria-label="Right">
+        <span data-icon="forward" data-icon-size="68"></span>
+      </button>
+      <button id="btn-move-jump" class="btn btn-move btn-move-jump" aria-label="Jump">
+        <span data-icon="up" data-icon-size="68"></span>
+      </button>
+    </div>
+  </div>
+
+  <!-- ============ PAUSE ============ -->
+  <div id="screen-pause" class="screen overlay hidden">
+    <div class="panel">
+      <h2 class="heading-with-icon">
+        <span data-icon="pause" data-icon-size="36"></span>
+        <span>Paused</span>
+      </h2>
+      <button id="btn-resume" class="btn btn-wide btn-with-icon">
+        <span data-icon="resume" data-icon-size="38"></span>
+        <span class="btn-label">Resume</span>
+      </button>
+      <button id="btn-pause-map" class="btn btn-wide btn-with-icon">
+        <span data-icon="map" data-icon-size="38"></span>
+        <span class="btn-label">Map</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- ============ LEVEL COMPLETE ============ -->
+  <div id="screen-complete" class="screen overlay hidden">
+    <div class="panel">
+      <h2 class="heading-with-icon">
+        <span data-icon="party" data-icon-size="36"></span>
+        <span>Level Complete!</span>
+      </h2>
+      <div id="star-row">
+        <span class="star" data-icon="star" data-icon-size="48"></span>
+        <span class="star" data-icon="star" data-icon-size="48"></span>
+        <span class="star" data-icon="star" data-icon-size="48"></span>
+      </div>
+      <div id="complete-totals" class="totals-row">
+        <span class="totals-item"><span data-icon="coin" data-icon-size="28"></span> <span id="complete-coins">0</span></span>
+        <span class="totals-item"><span data-icon="gem" data-icon-size="28"></span> <span id="complete-gems">0</span></span>
+      </div>
+      <button id="btn-next-level" class="btn btn-wide btn-with-icon">
+        <span data-icon="forward" data-icon-size="38"></span>
+        <span class="btn-label">Next level</span>
+      </button>
+      <button id="btn-complete-map" class="btn btn-wide btn-with-icon">
+        <span data-icon="map" data-icon-size="38"></span>
+        <span class="btn-label">Map</span>
+      </button>
+      <button id="btn-complete-house" class="btn btn-wide btn-with-icon">
+        <span data-icon="house" data-icon-size="38"></span>
+        <span class="btn-label">My House</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- ============ GAME COMPLETE (finale stats, after the last boss) ============ -->
+  <div id="screen-gamecomplete" class="screen overlay hidden">
+    <div class="panel gc-panel">
+      <h2 class="heading-with-icon">
+        <span data-icon="trophy" data-icon-size="40"></span>
+        <span>YOU DID IT!</span>
+        <span data-icon="trophy" data-icon-size="40"></span>
+      </h2>
+      <div class="gc-sub">You're a Sight Word Hero!</div>
+      <div id="gc-stats">
+        <div class="gc-row"><span class="gc-label"><span data-icon="map" data-icon-size="22"></span> Levels beaten</span><span id="gc-levels">0</span></div>
+        <div class="gc-row"><span class="gc-label"><span data-icon="star" data-icon-size="22"></span> Stars earned</span><span id="gc-stars">0</span></div>
+        <div class="gc-row"><span class="gc-label"><span data-icon="book" data-icon-size="22"></span> Words read</span><span id="gc-words">0</span></div>
+        <div class="gc-row"><span class="gc-label"><span data-icon="target" data-icon-size="22"></span> First-try reading</span><span id="gc-accuracy">0%</span></div>
+        <div class="gc-row"><span class="gc-label"><span data-icon="secret" data-icon-size="22"></span> Secrets found</span><span id="gc-secrets">0</span></div>
+        <div class="gc-row"><span class="gc-label"><span data-icon="coin" data-icon-size="22"></span> Coins collected</span><span id="gc-coins">0</span></div>
+        <div class="gc-row"><span class="gc-label"><span data-icon="clock" data-icon-size="22"></span> Time playing</span><span id="gc-time">0m</span></div>
+      </div>
+      <div id="gc-reward" class="heading-with-icon">
+        <span data-icon="trophy" data-icon-size="28"></span>
+        <span>A golden Hero Trophy is waiting at your house!</span>
+      </div>
+      <button id="btn-final-house" class="btn btn-wide btn-with-icon">
+        <span data-icon="house" data-icon-size="38"></span>
+        <span class="btn-label">See your trophy!</span>
+      </button>
+      <button id="btn-final-map" class="btn btn-wide btn-with-icon">
+        <span data-icon="map" data-icon-size="38"></span>
+        <span class="btn-label">Map</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- ============ MY HOUSE (3D; DOM chrome only) ============ -->
+  <div id="screen-house" class="screen map-screen hidden">
+    <button id="btn-house-back" class="btn btn-round corner-top-left" aria-label="Back">
+      <span data-icon="back" data-icon-size="52"></span>
+    </button>
+    <div id="house-wallet" class="totals-row">
+      <span class="totals-item"><span data-icon="coin" data-icon-size="26"></span> <span id="house-coins">0</span></span>
+      <span class="totals-item"><span data-icon="gem" data-icon-size="26"></span> <span id="house-gems">0</span></span>
+    </div>
+    <button id="btn-house-music" class="btn btn-round corner-top-right" aria-label="Music">
+      <span data-icon="music" data-icon-size="48"></span>
+    </button>
+    <button id="btn-house-shop" class="btn btn-huge btn-shop btn-with-icon">
+      <span data-icon="shop" data-icon-size="44"></span>
+      <span class="btn-label">SHOP</span>
+    </button>
+    <!-- Jukebox: pick which theme plays at the house (unlocked worlds only) -->
+    <div id="music-panel" class="hidden">
+      <div id="music-header">
+        <span class="heading-with-icon">
+          <span data-icon="music" data-icon-size="28"></span>
+          <span>Pick your music!</span>
+        </span>
+        <button id="btn-music-close" class="btn btn-round" aria-label="Close music">
+          <span data-icon="close" data-icon-size="40"></span>
+        </button>
+      </div>
+      <div id="music-list"></div>
+    </div>
+    <div id="shop-panel" class="hidden">
+      <div id="shop-header">
+        <span class="heading-with-icon">
+          <span data-icon="shop" data-icon-size="28"></span>
+          <span>Build your house!</span>
+        </span>
+        <button id="btn-shop-close" class="btn btn-round" aria-label="Close shop">
+          <span data-icon="close" data-icon-size="40"></span>
+        </button>
+      </div>
+      <div id="shop-list"></div>
+      <!-- Buy confirm: the kid answers by reading the words "yes" / "no". -->
+      <div id="shop-confirm" class="hidden">
+        <div id="shop-confirm-item">
+          <span id="shop-confirm-emoji" class="shop-icon"></span>
+          <span id="shop-confirm-name"></span>
+        </div>
+        <div id="shop-confirm-words"></div>
+      </div>
+    </div>
+    <div id="house-toast" class="hidden"></div>
+    <!-- Post-boss trophy ceremony chrome: title + the one button out -->
+    <div id="ceremony-panel" class="hidden">
+      <div id="ceremony-title" class="heading-with-icon">
+        <span data-icon="trophy" data-icon-size="32"></span>
+        <span>You won a trophy!</span>
+      </div>
+      <button id="btn-ceremony-map" class="btn btn-huge btn-with-icon">
+        <span data-icon="map" data-icon-size="44"></span>
+        <span class="btn-label">MAP</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- ============ CUTSCENE (3D; letterbox + captions) ============ -->
+  <div id="screen-cutscene" class="screen cutscene-screen hidden">
+    <div class="cs-bar cs-bar-top"></div>
+    <div class="cs-bar cs-bar-bottom"></div>
+    <div id="cs-word" class="hidden"></div>
+    <div id="cs-caption" class="hidden"></div>
+    <button id="btn-cutscene-skip" class="btn btn-with-icon">
+      <span data-icon="skip" data-icon-size="34"></span>
+      <span class="btn-label">SKIP</span>
+    </button>
+  </div>
+
+  <!-- ============ READ-ALOUD BONUS ROUND ============ -->
+  <div id="screen-bonus" class="screen overlay hidden">
+    <h2 class="bonus-heading heading-with-icon">
+      <span data-icon="book" data-icon-size="36"></span>
+      <span>Read it out loud!</span>
+    </h2>
+    <div id="bonus-word">the</div>
+    <div id="bonus-feedback"></div>
+    <button id="btn-mic" class="btn btn-mic" aria-label="Microphone">
+      <span data-icon="mic" data-icon-size="88"></span>
+    </button>
+    <div class="bonus-hint">Hold the mic and say the word</div>
+    <button id="btn-bonus-skip" class="btn btn-wide btn-with-icon">
+      <span data-icon="skip" data-icon-size="38"></span>
+      <span class="btn-label">Skip</span>
+    </button>
+  </div>
+
+</body>
+</html>
