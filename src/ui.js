@@ -8,10 +8,16 @@ import * as store from './store.js';
 import { PALETTES, STYLES, OUTFITS, lookFrom } from './character.js';
 import { HOUSE_ITEMS } from './housedata.js';
 import { renderLookThumbnails } from './thumbs.js';
+import {
+  buildProgressReport, buildExportPayload, formatPlayTime,
+} from './progress.js';
 
 const $ = (id) => document.getElementById(id);
 
-const SCREENS = ['title', 'players', 'map', 'pause', 'complete', 'gamecomplete', 'bonus', 'char', 'house', 'cutscene'];
+const SCREENS = [
+  'title', 'players', 'progress', 'map', 'pause', 'complete', 'gamecomplete',
+  'bonus', 'char', 'house', 'cutscene',
+];
 
 export function init(h) {
   fairy.mount();
@@ -29,6 +35,17 @@ export function init(h) {
   bindSpeak($('btn-switch-player'), 'Switch player!', () => {
     $('settings-panel').classList.add('hidden');
     h.onSwitchPlayer();
+  });
+  // Parent report: quiet open (no kid fanfare) so grown-ups can check stats.
+  bindSpeak($('btn-progress'), null, () => {
+    $('settings-panel').classList.add('hidden');
+    h.onProgress();
+  });
+  bindSpeak($('btn-progress-close'), 'Close', () => h.onProgressClose());
+  // Export is silent so a parent can save a backup without TTS chatter.
+  $('btn-progress-export').addEventListener('click', () => {
+    sfxClick();
+    exportProgressFile();
   });
   bindSpeak($('btn-players-back'), 'Back', () => h.onPlayersBack());
   // New-player prompt: OK keeps the typed name, Skip means "no name yet".
@@ -374,14 +391,157 @@ export function showComplete({ stars, coins, gems, hasNext }) {
   }
 }
 
-// ---------- game complete (finale stats) ----------
+// ---------- parent progress report ----------
 
-function formatPlayTime(seconds) {
-  const m = Math.round(seconds / 60);
-  if (m < 1) return 'Just started!';
-  if (m < 60) return `${m}m`;
-  return `${Math.floor(m / 60)}h ${m % 60}m`;
+// Build + show the grown-up reading report for the active profile.
+export function showProgress() {
+  const s = store.get();
+  const report = buildProgressReport({
+    words: s.words,
+    totals: store.totals(),
+    playerName: store.activeProfileName(),
+    unlocked: s.unlocked,
+  });
+  fillProgress(report);
+  showScreen('progress');
+  $('progress-export-toast').classList.add('hidden');
 }
+
+function fillProgress(report) {
+  const name = report.playerName || 'Player';
+  const world = report.unlocked ? report.unlocked.world + 1 : 1;
+  $('progress-player').textContent = `${name} · World ${world}`;
+
+  const t = report.totals;
+  const stats = [
+    ['⏱️ Time', formatPlayTime(t.playSeconds)],
+    ['🗺️ Levels', String(t.levelsCompleted)],
+    ['⭐ Stars', String(t.totalStars)],
+    ['🎯 First-try', `${t.accuracy}%`],
+    ['📖 Words read', String(t.wordsRead)],
+    ['⭐ Mastered', `${report.masteredCount} / ${report.seenCount || 0}`],
+  ];
+  const sum = $('progress-summary');
+  sum.innerHTML = '';
+  for (const [label, value] of stats) {
+    const el = document.createElement('div');
+    el.className = 'progress-stat';
+    el.innerHTML = `<span class="ps-label"></span><span class="ps-value"></span>`;
+    el.querySelector('.ps-label').textContent = label;
+    el.querySelector('.ps-value').textContent = value;
+    sum.appendChild(el);
+  }
+
+  const worlds = $('progress-worlds');
+  worlds.innerHTML = '';
+  for (const w of report.byWorld) {
+    const chip = document.createElement('span');
+    chip.className = 'progress-world-chip' + (w.seen === 0 ? ' empty' : '');
+    chip.textContent = `${w.emoji} ${w.mastered}/${w.total}`;
+    chip.title = `${w.name}: ${w.mastered} mastered, ${w.seen} practiced of ${w.total}`;
+    worlds.appendChild(chip);
+  }
+
+  fillWordList($('progress-practice'), report.practice, {
+    empty: 'No hard words yet — play a few levels!',
+    overflow: report.practiceOverflow,
+    showMisses: true,
+  });
+  fillWordList($('progress-mastered'), report.mastered, {
+    empty: 'Mastered words show up here after 3 first-try wins.',
+    showMisses: false,
+  });
+}
+
+function fillWordList(el, rows, { empty, overflow = 0, showMisses }) {
+  el.innerHTML = '';
+  if (!rows.length) {
+    const p = document.createElement('div');
+    p.className = 'progress-empty';
+    p.textContent = empty;
+    el.appendChild(p);
+    return;
+  }
+  for (const r of rows) {
+    const row = document.createElement('div');
+    const band = r.accuracy >= 80 ? 'good' : r.accuracy >= 50 ? 'ok' : 'hard';
+    row.className = `progress-word-row ${band}`;
+    const word = document.createElement('span');
+    word.className = 'pw-word';
+    word.textContent = r.word;
+    const meta = document.createElement('span');
+    meta.className = 'pw-meta';
+    meta.textContent = showMisses
+      ? `${r.firstTryCorrect}/${r.seen} first-try · ${r.missed} miss`
+      : `${r.firstTryCorrect} first-try`;
+    const acc = document.createElement('span');
+    acc.className = 'pw-acc';
+    acc.textContent = `${r.accuracy}%`;
+    row.append(word, meta, acc);
+    el.appendChild(row);
+  }
+  if (overflow > 0) {
+    const more = document.createElement('div');
+    more.className = 'progress-empty';
+    more.textContent = `…and ${overflow} more. Keep practicing!`;
+    el.appendChild(more);
+  }
+}
+
+function exportProgressFile() {
+  const s = store.get();
+  const report = buildProgressReport({
+    words: s.words,
+    totals: store.totals(),
+    playerName: store.activeProfileName(),
+    unlocked: s.unlocked,
+  });
+  const payload = buildExportPayload({
+    playerName: store.activeProfileName(),
+    profileId: store.activeProfileId(),
+    state: s,
+    report,
+  });
+  const json = JSON.stringify(payload, null, 2);
+  const stamp = new Date().toISOString().slice(0, 10);
+  const safeName = (payload.playerName || 'player')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '') || 'player';
+  const filename = `sight-words-progress-${safeName}-${stamp}.json`;
+
+  let saved = false;
+  try {
+    const blob = new Blob([json], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.rel = 'noopener';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+    saved = true;
+  } catch (e) { /* fall through to clipboard */ }
+
+  if (!saved && navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(json).then(() => showExportToast('Copied!')).catch(() => {
+      showExportToast('Could not export');
+    });
+    return;
+  }
+  showExportToast(saved ? 'Saved!' : 'Could not export');
+}
+
+function showExportToast(text) {
+  const el = $('progress-export-toast');
+  el.textContent = text;
+  el.classList.remove('hidden');
+  setTimeout(() => el.classList.add('hidden'), 2200);
+}
+
+// ---------- game complete (finale stats) ----------
 
 // Fill and show the finale stats screen; rows cascade in one by one.
 export function showGameComplete(t, { firstTime = true } = {}) {
@@ -392,7 +552,9 @@ export function showGameComplete(t, { firstTime = true } = {}) {
   $('gc-accuracy').textContent = `${t.accuracy}%`;
   $('gc-secrets').textContent = t.secretsFound;
   $('gc-coins').textContent = t.coinsEarned;
-  $('gc-time').textContent = formatPlayTime(t.playSeconds);
+  // Finale keeps the punchier kid-facing labels ("Just started!", "12m").
+  const m = Math.round(t.playSeconds / 60);
+  $('gc-time').textContent = m < 1 ? 'Just started!' : m < 60 ? `${m}m` : `${Math.floor(m / 60)}h ${m % 60}m`;
   // On replays the trophy is old news — skip the "new reward" banner.
   $('gc-reward').classList.toggle('hidden', !firstTime);
   const rows = $('gc-stats').querySelectorAll('.gc-row');
