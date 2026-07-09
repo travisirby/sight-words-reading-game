@@ -1,10 +1,13 @@
 // The player's house: a cutaway diorama (front wall open toward the camera)
 // on a grass island. Purchased catalog items from housedata.js pop into fixed
 // spots inside or in the yard; boss trophies line a shelf on the back wall.
-// The kid stands in the yard and walks wherever you tap (lawn or floor),
-// routing through the front doorway; buttons/shop stay on the DOM overlay.
+// The kid walks wherever you tap (lawn or floor, routing through the front
+// doorway) and can also free-roam: an on-screen thumbstick / WASD to walk
+// and a JUMP button / Space to hop. Buttons/shop stay on the DOM overlay.
 // The camera opens on a 3/4 view but the player can drag to orbit and
-// pinch/wheel to zoom; it idles with a very slow drift for life.
+// pinch/wheel to zoom; it idles with a very slow drift for life. Going
+// through the doorway auto-frames a close-up of the rooms, and stepping
+// back outside restores whatever view the player had.
 
 import * as THREE from 'three';
 import { voxelGeo } from './voxelgeo.js';
@@ -29,7 +32,14 @@ const FOOT = { minX: -5.75, maxX: 5.75, minZ: -6.35, maxZ: 1.35 };
 const INSIDE = { minX: -4.9, maxX: 4.9, minZ: -5.4, maxZ: 0.6 };
 const LAWN = { minX: -12.4, maxX: 12.4, minZ: -8.4, maxZ: 12.4 };
 const DOOR_HALF = 2.6;   // doorway waypoints clamp to |x| <= this
-const WALK_SPEED = 3.6;  // units/s
+const WALK_SPEED = 3.6;  // units/s (tap-to-walk routing)
+
+// Free-roam (joystick / WASD) movement + hop physics.
+const FREE_SPEED = 4.2;  // free-walk speed, a touch peppier than routed walks
+const JUMP_V = 7.6;      // launch velocity for a grounded hop
+const AIR_JUMP_V = 6.6;  // second (mid-air) hop, a little softer
+const GRAV = 21;         // gravity pulling the hop back down
+const AIR_JUMPS = 1;     // extra mid-air hops allowed before landing
 
 const inRect = (r, x, z) => x > r.minX && x < r.maxX && z > r.minZ && z < r.maxZ;
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -136,7 +146,17 @@ export class House {
     this.scene.add(this.kid);
     this.walkPath = null; // { pts, cum, dist, s, seg }
     this.kidY = GRASS_Y;  // eased ground height (floor <-> lawn step)
+
+    // Free-roam state: held direction from joystick/keys, plus hop physics.
+    this.stickMove = { f: 0, r: 0 }; // on-screen thumbstick (forward / right, -1..1)
+    this.keyMove = { f: 0, r: 0 };   // WASD / arrow keys
+    this.freeWalkPhase = 0;          // leg-swing phase while free-walking
+    this.jumpH = 0;                  // height above the ground
+    this.jumpVel = 0;                // vertical velocity
+    this.jumpsLeft = 0;              // remaining mid-air hops
+
     this.attachInput();
+    this.attachControls();
 
     // 3/4 view: house interior on the left, yard front-right.
     this.camBase = new THREE.Vector3(10.5, 10.5, 16.5);
@@ -154,6 +174,13 @@ export class House {
     this.camPitch = this.camPitch0;
     this.camDist = this.camDist0;
 
+    // Auto interior framing: walking through the doorway saves the outdoor
+    // view and eases to a close-up of the rooms; stepping back out restores
+    // the saved view. A drag/pinch cancels the ease (the player wins).
+    this.indoor = false;    // is the kid inside the house right now?
+    this.savedView = null;  // outdoor {yaw,pitch,dist,focus} to restore on exit
+    this.camTarget = null;  // in-flight auto transition target, same shape
+
     this.camera.position.copy(this.camBase);
     this.camera.lookAt(this.camLook);
   }
@@ -161,11 +188,13 @@ export class House {
   // ---------- orbit camera helpers ----------
 
   orbitBy(dYaw, dPitch) {
+    this.camTarget = null; // player takes over from any auto transition
     this.camYaw = clamp(this.camYaw + dYaw, this.camYaw0 - CAM_YAW_RANGE, this.camYaw0 + CAM_YAW_RANGE);
     this.camPitch = clamp(this.camPitch - dPitch, CAM_PITCH_MIN, CAM_PITCH_MAX);
   }
 
   zoomBy(d) {
+    this.camTarget = null; // player takes over from any auto transition
     this.camDist = clamp(this.camDist + d, CAM_DIST_MIN, CAM_DIST_MAX);
   }
 
@@ -174,6 +203,9 @@ export class House {
     this.camPitch = this.camPitch0;
     this.camDist = this.camDist0;
     this.camFocus.copy(this.camLook);
+    this.indoor = false;
+    this.savedView = null;
+    this.camTarget = null;
   }
 
   // ---------- static scenery ----------
@@ -1187,6 +1219,174 @@ export class House {
     }
   }
 
+  // On-screen thumbstick (free-walk) + JUMP button, plus WASD / arrow keys.
+  // These live in the #screen-house overlay and only steer while active and
+  // not mid-ceremony (tick() toggles their visibility).
+  attachControls() {
+    const parent = document.getElementById('screen-house');
+    if (!parent) return;
+
+    // --- thumbstick, bottom-left ---
+    const stick = document.createElement('div');
+    stick.id = 'house-stick';
+    Object.assign(stick.style, {
+      position: 'absolute', left: '22px', bottom: '22px', width: '132px', height: '132px',
+      borderRadius: '50%', background: 'rgba(255,255,255,0.16)',
+      border: '3px solid rgba(255,255,255,0.5)', touchAction: 'none',
+      zIndex: '25', userSelect: '-webkit-user-select', display: 'none',
+    });
+    const knob = document.createElement('div');
+    Object.assign(knob.style, {
+      position: 'absolute', left: '50%', top: '50%', width: '58px', height: '58px',
+      marginLeft: '-29px', marginTop: '-29px', borderRadius: '50%',
+      background: 'rgba(255,255,255,0.9)', boxShadow: '0 2px 7px rgba(0,0,0,0.3)',
+      pointerEvents: 'none', transform: 'translate(0px, 0px)',
+    });
+    stick.appendChild(knob);
+
+    // --- JUMP button, bottom-right ---
+    const jumpBtn = document.createElement('button');
+    jumpBtn.id = 'house-jump';
+    jumpBtn.className = 'btn btn-round';
+    jumpBtn.textContent = '⤴️';
+    Object.assign(jumpBtn.style, {
+      position: 'absolute', right: '28px', bottom: '32px', width: '96px', height: '96px',
+      fontSize: '44px', zIndex: '25', touchAction: 'none', display: 'none',
+    });
+    parent.append(stick, jumpBtn);
+    this.controls = { stick, knob, jumpBtn, visible: false };
+
+    const R = 48; // max knob travel (px)
+    let sid = null;
+    const setKnob = (dx, dy) => { knob.style.transform = `translate(${dx}px, ${dy}px)`; };
+    const readStick = (e) => {
+      const rect = stick.getBoundingClientRect();
+      let dx = e.clientX - (rect.left + rect.width / 2);
+      let dy = e.clientY - (rect.top + rect.height / 2);
+      const len = Math.hypot(dx, dy);
+      if (len > R) { dx = dx / len * R; dy = dy / len * R; }
+      setKnob(dx, dy);
+      this.stickMove.r = dx / R;   // right = +x on screen
+      this.stickMove.f = -dy / R;  // up on screen = forward (away from camera)
+    };
+    const endStick = (e) => {
+      if (e.pointerId !== sid) return;
+      sid = null;
+      this.stickMove.f = 0;
+      this.stickMove.r = 0;
+      setKnob(0, 0);
+    };
+    stick.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      sid = e.pointerId;
+      try { stick.setPointerCapture(sid); } catch (_) {}
+      readStick(e);
+    });
+    stick.addEventListener('pointermove', (e) => { if (e.pointerId === sid) readStick(e); });
+    stick.addEventListener('pointerup', endStick);
+    stick.addEventListener('pointercancel', endStick);
+    jumpBtn.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      this.jump();
+    });
+
+    // --- keyboard: WASD / arrows steer, Space hops ---
+    const F = { ArrowUp: 1, KeyW: 1, ArrowDown: -1, KeyS: -1 };
+    const Rk = { ArrowRight: 1, KeyD: 1, ArrowLeft: -1, KeyA: -1 };
+    const held = new Set();
+    const applyKeys = () => {
+      this.keyMove.f = (held.has('KeyW') || held.has('ArrowUp') ? 1 : 0) +
+        (held.has('KeyS') || held.has('ArrowDown') ? -1 : 0);
+      this.keyMove.r = (held.has('KeyD') || held.has('ArrowRight') ? 1 : 0) +
+        (held.has('KeyA') || held.has('ArrowLeft') ? -1 : 0);
+    };
+    window.addEventListener('keydown', (e) => {
+      if (!this.active || this.ceremony) return;
+      if (e.code in F || e.code in Rk) { e.preventDefault(); held.add(e.code); applyKeys(); return; }
+      if (e.code === 'Space') { e.preventDefault(); if (!e.repeat) this.jump(); }
+    });
+    window.addEventListener('keyup', (e) => {
+      if (e.code in F || e.code in Rk) { held.delete(e.code); applyKeys(); }
+    });
+  }
+
+  // Show/hide the on-screen controls (hidden mid-ceremony and off-scene).
+  setControls(v) {
+    const c = this.controls;
+    if (!c || c.visible === v) return;
+    c.visible = v;
+    c.stick.style.display = v ? 'block' : 'none';
+    c.jumpBtn.style.display = v ? 'flex' : 'none';
+    if (!v) { this.stickMove.f = 0; this.stickMove.r = 0; c.knob.style.transform = 'translate(0px, 0px)'; }
+  }
+
+  // Kick off a hop: full power from the ground, a softer one in mid-air.
+  jump() {
+    if (!this.active || this.ceremony) return;
+    const grounded = this.jumpH <= 0.001 && this.jumpVel <= 0;
+    if (grounded) { this.jumpVel = JUMP_V; this.jumpsLeft = AIR_JUMPS; }
+    else if (this.jumpsLeft > 0) { this.jumpVel = AIR_JUMP_V; this.jumpsLeft--; }
+  }
+
+  // Is (x,z) off the island or inside a wall? The interior is reachable only
+  // through the central front doorway; everything else in the footprint blocks.
+  blocked(x, z) {
+    if (!inRect(LAWN, x, z)) return true;      // off the island
+    if (inRect(INSIDE, x, z)) return false;    // interior floor
+    if (inRect(FOOT, x, z)) {                   // wall band...
+      const doorway = z > INSIDE.maxZ && z < FOOT.maxZ && Math.abs(x) <= DOOR_HALF;
+      return !doorway;                          // ...open only at the doorway
+    }
+    return false;                               // open lawn
+  }
+
+  // Free-walk from the combined joystick/key input, camera-relative so "up"
+  // always pushes away from the camera regardless of how it's been orbited.
+  updateFreeWalk(dt) {
+    let f = this.stickMove.f + this.keyMove.f;
+    let r = this.stickMove.r + this.keyMove.r;
+    const mag = Math.hypot(f, r);
+    if (mag > 1) { f /= mag; r /= mag; }
+    // Camera basis on the ground: forward (away from cam) and right.
+    const s = Math.sin(this.camYaw), c = Math.cos(this.camYaw);
+    const wx = -s * f + c * r;
+    const wz = -c * f - s * r;
+    const step = FREE_SPEED * dt;
+    let x = this.kid.position.x, z = this.kid.position.z;
+    if (!this.blocked(x + wx * step, z)) x += wx * step; // slide along walls
+    if (!this.blocked(x, z + wz * step)) z += wz * step;
+    // Ease the floor <-> lawn step instead of popping.
+    this.kidY += (this.groundY({ x, z }) - this.kidY) * (1 - Math.exp(-dt * 10));
+    this.freeWalkPhase += step * 6;
+    this.kid.position.set(x, this.kidY, z);
+    // Face the travel direction (+x local forward), easing the turn.
+    const want = Math.atan2(-wz, wx);
+    let dr = want - this.kid.rotation.y;
+    dr = Math.atan2(Math.sin(dr), Math.cos(dr));
+    this.kid.rotation.y += dr * (1 - Math.exp(-dt * 12));
+    const swing = Math.sin(this.freeWalkPhase);
+    const p = this.kid.userData.parts;
+    p.legL.rotation.z = -swing * 0.7;
+    p.legR.rotation.z = swing * 0.7;
+    p.armL.rotation.z = swing * 0.7;
+    p.armR.rotation.z = -swing * 0.7;
+  }
+
+  // Integrate the hop arc and lift the kid off the ground by jumpH.
+  updateJump(dt) {
+    if (this.jumpH <= 0 && this.jumpVel <= 0) return;
+    this.jumpVel -= GRAV * dt;
+    this.jumpH += this.jumpVel * dt;
+    if (this.jumpH <= 0) { this.jumpH = 0; this.jumpVel = 0; this.jumpsLeft = 0; }
+    this.kid.position.y = this.kidY + this.jumpH;
+    // Tuck limbs while airborne.
+    const p = this.kid.userData.parts;
+    p.legL.rotation.z = 0.5; p.legR.rotation.z = -0.5;
+    p.armL.rotation.z = -0.4; p.armR.rotation.z = 0.4;
+  }
+
   tap(cx, cy) {
     const ndc = new THREE.Vector2(
       (cx / window.innerWidth) * 2 - 1,
@@ -1348,6 +1548,10 @@ export class House {
     applyLook(this.kid, currentLook());
     this.walkPath = null;
     this.kidY = GRASS_Y;
+    this.stickMove.f = this.stickMove.r = 0;
+    this.keyMove.f = this.keyMove.r = 0;
+    this.jumpH = this.jumpVel = 0;
+    this.jumpsLeft = 0;
     this.kid.position.copy(this.kidHome);
     this.kid.rotation.y = -Math.PI / 4;
     this.resetCam();
@@ -1360,6 +1564,7 @@ export class House {
     // slot, and the skipped decoration appears on the next refresh().
     this.endCeremony();
     this.active = false;
+    this.setControls(false);
   }
 
   tick(dt) {
@@ -1373,8 +1578,19 @@ export class House {
 
     for (const fn of this.anims) fn(t, dt);
 
+    // On-screen controls hide during the trophy ceremony.
+    this.setControls(!this.ceremony);
+
+    // Free-roam (joystick / keys) takes over from tap-to-walk routing.
+    const moving = !this.ceremony &&
+      (Math.abs(this.stickMove.f + this.keyMove.f) > 0.01 ||
+       Math.abs(this.stickMove.r + this.keyMove.r) > 0.01);
+    if (moving) this.walkPath = null;
+
     if (this.walkPath) {
       this.updateWalk(dt);
+    } else if (moving) {
+      this.updateFreeWalk(dt);
     } else {
       // Idle: tiny bob, easing back to camera-facing after a walk.
       this.kid.position.y = this.kidY + Math.abs(Math.sin(t * 2)) * 0.04;
@@ -1382,6 +1598,9 @@ export class House {
       dr = Math.atan2(Math.sin(dr), Math.cos(dr));
       this.kid.rotation.y += dr * (1 - Math.exp(-dt * 8));
     }
+
+    // Lift the kid through any hop arc (on top of walk/free-walk/idle).
+    this.updateJump(dt);
 
     if (this.ceremony) this.updateCeremony(dt);
 
@@ -1392,6 +1611,46 @@ export class House {
       this.camLerpLook = (this.camLerpLook || this.camLook.clone()).lerp(this.ceremonyCam.look, k);
       this.camera.lookAt(this.camLerpLook);
     } else {
+      // Auto interior framing: crossing the doorway swaps between a saved
+      // outdoor view and a close-up that peers into the rooms.
+      const indoorNow = inRect(INSIDE, this.kid.position.x, this.kid.position.z);
+      if (indoorNow !== this.indoor) {
+        this.indoor = indoorNow;
+        if (indoorNow) {
+          this.savedView = {
+            yaw: this.camYaw, pitch: this.camPitch, dist: this.camDist,
+            focus: this.camFocus.clone(),
+          };
+          // Head-on close-up through the open wall (yaw 0 = straight down
+          // the front), low enough to look under the lintel, focused on the
+          // middle of the rooms.
+          this.camTarget = {
+            yaw: 0, pitch: 0.28, dist: 12.5,
+            focus: new THREE.Vector3(0, 1.3, -2.8),
+          };
+        } else {
+          this.camTarget = this.savedView || {
+            yaw: this.camYaw0, pitch: this.camPitch0, dist: this.camDist0,
+            focus: this.camLook.clone(),
+          };
+          this.savedView = null;
+        }
+      }
+      if (this.camTarget) {
+        // Ease toward the target; snap + finish once everything is close.
+        const k = 1 - Math.exp(-dt * 3);
+        this.camYaw += (this.camTarget.yaw - this.camYaw) * k;
+        this.camPitch += (this.camTarget.pitch - this.camPitch) * k;
+        this.camDist += (this.camTarget.dist - this.camDist) * k;
+        this.camFocus.lerp(this.camTarget.focus, k);
+        if (Math.abs(this.camTarget.yaw - this.camYaw) < 0.004 &&
+            Math.abs(this.camTarget.pitch - this.camPitch) < 0.004 &&
+            Math.abs(this.camTarget.dist - this.camDist) < 0.05 &&
+            this.camFocus.distanceTo(this.camTarget.focus) < 0.05) {
+          this.camTarget = null;
+        }
+      }
+
       // Orbit view from the player's yaw/pitch/distance, plus a very slow
       // idle wobble so the diorama still feels alive when left alone.
       this.camLerpLook = null;
