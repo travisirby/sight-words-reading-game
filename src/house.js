@@ -3,7 +3,8 @@
 // spots inside or in the yard; boss trophies line a shelf on the back wall.
 // The kid stands in the yard and walks wherever you tap (lawn or floor),
 // routing through the front doorway; buttons/shop stay on the DOM overlay.
-// The camera is a fixed 3/4 view with a very slow drift for life.
+// The camera opens on a 3/4 view but the player can drag to orbit and
+// pinch/wheel to zoom; it idles with a very slow drift for life.
 
 import * as THREE from 'three';
 import { voxelGeo } from './voxelgeo.js';
@@ -31,6 +32,15 @@ const DOOR_HALF = 2.6;   // doorway waypoints clamp to |x| <= this
 const WALK_SPEED = 3.6;  // units/s
 
 const inRect = (r, x, z) => x > r.minX && x < r.maxX && z > r.minZ && z < r.maxZ;
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+
+// Orbit-camera limits: how far the player can swing/tilt/zoom the diorama view.
+const CAM_YAW_RANGE = 1.15; // ± radians of swing from the default 3/4 angle
+const CAM_PITCH_MIN = 0.18; // low, near-ground angle
+const CAM_PITCH_MAX = 1.15; // high, near top-down
+const CAM_DIST_MIN = 12;    // zoomed in close
+const CAM_DIST_MAX = 30;    // pulled back wide
+
 const WORLD_TROPHY_COUNT = 6;
 const TROPHY_SHELF_SPACING = 0.78;
 const TROPHY_TINTS = [0xffd54a, 0xffc233, 0xffe082, 0xe07ac2, 0xf5b942, 0xff8c3e];
@@ -111,6 +121,8 @@ export class House {
       herotrophy: [3.6, GRASS_Y, 3.0],
     };
 
+    this.buildSky();
+    this.buildDistantLand();
     this.buildIsland();
     this.buildHouse();
     this.buildTrophyShelf();
@@ -129,8 +141,39 @@ export class House {
     // 3/4 view: house interior on the left, yard front-right.
     this.camBase = new THREE.Vector3(10.5, 10.5, 16.5);
     this.camLook = new THREE.Vector3(-0.5, 1.2, 0.5);
+
+    // Orbit camera: a spherical offset (yaw/pitch/distance) from a focus point,
+    // seeded so the default view exactly reproduces camBase/camLook. Drag orbits,
+    // pinch/wheel zooms — see attachInput() and tick().
+    this.camFocus = this.camLook.clone();
+    const off = this.camBase.clone().sub(this.camLook);
+    this.camDist0 = off.length();
+    this.camYaw0 = Math.atan2(off.x, off.z);
+    this.camPitch0 = Math.asin(off.y / this.camDist0);
+    this.camYaw = this.camYaw0;
+    this.camPitch = this.camPitch0;
+    this.camDist = this.camDist0;
+
     this.camera.position.copy(this.camBase);
     this.camera.lookAt(this.camLook);
+  }
+
+  // ---------- orbit camera helpers ----------
+
+  orbitBy(dYaw, dPitch) {
+    this.camYaw = clamp(this.camYaw + dYaw, this.camYaw0 - CAM_YAW_RANGE, this.camYaw0 + CAM_YAW_RANGE);
+    this.camPitch = clamp(this.camPitch - dPitch, CAM_PITCH_MIN, CAM_PITCH_MAX);
+  }
+
+  zoomBy(d) {
+    this.camDist = clamp(this.camDist + d, CAM_DIST_MIN, CAM_DIST_MAX);
+  }
+
+  resetCam() {
+    this.camYaw = this.camYaw0;
+    this.camPitch = this.camPitch0;
+    this.camDist = this.camDist0;
+    this.camFocus.copy(this.camLook);
   }
 
   // ---------- static scenery ----------
@@ -278,6 +321,72 @@ export class House {
       this.scene.add(gp);
       this.clouds.push(gp);
     }
+  }
+
+  buildSky() {
+    // Gradient skydome + matched fog so the floating island sits inside a real
+    // sky instead of a flat blue void — the same trick level.js / overworld.js
+    // use to feel "set in the world."
+    const topCol = 0x5aa8e8;      // deep blue overhead
+    const horizonCol = 0xdcecfa;  // pale haze at the horizon
+    this.scene.background = new THREE.Color(topCol);
+    this.scene.fog = new THREE.Fog(horizonCol, 55, 150);
+
+    const cvs = document.createElement('canvas');
+    cvs.width = 2;
+    cvs.height = 256;
+    const ctx = cvs.getContext('2d');
+    const grad = ctx.createLinearGradient(0, 0, 0, 256);
+    grad.addColorStop(0.0, '#5aa8e8');
+    grad.addColorStop(0.55, '#9fd4f4');
+    grad.addColorStop(1.0, '#e7f3fc');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, 2, 256);
+    const tex = new THREE.CanvasTexture(cvs);
+    const dome = new THREE.Mesh(
+      new THREE.SphereGeometry(140, 24, 16),
+      new THREE.MeshBasicMaterial({ map: tex, side: THREE.BackSide, fog: false, depthWrite: false })
+    );
+    dome.renderOrder = -2;
+    this.scene.add(dome);
+
+    // A soft sun with a halo, sitting in the visible back-left sky. Basic
+    // material + fog:false so it stays bright no matter how far it is.
+    const sun = new THREE.Group();
+    const halo = new THREE.Mesh(sphereGeo, new THREE.MeshBasicMaterial({
+      color: 0xffe8a6, transparent: true, opacity: 0.35, fog: false, depthWrite: false,
+    }));
+    halo.scale.setScalar(26);
+    const core = new THREE.Mesh(sphereGeo, new THREE.MeshBasicMaterial({ color: 0xfff4cf, fog: false }));
+    core.scale.setScalar(13);
+    sun.add(halo, core);
+    sun.position.set(-58, 44, -78);
+    this.scene.add(sun);
+  }
+
+  buildDistantLand() {
+    // Hazy stepped hills and a sea plane far below the floating island, so
+    // wherever the player swings the camera there's a world down there rather
+    // than empty sky. The fog set in buildSky() melts the far edges into the
+    // horizon, giving cheap depth (like level.js's parallax skyline).
+    const layers = [
+      { r: 64, y: -15, n: 24, h: 6, w: 8, col: 0x9cc0dd }, // far ring, blue-hazed
+      { r: 46, y: -11, n: 18, h: 5, w: 7, col: 0x74ac6c }, // near ring, greener
+    ];
+    for (const L of layers) {
+      const mat = lambert(L.col);
+      for (let i = 0; i < L.n; i++) {
+        const a = (i / L.n) * Math.PI * 2;
+        const rr = L.r + Math.sin(i * 2.3) * 6;
+        const hh = L.h + (Math.sin(i * 1.7) * 0.5 + 0.5) * L.h;
+        this.scene.add(box(
+          mat, Math.sin(a) * rr, L.y + hh / 2, Math.cos(a) * rr,
+          L.w + Math.abs(Math.sin(i * 1.3)) * 3, hh, L.w + Math.abs(Math.cos(i)) * 3, a
+        ));
+      }
+    }
+    // Big flat sea/haze floor beneath it all so the horizon has a bottom.
+    this.scene.add(box(lambert(0x9ccbe8), 0, -18, 0, 300, 0.5, 300));
   }
 
   // ---------- item builders ----------
@@ -986,27 +1095,95 @@ export class House {
   attachInput() {
     const el = this.renderer.domElement;
     this.raycaster = new THREE.Raycaster();
-    let down = null;
+    el.style.touchAction = 'none'; // let us own drag/pinch gestures
+
+    // One-finger drag orbits the camera; two-finger pinch (or wheel) zooms;
+    // a press that never turns into a drag falls through to tap-to-walk.
+    const pointers = new Map(); // pointerId -> { x, y }
+    let down = null;   // first-finger down position, for tap detection
+    let dragging = false;
+    let pinchDist = 0;
+
     const onDown = (e) => {
       if (!this.active) return;
       if (e.target && e.target.closest && e.target.closest('button')) return;
-      down = { x: e.clientX, y: e.clientY };
+      pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (pointers.size === 1) {
+        down = { x: e.clientX, y: e.clientY };
+        dragging = false;
+      } else if (pointers.size === 2) {
+        const [a, b] = [...pointers.values()];
+        pinchDist = Math.hypot(a.x - b.x, a.y - b.y);
+        dragging = true; // two fingers is never a tap
+      }
     };
+
+    const onMove = (e) => {
+      if (!this.active || !pointers.has(e.pointerId)) return;
+      const prev = pointers.get(e.pointerId);
+      const px = prev.x, py = prev.y;
+      prev.x = e.clientX;
+      prev.y = e.clientY;
+
+      if (pointers.size >= 2) {
+        // Pinch: fingers apart => zoom in (distance shrinks).
+        const [a, b] = [...pointers.values()];
+        const d = Math.hypot(a.x - b.x, a.y - b.y);
+        if (pinchDist > 0) this.zoomBy((pinchDist - d) * 0.05);
+        pinchDist = d;
+        return;
+      }
+      // Single-finger drag orbits once it clears the tap threshold.
+      if (!down) return;
+      if (!dragging && Math.hypot(e.clientX - down.x, e.clientY - down.y) > 10) dragging = true;
+      if (dragging) this.orbitBy((e.clientX - px) * 0.006, (e.clientY - py) * 0.006);
+    };
+
     const onUp = (e) => {
-      if (!this.active || !down) return;
-      const moved = Math.hypot(e.clientX - down.x, e.clientY - down.y);
-      down = null;
-      if (moved > 10) return; // a drag, not a tap
-      this.tap(e.clientX, e.clientY);
+      if (!this.active) return;
+      const wasTap = pointers.size === 1 && !dragging && down &&
+        Math.hypot(e.clientX - down.x, e.clientY - down.y) <= 10;
+      pointers.delete(e.pointerId);
+      if (pointers.size < 2) pinchDist = 0;
+      if (pointers.size === 0) { down = null; dragging = false; }
+      if (wasTap) this.tap(e.clientX, e.clientY);
     };
+
+    const onWheel = (e) => {
+      if (!this.active) return;
+      e.preventDefault();
+      this.zoomBy(e.deltaY * 0.01);
+    };
+
     if (window.PointerEvent) {
       el.addEventListener('pointerdown', onDown);
+      window.addEventListener('pointermove', onMove);
       window.addEventListener('pointerup', onUp);
+      window.addEventListener('pointercancel', onUp);
+      el.addEventListener('wheel', onWheel, { passive: false });
     } else {
-      el.addEventListener('mousedown', onDown);
-      window.addEventListener('mouseup', onUp);
-      el.addEventListener('touchstart', (e) => onDown(e.changedTouches[0]), { passive: true });
-      window.addEventListener('touchend', (e) => onUp(e.changedTouches[0]));
+      // Legacy fallback: mouse drag orbits, wheel zooms, click walks.
+      let mdown = null, mdrag = false, mprev = null;
+      el.addEventListener('mousedown', (e) => {
+        if (!this.active) return;
+        if (e.target && e.target.closest && e.target.closest('button')) return;
+        mdown = { x: e.clientX, y: e.clientY };
+        mprev = { x: e.clientX, y: e.clientY };
+        mdrag = false;
+      });
+      window.addEventListener('mousemove', (e) => {
+        if (!this.active || !mdown) return;
+        if (!mdrag && Math.hypot(e.clientX - mdown.x, e.clientY - mdown.y) > 10) mdrag = true;
+        if (mdrag) this.orbitBy((e.clientX - mprev.x) * 0.006, (e.clientY - mprev.y) * 0.006);
+        mprev = { x: e.clientX, y: e.clientY };
+      });
+      window.addEventListener('mouseup', (e) => {
+        if (!this.active || !mdown) return;
+        const tap = !mdrag && Math.hypot(e.clientX - mdown.x, e.clientY - mdown.y) <= 10;
+        mdown = null;
+        if (tap) this.tap(e.clientX, e.clientY);
+      });
+      el.addEventListener('wheel', onWheel, { passive: false });
     }
   }
 
@@ -1173,6 +1350,7 @@ export class House {
     this.kidY = GRASS_Y;
     this.kid.position.copy(this.kidHome);
     this.kid.rotation.y = -Math.PI / 4;
+    this.resetCam();
     this.camera.position.copy(this.camBase);
     this.camera.lookAt(this.camLook);
   }
@@ -1214,14 +1392,17 @@ export class House {
       this.camLerpLook = (this.camLerpLook || this.camLook.clone()).lerp(this.ceremonyCam.look, k);
       this.camera.lookAt(this.camLerpLook);
     } else {
-      // Very slow camera drift — just enough that the diorama feels alive.
+      // Orbit view from the player's yaw/pitch/distance, plus a very slow
+      // idle wobble so the diorama still feels alive when left alone.
       this.camLerpLook = null;
+      const cp = Math.cos(this.camPitch);
+      const horiz = this.camDist * cp;
       this.camera.position.set(
-        this.camBase.x + Math.sin(t * 0.12) * 0.7,
-        this.camBase.y + Math.sin(t * 0.09) * 0.3,
-        this.camBase.z + Math.cos(t * 0.12) * 0.7
+        this.camFocus.x + horiz * Math.sin(this.camYaw) + Math.sin(t * 0.12) * 0.5,
+        this.camFocus.y + this.camDist * Math.sin(this.camPitch) + Math.sin(t * 0.09) * 0.25,
+        this.camFocus.z + horiz * Math.cos(this.camYaw) + Math.cos(t * 0.12) * 0.5
       );
-      this.camera.lookAt(this.camLook);
+      this.camera.lookAt(this.camFocus);
     }
 
     this.effects.update(dt);
