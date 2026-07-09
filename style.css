@@ -584,7 +584,7 @@ html, body {
   position: absolute;
   top: calc(14px + env(safe-area-inset-top));
   left: calc(16px + env(safe-area-inset-left));
-  font-size: 34px;
+  font-size: 44px;
   font-weight: bold;
   color: #fff;
   background: rgba(44, 62, 117, 0.75);
@@ -594,7 +594,8 @@ html, body {
 }
 #hud-key {
   position: absolute;
-  top: calc(90px + env(safe-area-inset-top));
+  /* Below the coin chip, which grew with its 68px coin. */
+  top: calc(116px + env(safe-area-inset-top));
   left: calc(16px + env(safe-area-inset-left));
   font-size: 34px;
   background: rgba(44, 62, 117, 0.75);

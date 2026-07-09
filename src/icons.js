@@ -62,11 +62,10 @@ function inkStroke(d, width = 5, color = C.white) {
 // ---------- chrome / currency ----------
 
 const ICONS = {
+  // Plain gold disc with a rim hint — matches the in-world coin object.
   coin: (s) => svg(
-    circle(16, 16, 11, C.gold) +
-    circle(16, 16, 6.5, C.goldMid) +
-    `<circle cx="16" cy="16" r="6.5" fill="none" stroke="${C.ink}" stroke-width="1.5"/>` +
-    block(14, 10, 4, 12, C.gold, 1),
+    circle(16, 16, 12, C.gold) +
+    `<circle cx="16" cy="16" r="8.5" fill="none" stroke="${C.goldMid}" stroke-width="2.5"/>`,
     s
   ),
 
