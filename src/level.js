@@ -968,8 +968,11 @@ export class LevelScene {
           put(col, g - 0.5 - d, zi, 1, 1, 1, p.dirt[(col + zi + d) & 1], 0, j2, hu * 0.6);
         }
       }
-      // Darker grass lip along the front edge, slightly proud of the face.
-      put(col, g - 0.55, 1.03, 1, 0.16, 1.02, p.top[1], 0, -0.1);
+      // Darker grass lip along the front edge, slightly proud of the face —
+      // in x too, else its end faces sit exactly on the dirt's side planes
+      // and z-fight at every step corner. Neighboring lips overlap a touch,
+      // which is invisible (same color).
+      put(col, g - 0.55, 1.03, 1.04, 0.16, 1.02, p.top[1], 0, -0.1);
       for (let zi = -5; zi <= -2; zi++) {
         const j = (h01(col * 11 + zi * 17) - 0.5) * 0.09;
         const hu = (h01(col * 19 + zi * 23 + 7) - 0.5) * 0.024;
