@@ -5,7 +5,9 @@
 // doorway) and can also free-roam: an on-screen thumbstick / WASD to walk
 // and a JUMP button / Space to hop. Buttons/shop stay on the DOM overlay.
 // The camera opens on a 3/4 view but the player can drag to orbit and
-// pinch/wheel to zoom; it idles with a very slow drift for life.
+// pinch/wheel to zoom; it idles with a very slow drift for life. Going
+// through the doorway auto-frames a close-up of the rooms, and stepping
+// back outside restores whatever view the player had.
 
 import * as THREE from 'three';
 import { voxelGeo } from './voxelgeo.js';
@@ -172,6 +174,13 @@ export class House {
     this.camPitch = this.camPitch0;
     this.camDist = this.camDist0;
 
+    // Auto interior framing: walking through the doorway saves the outdoor
+    // view and eases to a close-up of the rooms; stepping back out restores
+    // the saved view. A drag/pinch cancels the ease (the player wins).
+    this.indoor = false;    // is the kid inside the house right now?
+    this.savedView = null;  // outdoor {yaw,pitch,dist,focus} to restore on exit
+    this.camTarget = null;  // in-flight auto transition target, same shape
+
     this.camera.position.copy(this.camBase);
     this.camera.lookAt(this.camLook);
   }
@@ -179,11 +188,13 @@ export class House {
   // ---------- orbit camera helpers ----------
 
   orbitBy(dYaw, dPitch) {
+    this.camTarget = null; // player takes over from any auto transition
     this.camYaw = clamp(this.camYaw + dYaw, this.camYaw0 - CAM_YAW_RANGE, this.camYaw0 + CAM_YAW_RANGE);
     this.camPitch = clamp(this.camPitch - dPitch, CAM_PITCH_MIN, CAM_PITCH_MAX);
   }
 
   zoomBy(d) {
+    this.camTarget = null; // player takes over from any auto transition
     this.camDist = clamp(this.camDist + d, CAM_DIST_MIN, CAM_DIST_MAX);
   }
 
@@ -192,6 +203,9 @@ export class House {
     this.camPitch = this.camPitch0;
     this.camDist = this.camDist0;
     this.camFocus.copy(this.camLook);
+    this.indoor = false;
+    this.savedView = null;
+    this.camTarget = null;
   }
 
   // ---------- static scenery ----------
@@ -1597,6 +1611,45 @@ export class House {
       this.camLerpLook = (this.camLerpLook || this.camLook.clone()).lerp(this.ceremonyCam.look, k);
       this.camera.lookAt(this.camLerpLook);
     } else {
+      // Auto interior framing: crossing the doorway swaps between a saved
+      // outdoor view and a close-up that peers into the rooms.
+      const indoorNow = inRect(INSIDE, this.kid.position.x, this.kid.position.z);
+      if (indoorNow !== this.indoor) {
+        this.indoor = indoorNow;
+        if (indoorNow) {
+          this.savedView = {
+            yaw: this.camYaw, pitch: this.camPitch, dist: this.camDist,
+            focus: this.camFocus.clone(),
+          };
+          // Front-on 3/4 close-up through the open wall, low enough to look
+          // under the lintel, focused on the middle of the rooms.
+          this.camTarget = {
+            yaw: this.camYaw0, pitch: 0.28, dist: 12.5,
+            focus: new THREE.Vector3(0, 1.3, -2.8),
+          };
+        } else {
+          this.camTarget = this.savedView || {
+            yaw: this.camYaw0, pitch: this.camPitch0, dist: this.camDist0,
+            focus: this.camLook.clone(),
+          };
+          this.savedView = null;
+        }
+      }
+      if (this.camTarget) {
+        // Ease toward the target; snap + finish once everything is close.
+        const k = 1 - Math.exp(-dt * 3);
+        this.camYaw += (this.camTarget.yaw - this.camYaw) * k;
+        this.camPitch += (this.camTarget.pitch - this.camPitch) * k;
+        this.camDist += (this.camTarget.dist - this.camDist) * k;
+        this.camFocus.lerp(this.camTarget.focus, k);
+        if (Math.abs(this.camTarget.yaw - this.camYaw) < 0.004 &&
+            Math.abs(this.camTarget.pitch - this.camPitch) < 0.004 &&
+            Math.abs(this.camTarget.dist - this.camDist) < 0.05 &&
+            this.camFocus.distanceTo(this.camTarget.focus) < 0.05) {
+          this.camTarget = null;
+        }
+      }
+
       // Orbit view from the player's yaw/pitch/distance, plus a very slow
       // idle wobble so the diorama still feels alive when left alone.
       this.camLerpLook = null;
