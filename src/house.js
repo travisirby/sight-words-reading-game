@@ -1621,10 +1621,11 @@ export class House {
             yaw: this.camYaw, pitch: this.camPitch, dist: this.camDist,
             focus: this.camFocus.clone(),
           };
-          // Front-on 3/4 close-up through the open wall, low enough to look
-          // under the lintel, focused on the middle of the rooms.
+          // Head-on close-up through the open wall (yaw 0 = straight down
+          // the front), low enough to look under the lintel, focused on the
+          // middle of the rooms.
           this.camTarget = {
-            yaw: this.camYaw0, pitch: 0.28, dist: 12.5,
+            yaw: 0, pitch: 0.28, dist: 12.5,
             focus: new THREE.Vector3(0, 1.3, -2.8),
           };
         } else {
