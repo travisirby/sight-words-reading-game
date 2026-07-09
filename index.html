@@ -6,8 +6,8 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <title>Super Kids Sight Words Adventure</title>
-  <script type="module" crossorigin src="./assets/index-3HAKwF_O.js"></script>
-  <link rel="stylesheet" crossorigin href="./assets/index-kj9ftteH.css">
+  <script type="module" crossorigin src="./assets/index-dY74DuWQ.js"></script>
+  <link rel="stylesheet" crossorigin href="./assets/index-BbxM0PkY.css">
 </head>
 <body>
   <!-- 3D canvas mounts here -->
@@ -118,9 +118,10 @@
     <div id="hud-coins">🪙 <span id="coin-count">0</span></div>
     <div id="hud-key" class="hidden">🔑</div>
     <button id="btn-pause" class="btn btn-round btn-pause">⏸️</button>
-    <button id="btn-repeat-word" class="btn btn-repeat">🔊</button>
-    <!-- One-time tutorial callout pointing at the 🔊 button -->
-    <div id="repeat-tip" class="hidden">🔊 Tap to hear<br />your word again!</div>
+    <!-- Hear-it-again: shown only while a spoken word challenge is live -->
+    <button id="btn-repeat-word" class="btn btn-repeat hidden" aria-label="Hear the word again">👂<span class="repeat-badge">🔁</span></button>
+    <!-- One-time tutorial callout pointing at the repeat button -->
+    <div id="repeat-tip" class="hidden">👂 Tap to hear<br />your word again!</div>
     <div id="progress-dots"></div>
     <!-- Time-freeze steering controls (choice mode only) -->
     <div id="move-controls" class="hidden">
