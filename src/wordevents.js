@@ -8,7 +8,7 @@ import { voxelGeo } from './voxelgeo.js';
 import { KID_H } from './player.js';
 import { shuffle } from './words.js';
 import {
-  sfxCorrect, sfxWrong, sfxBonk, sfxDoorOpen, sfxStarGrab, sfxPop, speak,
+  sfxCorrect, sfxWrong, sfxBonk, sfxDoorOpen, sfxStarGrab, sfxStar, sfxPop, speak,
 } from './audio.js';
 
 const boxGeo = voxelGeo;
@@ -446,7 +446,14 @@ export class DoorsEvent {
   }
 }
 
-// ---------- FLAG STARS (review) ----------
+// ---------- FLAG STARS: catch the falling star (end-of-level review) ----------
+
+const STAR_TOP = 9;      // release height above the ground
+const STAR_HOVER = 1.7;  // resting height: a standing kid's hands reach it
+const STAR_FALL = 2.8;   // descent speed, units/s
+const STAR_GAP = 6;      // spacing between the two lanes
+const CATCH_DX = 0.9;    // horizontal catch radius
+const CATCH_REACH = 2.2; // how far above the kid's feet a star can be caught
 
 function makeStar() {
   const g = new THREE.Group();
@@ -461,7 +468,16 @@ function makeStar() {
 }
 
 export class StarsEvent {
-  // reviews: [{ word, distractor }], up to 2 — grabbing the right star = +1 gem
+  // reviews: [{ word, distractor }], up to 2. At the end of a level the kid
+  // stops in a little arena; the narrator names a word and TWO word-stars
+  // twinkle down out of the sky. He walks under the one that matches and it
+  // drops into his hands — a gem each. This is deliberately NOT the ? block:
+  //  - the verb is "stand under / reach up," never a jump. The star comes to
+  //    HIM, so an eager early jump does nothing.
+  //  - nothing is catchable until the word has finished being spoken. The
+  //    stars hang high and dim while the narrator talks and only start
+  //    falling on narration end, so he can't lock in an answer before he has
+  //    heard the word.
   constructor(scene, level, { x, reviews, onGem, onDone }) {
     this.type = 'stars';
     this.level = level;
@@ -472,21 +488,26 @@ export class StarsEvent {
     this.idx = 0;
     this.done = false;
     this.warned = false;
-    this.pending = 0; // delay before presenting the next review word
+    this.announced = false; // the current word has been named
+    this.dropping = false;  // stars released and now catchable
+    this.pending = 0;       // delay before the next review's stars appear
+
+    this.laneX = [x + 4, x + 4 + STAR_GAP];
+    this.armX = this.laneX[0] - 3; // he freezes here and the word is spoken
 
     this.group = new THREE.Group();
     scene.add(this.group);
-    this.stars = [0, 1].map(() => {
+    this.stars = this.laneX.map(() => {
       const holder = new THREE.Group();
       const star = makeStar();
       const sign = makeSign(1.8, 0.9);
       sign.position.y = -1.15;
       holder.add(star, sign);
+      holder.visible = false;
       this.group.add(holder);
-      return { holder, star, sign, word: '', taken: false };
+      return { holder, star, sign, word: '', taken: false, hoverY: 0, trailT: 0 };
     });
-    if (reviews.length) this.present(x + 5);
-    else this.finish();
+    if (!reviews.length) this.finish();
   }
 
   get word() {
@@ -494,71 +515,104 @@ export class StarsEvent {
     return r ? r.word : '';
   }
 
-  present(sx) {
+  // The frozen roaming band handed to the game while a review is live: he can
+  // shuffle left/right between the two lanes to line up under a star, but not
+  // wander off toward the flag. Null once the whole review is over.
+  roamZone() {
+    if (this.done || !this.reviews.length) return null;
+    return { engage: this.armX, min: this.armX, max: this.laneX[1] + 2 };
+  }
+
+  setGlow(s, on) {
+    s.star.children.forEach((m) => m.material.emissive.setHex(on ? 0x775500 : 0x2a2011));
+  }
+
+  // Name the current word and hang two stars high overhead, small and dim.
+  // They only wake up and start falling once the narration finishes.
+  announce(api, first) {
+    this.announced = true;
+    this.dropping = false;
+    this.warned = false;
     const r = this.reviews[this.idx];
     const words = shuffle([r.word, r.distractor]);
-    // Both stars float at the same height, well above head reach: walking
-    // (or falling) past one can never touch it, so reaching the far star
-    // never means threading past the near one — the old mixed heights put
-    // the low star's hitbox a hair above a grounded head and squarely
-    // inside every jump arc.
     for (let i = 0; i < 2; i++) {
       const s = this.stars[i];
-      const px = sx + i * 6;
-      s.baseY = this.level.groundTopAt(px) + 3.1;
-      s.holder.position.set(px, s.baseY, 0);
+      const lx = this.laneX[i];
+      const top = this.level.groundTopAt(lx);
+      s.hoverY = top + STAR_HOVER;
+      s.holder.position.set(lx, top + STAR_TOP, 0);
+      s.holder.scale.setScalar(0.55);
       s.holder.visible = true;
       s.word = words[i];
       s.taken = false;
+      s.trailT = 0;
       setSign(s.sign, s.word, 'normal');
+      this.setGlow(s, false);
     }
-    this.lastX = sx + 6;
-    this.warned = false;
+    if (api && api.armRepeat) api.armRepeat();
+    const line = first
+      ? `Catch the star that says: ${r.word}!`
+      : `Now catch: ${r.word}!`;
+    speak(line, { rate: 0.9, echoWord: Math.random() < 0.4, onend: () => this.release() });
+  }
+
+  // Narration done: the stars flare to full size and begin drifting down.
+  release() {
+    if (this.done) return;
+    this.dropping = true;
+    for (const s of this.stars) {
+      if (s.taken || !s.holder.visible) continue;
+      s.holder.scale.setScalar(1);
+      this.setGlow(s, true);
+    }
+    sfxStar(0);
   }
 
   update(dt, player, api) {
     const t = performance.now() / 1000;
-    for (const s of this.stars) {
-      s.star.rotation.y += dt * 2;
-      if (s.baseY !== undefined) {
-        s.holder.position.y = s.baseY + Math.sin(t * 3 + s.holder.position.x) * 0.12;
-      }
-    }
+    for (const s of this.stars) s.star.rotation.y += dt * 2;
     if (this.done) return;
 
     if (this.pending > 0) {
       this.pending -= dt;
-      if (this.pending <= 0) {
-        this.present(player.x + 5);
-        api.speakWord();
-      }
+      if (this.pending <= 0) this.announce(api, false);
       return;
     }
 
-    // Grab by jumping UP into a star — the same verb as bonking a ? block.
-    // Only a rising player right under it selects; walking or falling past
-    // never does, so choosing is always a deliberate jump.
+    // Reached the arena: name the word. Stars fall when the line finishes.
+    if (!this.announced) {
+      if (player.x >= this.armX) this.announce(api, this.idx === 0);
+      return;
+    }
+
+    if (!this.dropping) return;
+
+    // Each live star drifts down to reach height, then bobs there waiting.
+    for (const s of this.stars) {
+      if (s.taken || !s.holder.visible) continue;
+      if (s.holder.position.y > s.hoverY + 0.001) {
+        s.holder.position.y = Math.max(s.hoverY, s.holder.position.y - STAR_FALL * dt);
+        s.trailT -= dt;
+        if (s.trailT <= 0) {
+          s.trailT = 0.14; // sparkle comet-trail as it falls
+          api.effects.sparkle(new THREE.Vector3(s.holder.position.x, s.holder.position.y, 0));
+        }
+      } else {
+        s.holder.position.y = s.hoverY + Math.sin(t * 3 + s.holder.position.x) * 0.12;
+      }
+    }
+
+    // Catch by being under a star once it is low enough to reach — standing
+    // does it, a little jump does it sooner. No rising-velocity gate: the
+    // star coming down to him IS the interaction.
     for (const s of this.stars) {
       if (s.taken || !s.holder.visible) continue;
       const dx = Math.abs(player.x - s.holder.position.x);
-      const sy = s.holder.position.y;
-      if (dx < 0.8 && player.vy > 0.5 &&
-          player.y + KID_H > sy - 0.7 && player.y < sy + 0.5) {
+      if (dx < CATCH_DX && s.holder.position.y <= player.y + CATCH_REACH) {
         s.taken = true;
         if (s.word === this.word) this.grabCorrect(s, api);
         else this.grabWrong(s, api);
         return;
-      }
-    }
-
-    // Walked past both stars.
-    if (player.x > this.lastX + 2.2) {
-      if (!this.warned) {
-        this.warned = true;
-        this.present(player.x + 5);
-        api.speakWord();
-      } else {
-        this.advance(api);
       }
     }
   }
@@ -570,12 +624,12 @@ export class StarsEvent {
       new THREE.Vector3(s.holder.position.x, s.holder.position.y + 1.2, 0), '+1'
     );
     this.onGem();
-    // warned means a wrong grab since this word was presented; a clean
-    // grab earns first-try praise, not the recovery line.
+    // warned means a wrong catch since this word was named; a clean catch
+    // earns first-try praise, not the recovery line.
     if (!this.warned && api.praiseFirstTry) api.praiseFirstTry();
     else api.praise();
     for (const k of this.stars) k.holder.visible = false;
-    this.advance(api, true);
+    this.advance(true);
   }
 
   grabWrong(s, api) {
@@ -583,20 +637,24 @@ export class StarsEvent {
     sfxWrong();
     if (api.onWrong) api.onWrong();
     if (!this.warned) {
+      // The other (correct) star keeps hovering, so he just walks over to it
+      // for the recovery — a guided second try, never a dead end.
       this.warned = true;
-      speak(`Almost! The word is: ${this.word}.`, { rate: 0.9 });
+      speak(`Almost! Catch the one that says: ${this.word}.`, { rate: 0.9 });
     } else {
-      this.advance(api);
+      this.advance(false);
     }
   }
 
-  advance(api, correct = false) {
+  advance(correct) {
     this.idx++;
     for (const s of this.stars) s.holder.visible = false;
+    this.announced = false;
+    this.dropping = false;
     if (this.idx >= this.reviews.length) {
       this.finish();
     } else {
-      this.pending = correct ? 0.7 : 0.25; // next word presented in update()
+      this.pending = correct ? 0.7 : 0.35; // next word announced in update()
     }
   }
 
@@ -606,11 +664,11 @@ export class StarsEvent {
     if (this.onDone) this.onDone();
   }
 
-  clampX() {
-    return Infinity;
-  }
-
   debugResolve(correct, api) {
+    if (this.done) return;
+    if (this.pending > 0) this.pending = 0;
+    if (!this.announced) this.announce(api, this.idx === 0);
+    this.dropping = true;
     const s = this.stars.find((k) => !k.taken && (correct ? k.word === this.word : k.word !== this.word));
     if (!s) return;
     s.taken = true;

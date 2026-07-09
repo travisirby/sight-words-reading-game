@@ -174,6 +174,12 @@ export class Game {
         this.autoRepeats = 0;
         if (this.bossFight) this.bossFight.taunt();
       },
+      // Restart the auto-repeat clock when a star review names its word, so
+      // the "Find the word" nudge doesn't step on the freshly-spoken prompt.
+      armRepeat: () => {
+        this.repeatTimer = REPEAT_AFTER;
+        this.autoRepeats = 0;
+      },
       stumble: () => { // boss projectile brush: same gentle cost as a critter
         sfxWrong();
         this.player.stumble();
@@ -353,16 +359,9 @@ export class Game {
       // Doors: freeze before the step ledges; clampX() already walls off max.
       return { engage: ev.wallX - 8, min: ev.wallX - 10, max: Infinity };
     }
-    if (this.stars && !this.stars.done && this.stars.reviews.length && this.stars.pending <= 0) {
-      const vis = this.stars.stars.filter((s) => s.holder.visible && !s.taken);
-      if (vis.length) {
-        const xs = vis.map((s) => s.holder.position.x);
-        return {
-          engage: Math.min(...xs) - 4,
-          min: Math.min(...xs) - 5.5,
-          max: Math.max(...xs) + 1.5,
-        };
-      }
+    if (this.stars) {
+      const z = this.stars.roamZone();
+      if (z) return z;
     }
     return null;
   }
@@ -511,8 +510,10 @@ export class Game {
       },
       onDone: () => { this.phase = 'flagrun'; },
     });
+    // The word is named by the event itself once he reaches the catch arena
+    // (StarsEvent.announce), not here — so the prompt lands when he's in place
+    // and the stars only fall after it finishes.
     if (reviews.length) {
-      speak(`Star time! Jump under the star with the word: ${reviews[0].word}!`, { rate: 0.9, echoWord: Math.random() < 0.4 });
       this.repeatTimer = REPEAT_AFTER;
       this.autoRepeats = 0;
     }
