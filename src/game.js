@@ -168,7 +168,7 @@ export class Game {
       onCorrect: (firstTry, attempts) => this.onEventCorrect(firstTry, attempts),
       onFail: () => this.onEventFail(),
       onWrong: () => {
-        // A miss re-teaches the word (listen beat + reshuffle), so restart
+        // A miss re-teaches the word (listen beat + pushback), so restart
         // the auto-repeat clock with a fresh budget.
         this.repeatTimer = REPEAT_AFTER;
         this.autoRepeats = 0;
