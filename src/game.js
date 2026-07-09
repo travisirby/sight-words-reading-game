@@ -28,6 +28,7 @@ const STARS_SPEED = 2.5;
 const CHOICE_SPEED = 3.4; // manual left/right steering while time is frozen
 const FORWARD_BOOST = 1.9; // holding forward during auto-run speeds him up
 const REPEAT_AFTER = 6; // seconds of no answer before the word auto-repeats
+const FAIRY_HOP = 1.6; // seconds the fairy hovers over each answer choice
 const CRITTER_COLORS = [0xff7f50, 0xba68c8, 0x4dd0e1, 0xe93fc8, 0x9fa8da, 0xffb74d];
 
 const boxGeo = voxelGeo;
@@ -147,6 +148,10 @@ export class Game {
     this.choice = false; // time-freeze steering mode at a word choice
     this.moveHeld = {}; // { Lkey, Rkey, Lbtn, Rbtn } held flags
     this.shownControls = null; // last controls mode sent to the HUD
+
+    this.fairyVec = new THREE.Vector3(); // scratch for world→screen projection
+    this.fairyT = 0; // drives the fairy's hop between answer choices
+    this.fairyOut = false; // whether she's off her HUD perch chasing answers
 
     // Shared context handed to word events.
     this.api = {
@@ -382,6 +387,7 @@ export class Game {
       this.bossFight.dispose();
       this.bossFight = null;
     }
+    this.fairyHome();
   }
 
   pause() { this.paused = true; }
@@ -445,6 +451,69 @@ export class Game {
       ? new BlocksEvent(this.scene, this.level, opts)
       : new DoorsEvent(this.scene, this.level, opts);
     this.spoken = false;
+    this.fairyT = 0; // she starts her rounds at the first answer
+  }
+
+  // ---------- fairy hover targets ----------
+
+  // While a word challenge is live, the narrator fairy leaves her HUD perch
+  // and flits across the answer choices — hovering over every option for the
+  // same beat (never lingering on the right one, so she can't be used as a
+  // tell) — then parks over the correct sign for the celebration or reveal
+  // once the event resolves. Screen-space targets go out via 'wr-fairy';
+  // fairyHome() sends null, which returns her to the perch.
+
+  fairyHome() {
+    if (!this.fairyOut) return;
+    this.fairyOut = false;
+    window.dispatchEvent(new CustomEvent('wr-fairy', { detail: null }));
+  }
+
+  // World-space hover point over the current answers (in fairyVec), or null
+  // when there's nothing to present.
+  fairyAnchor() {
+    const v = this.fairyVec;
+    const ev = this.activeEv;
+    if (ev && this.spoken) {
+      if (ev.type === 'doors') {
+        const d = ev.done
+          ? ev.doors.find((k) => k.word === ev.word)
+          : ev.doors[Math.floor(this.fairyT / FAIRY_HOP) % ev.doors.length];
+        if (!d) return null;
+        // Beside the door's word sign, not above it: the tiers stack only 2
+        // units apart, so hovering over one sign would cover the next one up.
+        return v.set(ev.wallX - 4.5, ev.groundY + d.tier + 1.35, 1.3);
+      }
+      const b = ev.done
+        ? ev.blocks.find((k) => k.g.visible && k.word === ev.word)
+        : ev.blocks[Math.floor(this.fairyT / FAIRY_HOP) % ev.blocks.length];
+      if (!b || !b.g.visible) return null;
+      return v.copy(b.g.position).setY(b.g.position.y + 2.1);
+    }
+    if (this.stars && !this.stars.done && this.stars.reviews.length) {
+      const vis = this.stars.stars.filter((s) => s.holder.visible && !s.taken);
+      if (!vis.length) return null;
+      const s = vis[Math.floor(this.fairyT / FAIRY_HOP) % vis.length];
+      return v.copy(s.holder.position).setY(s.holder.position.y + 1.7);
+    }
+    return null;
+  }
+
+  updateFairy(dt) {
+    this.fairyT += dt;
+    const anchor = this.fairyAnchor();
+    if (!anchor) {
+      this.fairyHome();
+      return;
+    }
+    this.fairyOut = true;
+    anchor.project(this.camera); // NDC; clamped so she never leaves the view
+    window.dispatchEvent(new CustomEvent('wr-fairy', {
+      detail: {
+        x: Math.min(94, Math.max(6, (anchor.x * 0.5 + 0.5) * 100)),
+        y: Math.min(88, Math.max(8, (0.5 - anchor.y * 0.5) * 100)),
+      },
+    }));
   }
 
   speakIntro() {
@@ -858,6 +927,7 @@ export class Game {
       if (this.repeatTipT <= 0 && this.cb.onRepeatTip) this.cb.onRepeatTip();
     }
 
+    this.updateFairy(dt);
     this.syncControls();
   }
 
