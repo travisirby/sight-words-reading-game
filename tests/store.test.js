@@ -144,6 +144,20 @@ describe('save migration', () => {
   });
 });
 
+describe('house music', () => {
+  it('defaults to the cozy house track', () => {
+    expect(store.get().houseMusic).toBe('house');
+  });
+
+  it('persists the picked track across a reload', async () => {
+    store.setHouseMusic('waffle');
+    vi.resetModules();
+    const reloaded = await import('../src/store.js');
+    reloaded.load();
+    expect(reloaded.get().houseMusic).toBe('waffle');
+  });
+});
+
 describe('wordStats / isMastered', () => {
   it('returns null for a never-seen word', () => {
     expect(store.wordStats('zebra')).toBeNull();

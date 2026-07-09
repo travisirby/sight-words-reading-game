@@ -42,6 +42,9 @@ const defaults = () => ({
   house: { owned: {}, unseen: {}, seenCoins: 0, seenGems: 0 },
   // one-time 🔊 repeat-button tutorial shown at the first word event
   seenRepeatTip: false,
+  // music track playing at the house — 'house' or any theme the player has
+  // unlocked and picked from the house jukebox (main.js validates it)
+  houseMusic: 'house',
   // lifetime totals for the finale stats screen. playSeconds counts only
   // active in-run time (main.js flushes it); wordsRead / coinsEarned are
   // running counters (per-word stats track accuracy, not lifetime volume).
@@ -646,5 +649,10 @@ export function setMusic(on) {
 
 export function setMic(on) {
   state.mic = on;
+  save();
+}
+
+export function setHouseMusic(name) {
+  state.houseMusic = name;
   save();
 }
