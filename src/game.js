@@ -90,7 +90,7 @@ export class Game {
   // callbacks: { onCoins(n), onDotsInit(count), onDot(index, cls),
   //              onKey(found), onRunComplete(res),
   //              onControls(mode: 'choice'|'boost'|null),
-  //              onAutoRepeat(), onRepeatTip() }
+  //              onAutoRepeat(), onRepeatTip(), onRepeatButton(on) }
   constructor(renderer, cb) {
     this.cb = cb;
     this.renderer = renderer;
@@ -235,6 +235,7 @@ export class Game {
     this.eventIdx = 0;
     this.activeEv = null;
     this.spoken = false;
+    this.announced = false; // narrator finished saying the target word
     this.stars = null;
     // run | stars | flagrun | flag | done (+ bossIntro | bossDefeat)
     this.phase = boss ? 'bossIntro' : 'run';
@@ -242,7 +243,7 @@ export class Game {
     this.introSpoke = false;
     this.repeatTimer = 0;
     this.autoRepeats = 0;
-    this.repeatTipT = 0; // countdown to the one-time 🔊-button tutorial tip
+    this.repeatTipT = 0; // countdown to the one-time 👂-button tutorial tip
     this.bounce = null;
     this.stumbleMul = 1;
     this.lavaCool = 0;
@@ -297,6 +298,7 @@ export class Game {
     this.running = true;
     this.paused = false;
     this.syncControls();
+    this.syncRepeatButton();
   }
 
   stopRun() {
@@ -304,6 +306,7 @@ export class Game {
     this.clearEvents();
     this.setChoice(false);
     this.syncControls();
+    this.syncRepeatButton();
   }
 
   // ---------- choice mode (time freeze at the decision spot) ----------
@@ -346,6 +349,24 @@ export class Game {
     if (mode === this.shownControls) return;
     this.shownControls = mode;
     if (this.cb.onControls) this.cb.onControls(mode);
+  }
+
+  // The repeat button only makes sense while there's a live word challenge
+  // whose target the narrator has already said out loud — never before the
+  // intro line finishes, never after the challenge resolves.
+  get repeatAvailable() {
+    if (!this.running || !this.announced) return false;
+    if (this.stars && !this.stars.done) {
+      return this.stars.reviews.length > 0 && this.stars.pending <= 0;
+    }
+    return !!(this.activeEv && !this.activeEv.done && this.spoken);
+  }
+
+  syncRepeatButton() {
+    const on = this.repeatAvailable;
+    if (on === this.shownRepeat) return;
+    this.shownRepeat = on;
+    if (this.cb.onRepeatButton) this.cb.onRepeatButton(on);
   }
 
   // The zone the player may roam while frozen: null when no choice is
@@ -407,7 +428,11 @@ export class Game {
   repeatWord() {
     const w = this.currentWord();
     if (this.running && w) {
-      speak(`Find the word: ${w}`, { rate: 0.85, echoWord: Math.random() < 0.4 });
+      speak(`Find the word: ${w}`, {
+        rate: 0.85,
+        echoWord: Math.random() < 0.4,
+        onend: () => { this.announced = true; },
+      });
       // Restart the quiet-spell clock: without this, an auto-repeat due
       // moments later would cut this prompt off mid-sentence ("Find the
       // word… Find the word: sun").
@@ -445,6 +470,7 @@ export class Game {
       ? new BlocksEvent(this.scene, this.level, opts)
       : new DoorsEvent(this.scene, this.level, opts);
     this.spoken = false;
+    this.announced = false;
   }
 
   speakIntro() {
@@ -452,10 +478,14 @@ export class Game {
     const line = this.activeEv.type === 'blocks'
       ? `Bonk the block with the word: ${w}!`
       : `Jump through the door with the word: ${w}!`;
-    speak(line, { rate: 0.9, echoWord: Math.random() < 0.4 });
+    speak(line, {
+      rate: 0.9,
+      echoWord: Math.random() < 0.4,
+      onend: () => { this.announced = true; },
+    });
     this.repeatTimer = REPEAT_AFTER;
     this.autoRepeats = 0;
-    // First word event ever: point out the 🔊 repeat button, once the
+    // First word event ever: point out the repeat button, once the
     // intro line has had time to finish (speak() cuts off earlier speech).
     if (!store.get().seenRepeatTip) {
       store.markRepeatTipSeen();
@@ -520,8 +550,13 @@ export class Game {
       },
       onDone: () => { this.phase = 'flagrun'; },
     });
+    this.announced = false;
     if (reviews.length) {
-      speak(`Star time! Jump under the star with the word: ${reviews[0].word}!`, { rate: 0.9, echoWord: Math.random() < 0.4 });
+      speak(`Star time! Jump under the star with the word: ${reviews[0].word}!`, {
+        rate: 0.9,
+        echoWord: Math.random() < 0.4,
+        onend: () => { this.announced = true; },
+      });
       this.repeatTimer = REPEAT_AFTER;
       this.autoRepeats = 0;
     }
@@ -848,22 +883,24 @@ export class Game {
         this.autoRepeats++;
         this.repeatTimer = REPEAT_AFTER;
         this.repeatWord();
-        if (this.cb.onAutoRepeat) this.cb.onAutoRepeat(); // HUD flashes 🔊
+        if (this.cb.onAutoRepeat) this.cb.onAutoRepeat(); // HUD flashes 👂
       }
     }
 
-    // One-time 🔊-button tutorial, delayed so the intro line finishes first.
+    // One-time 👂-button tutorial, delayed so the intro line finishes first.
     if (this.repeatTipT > 0) {
       this.repeatTipT -= dt;
       if (this.repeatTipT <= 0 && this.cb.onRepeatTip) this.cb.onRepeatTip();
     }
 
     this.syncControls();
+    this.syncRepeatButton();
   }
 
   finishRun() {
     this.running = false;
     this.syncControls();
+    this.syncRepeatButton();
     this.clearEvents();
     this.cb.onRunComplete({
       results: this.results,

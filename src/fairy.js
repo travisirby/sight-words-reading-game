@@ -10,7 +10,7 @@ import { voxelGeo } from './voxelgeo.js';
 import { configureRenderer } from './rendercfg.js';
 
 // Perch per screen, in % of the viewport. 'game' is the during-run perch
-// (under the 🔊 repeat button, since she's the one saying the words).
+// (under the 👂 repeat button, since she's the one saying the words).
 const PERCHES = {
   title: { x: 82, y: 16 },
   map: { x: 88, y: 18 },

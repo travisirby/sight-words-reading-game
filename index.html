@@ -115,9 +115,10 @@
     <div id="hud-coins">🪙 <span id="coin-count">0</span></div>
     <div id="hud-key" class="hidden">🔑</div>
     <button id="btn-pause" class="btn btn-round btn-pause">⏸️</button>
-    <button id="btn-repeat-word" class="btn btn-repeat">🔊</button>
-    <!-- One-time tutorial callout pointing at the 🔊 button -->
-    <div id="repeat-tip" class="hidden">🔊 Tap to hear<br />your word again!</div>
+    <!-- Hear-it-again: shown only while a spoken word challenge is live -->
+    <button id="btn-repeat-word" class="btn btn-repeat hidden" aria-label="Hear the word again">👂<span class="repeat-badge">🔁</span></button>
+    <!-- One-time tutorial callout pointing at the repeat button -->
+    <div id="repeat-tip" class="hidden">👂 Tap to hear<br />your word again!</div>
     <div id="progress-dots"></div>
     <!-- Time-freeze steering controls (choice mode only) -->
     <div id="move-controls" class="hidden">

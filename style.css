@@ -535,6 +535,15 @@ html, body {
   --side: #3f7fc4;
   animation: repeat-glow 2.8s ease-in-out infinite;
 }
+/* Repeat-arrows badge tucked on the ear: reads as "hear it again". */
+.btn-repeat .repeat-badge {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  font-size: 38px;
+  line-height: 1;
+  pointer-events: none;
+}
 @keyframes repeat-glow {
   0%, 100% {
     box-shadow:
@@ -559,7 +568,7 @@ html, body {
 }
 #repeat-tip {
   position: absolute;
-  /* Below the fairy, who perches between the 🔊 button and this tip. */
+  /* Below the fairy, who perches between the 👂 button and this tip. */
   top: calc(212px + env(safe-area-inset-top));
   right: calc(20px + env(safe-area-inset-right));
   font-size: 24px;
@@ -574,7 +583,7 @@ html, body {
   pointer-events: none;
   animation: toast-pop 0.35s cubic-bezier(0.34, 1.5, 0.5, 1);
 }
-#repeat-tip::before { /* arrow up toward the 🔊 button */
+#repeat-tip::before { /* arrow up toward the 👂 button */
   content: '';
   position: absolute;
   top: -13px;
