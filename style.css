@@ -666,15 +666,6 @@ html, body {
   align-items: center;
   justify-content: center;
 }
-/* Repeat-arrows badge tucked on the ear: reads as "hear it again". */
-.btn-repeat .repeat-badge {
-  position: absolute;
-  right: 8px;
-  bottom: 8px;
-  font-size: 38px;
-  line-height: 1;
-  pointer-events: none;
-}
 @keyframes repeat-glow {
   0%, 100% {
     box-shadow:
