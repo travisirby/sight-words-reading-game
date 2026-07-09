@@ -6,7 +6,7 @@ import * as THREE from 'three';
 import { voxelGeo } from './voxelgeo.js';
 import { LevelScene, generateLevel, generateBossArena, SECRET_THEME } from './level.js';
 import { Player, KID_H } from './player.js';
-import { BlocksEvent, DoorsEvent, StarsEvent } from './wordevents.js';
+import { BlocksEvent, BridgeEvent, DoorsEvent, StarsEvent } from './wordevents.js';
 import { BossFight, BOSSES } from './boss.js';
 import { Effects } from './effects.js';
 import { createInput } from './input.js';
@@ -350,6 +350,9 @@ export class Game {
       if (ev.type === 'blocks') {
         return { engage: ev.firstX - 4.5, min: ev.firstX - 6, max: ev.lastX + 1.5 };
       }
+      if (ev.type === 'bridge') {
+        return { engage: ev.firstX - 3.5, min: ev.firstX - 5, max: ev.lastX + 1.5 };
+      }
       // Doors: freeze before the step ledges; clampX() already walls off max.
       return { engage: ev.wallX - 8, min: ev.wallX - 10, max: Infinity };
     }
@@ -435,17 +438,26 @@ export class Game {
     const word = this.queue[this.eventIdx];
     const distractors = pickDistractors(word, this.distractorPool, this.tierList);
     const opts = { ...def, word, distractors };
-    this.activeEv = def.type === 'blocks'
-      ? new BlocksEvent(this.scene, this.level, opts)
-      : new DoorsEvent(this.scene, this.level, opts);
+    if (def.type === 'blocks') {
+      this.activeEv = new BlocksEvent(this.scene, this.level, opts);
+    } else if (def.type === 'bridge') {
+      this.activeEv = new BridgeEvent(this.scene, this.level, opts);
+    } else {
+      this.activeEv = new DoorsEvent(this.scene, this.level, opts);
+    }
     this.spoken = false;
   }
 
   speakIntro() {
     const w = this.activeEv.word;
-    const line = this.activeEv.type === 'blocks'
-      ? `Bonk the block with the word: ${w}!`
-      : `Jump through the door with the word: ${w}!`;
+    let line;
+    if (this.activeEv.type === 'blocks') {
+      line = `Bonk the block with the word: ${w}!`;
+    } else if (this.activeEv.type === 'bridge') {
+      line = `Stomp the switch with the word: ${w}, to build the bridge!`;
+    } else {
+      line = `Jump through the door with the word: ${w}!`;
+    }
     speak(line, { rate: 0.9, echoWord: Math.random() < 0.4 });
     this.repeatTimer = REPEAT_AFTER;
     this.autoRepeats = 0;

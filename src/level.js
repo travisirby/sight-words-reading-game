@@ -126,7 +126,7 @@ export function generateLevel({ seed, wordCount, theme, secret = false, hasKey =
   const platforms = []; // { x0, x1, y } one-way, land-from-above only
   const coins = []; // { x, y }
   const critters = []; // { x0, x1 }
-  const events = []; // { type: 'blocks'|'doors', x, wallX?, groundY }
+  const events = []; // { type: 'blocks'|'doors'|'bridge', x, ..., groundY }
   let g = 0;
   let key = null;
 
@@ -151,7 +151,11 @@ export function generateLevel({ seed, wordCount, theme, secret = false, hasKey =
   // Secret bonus levels swap the key for coin caves — two of them, so the
   // whole run feels like a treasure hunt.
   const caves = secret ? new Set([1, Math.max(2, wordCount - 2)]) : null;
-  const typeOffset = seed % 2;
+  // Regular runs rotate through three different reading verbs. Secret runs
+  // keep the original, hazard-free blocks/doors cadence so their bonus-party
+  // pacing stays quick and familiar.
+  const eventTypes = secret ? ['blocks', 'doors'] : ['blocks', 'doors', 'bridge'];
+  const typeOffset = seed % eventTypes.length;
 
   for (let i = 0; i < wordCount; i++) {
     // Golden key: high off-path platform, max-jump reach. It sits at the
@@ -229,11 +233,11 @@ export function generateLevel({ seed, wordCount, theme, secret = false, hasKey =
     }
 
     // ---- word event zone (flat ground) ----
-    const type = (i + typeOffset) % 2 === 0 ? 'blocks' : 'doors';
+    const type = eventTypes[(i + typeOffset) % eventTypes.length];
     if (type === 'blocks') {
       events.push({ type, x: x(), groundY: g });
       flat(36);
-    } else {
+    } else if (type === 'doors') {
       const s = x();
       events.push({ type, x: s, wallX: s + 12, groundY: g });
       // Door step ledges are thin so they don't hang down over the face of
@@ -244,6 +248,23 @@ export function generateLevel({ seed, wordCount, theme, secret = false, hasKey =
       // than blocks do, so the tail is longer: praise spoken at the wall
       // must outrun the next intro trigger even at full boost.
       flat(26);
+    } else {
+      // Three floor switches sit on a safe approach. Beyond them is a
+      // shallow ravine: the active word event raises a temporary platform
+      // across it after the right switch is stomped. The choice clamp keeps
+      // the kid on the approach until that platform exists, so the ravine is
+      // spectacle rather than a failure hazard.
+      const s = x();
+      const bridgeX = s + 16;
+      const bridgeEndX = bridgeX + 8;
+      events.push({ type, x: s, bridgeX, bridgeEndX, groundY: g });
+      flat(16);
+      g -= 4;
+      flat(9);
+      g += 4;
+      // A generous landing runway lets the bridge-building celebration and
+      // praise line finish before the next word prompt can begin.
+      flat(16);
     }
   }
 

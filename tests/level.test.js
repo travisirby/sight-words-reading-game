@@ -29,4 +29,31 @@ describe('generateLevel', () => {
     expect(PALETTES[SECRET_THEME].night).toBe(true);
     expect(typeof PROPS[SECRET_THEME]).toBe('function');
   });
+
+  it('rotates bridge events into regular levels', () => {
+    const lvl = generateLevel({ seed: 1, wordCount: 6, theme: 0 });
+    const types = lvl.events.map((e) => e.type);
+    expect(types).toContain('blocks');
+    expect(types).toContain('doors');
+    expect(types).toContain('bridge');
+  });
+
+  it('places a nine-column ravine beneath each word bridge', () => {
+    const lvl = generateLevel({ seed: 1, wordCount: 6, theme: 0 });
+    const bridge = lvl.events.find((e) => e.type === 'bridge');
+    expect(bridge).toBeDefined();
+    expect(bridge.bridgeEndX - bridge.bridgeX + 1).toBe(9);
+    for (let x = bridge.bridgeX; x <= bridge.bridgeEndX; x++) {
+      expect(lvl.groundY[x]).toBe(bridge.groundY - 4);
+    }
+    expect(lvl.groundY[bridge.bridgeX - 1]).toBe(bridge.groundY);
+    expect(lvl.groundY[bridge.bridgeEndX + 1]).toBe(bridge.groundY);
+  });
+
+  it('keeps secret levels on their original hazard-free event cadence', () => {
+    const lvl = generateLevel({
+      seed: 7, wordCount: 6, theme: SECRET_THEME, secret: true,
+    });
+    expect(lvl.events.every((e) => e.type === 'blocks' || e.type === 'doors')).toBe(true);
+  });
 });

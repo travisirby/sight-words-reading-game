@@ -23,6 +23,7 @@ states, no timers, just coins, confetti, and encouragement.
   buffering keep it forgiving for small hands.
 - **Word events** inside each level:
   - **? Blocks** — bonk the spoken word from below, Mario-style
+  - **Word bridges** — stomp the right word switch to raise a bridge
   - **Word doors** — jump to the tier with the right word to open the way
   - **Flag stars** — review words at the finish flagpole for bonus gems
 - **Critters** can be stomped for coins; touching one just costs a coin.
@@ -66,7 +67,7 @@ everything else still works.
   Crystal Caves 💎, Sky Islands ☁️.
 - **Hear it, find it** — the word is spoken, never shown in the HUD; the 🔊 button
   repeats it anytime, and it auto-repeats if he hesitates.
-- **Gentle retry** — a wrong block/door re-asks the same word on the spot, and
+- **Gentle retry** — a wrong block/bridge/door re-asks the same word on the spot, and
   missed words come back for extra practice in future runs (and fill the secret
   levels).
 - **Read it aloud** — after each level, he reads 3 words into the mic for bonus gems.
