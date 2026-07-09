@@ -27,13 +27,11 @@ export const PALETTES = {
 export const STYLES = {
   label: 'Hair style',
   names: ['Short', 'Spiky', 'Long', 'Buzz', 'Bald'],
-  icons: ['🙂', '🦔', '👧', '🧢', '🥚'],
 };
 
 export const OUTFITS = {
   label: 'Outfit',
   names: ['Shirt and pants', 'Dress', 'Overalls'],
-  icons: ['👕', '👗', '👖'],
 };
 
 // store character indices -> concrete look

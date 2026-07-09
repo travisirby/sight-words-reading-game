@@ -20,6 +20,7 @@ import {
 import * as music from './music.js';
 import { WORLDS, shuffle } from './words.js';
 import { HOUSE_ITEMS, decorForWorld } from './housedata.js';
+import { itemIconName, worldIconName } from './icons.js';
 
 // Testing cheats via URL: ?unlock opens every level/castle/secret,
 // ?reset wipes the save first (combine as ?reset&unlock).
@@ -282,12 +283,12 @@ function closeCharacter() {
 // each world's theme joins the list once the kid has reached that world.
 function houseMusicChoices() {
   const choices = [
-    { track: 'house', name: 'My House', emoji: '🏠' },
-    { track: 'map', name: 'World Map', emoji: '🗺️' },
+    { track: 'house', name: 'My House', icon: 'house' },
+    { track: 'map', name: 'World Map', icon: 'map' },
   ];
   WORLDS.forEach((w, wi) => {
     if (store.isWorldUnlocked(wi)) {
-      choices.push({ track: WORLD_TRACKS[wi], name: w.name, emoji: w.emoji });
+      choices.push({ track: WORLD_TRACKS[wi], name: w.name, icon: worldIconName(wi) });
     }
   });
   return choices;
@@ -340,7 +341,7 @@ function leaveHouse() {
 
 function buyItem(item) {
   if (item.earned !== undefined && !store.ownsHouseItem(item.id)) {
-    ui.houseToast('🏰 Castle prize!');
+    ui.houseToast({ icon: 'castle', text: 'Castle prize!' });
     speak('Beat the castle boss to win that prize!', { rate: 1.0 });
     return;
   }
@@ -349,7 +350,10 @@ function buyItem(item) {
     return;
   }
   if (!store.buyHouseItem(item.id, item.cost, item.currency)) {
-    ui.houseToast('🪙 Keep playing!');
+    ui.houseToast({
+      icon: item.currency === 'gems' ? 'gem' : 'coin',
+      text: 'Keep playing!',
+    });
     speakLine(item.currency === 'gems' ? 'needGems' : 'needCoins');
     return;
   }
@@ -357,7 +361,7 @@ function buyItem(item) {
   house.celebrate(item.id);
   sfxCorrect();
   ui.refreshShop();
-  ui.houseToast(`${item.emoji} ${item.name}!`);
+  ui.houseToast({ icon: itemIconName(item.id), text: `${item.name}!` });
   speak(`You got the ${item.name}!`, { rate: 1.0, onend: () => speakLine('purchase') });
 }
 
@@ -576,7 +580,7 @@ function bonusMicDown() {
         lastRun.gems += 5;
         store.addGems(5);
         sfxGem();
-        ui.setBonusFeedback('⭐ +5 💎');
+        ui.setBonusFeedback('+5 gems!');
         speakLine('correct');
         advanceBonus();
       }
@@ -586,7 +590,7 @@ function bonusMicDown() {
       ui.setMicListening(false);
       if (!bonus || bonus.matched || bonus.advancing) return;
       if (bonus.heard.length) {
-        ui.setBonusFeedback('💛 Nice try!');
+        ui.setBonusFeedback('Nice try!');
         speak(`Nice try! The word is: ${bonus.words[bonus.idx]}`, { rate: 0.9 });
         advanceBonus();
       }
