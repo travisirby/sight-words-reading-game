@@ -175,8 +175,8 @@ const ICONS = {
 
   // Hear-it-again ear: thick flesh-tone helix with a simple inner curve.
   ear: (s) => svg(
-    inkStroke('M10.5 14c0-6.5 4-10 8.5-10S28 8 28 14c0 4.5-2.5 6.8-4.7 9.4l-2.6 3.4c-1.9 2.5-5.4 2.7-7.2.9', 5, '#ffcf9e') +
-    `<path d="M16.5 14c0-2.8 1.8-4.4 4-4.4" fill="none" stroke="${C.ink}" stroke-width="2.5" stroke-linecap="round"/>`,
+    inkStroke('M9 15c0-5.5 3-9 7.5-9s7.5 3.5 7.5 9c0 4.5-2.5 6.5-4.5 9-1.7 2.1-4.6 2.5-6.5 1', 5, '#ffcf9e') +
+    `<path d="M14.5 15c0-2.7 1.7-4.3 3.9-4.3" fill="none" stroke="${C.ink}" stroke-width="2.5" stroke-linecap="round"/>`,
     s
   ),
 
