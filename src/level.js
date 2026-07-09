@@ -545,6 +545,10 @@ export class LevelScene {
   constructor(scene) {
     this.scene = scene;
     this.data = null;
+    // Moving solid boxes (e.g. ? blocks) registered by word events; entries
+    // are { x0, x1, y0, y } (physical extents, y = top, y0 = bottom) kept in
+    // sync by their owner every frame.
+    this.dynamicSolids = [];
 
     this.blocks = new THREE.InstancedMesh(chamferVoxelGeo, new THREE.MeshLambertMaterial(), MAX_BLOCKS);
     this.blocks.frustumCulled = false;
@@ -856,6 +860,7 @@ export class LevelScene {
 
   build(data) {
     this.data = data;
+    this.dynamicSolids.length = 0; // owners were disposed with the old level
     const p = PALETTES[data.theme];
     this.scene.background = new THREE.Color(p.skyTop);
     this.scene.fog = new THREE.Fog(p.fog, 30, 80);
@@ -1439,7 +1444,27 @@ export class LevelScene {
         }
       }
     }
+    for (const s of this.dynamicSolids) {
+      if (x >= s.x0 - 0.3 && x <= s.x1 + 0.3 && s.y <= feetY + 0.3 && s.y > best) {
+        best = s.y;
+      }
+    }
     if (best === -Infinity) best = this.groundTopAt(x);
     return best;
+  }
+
+  // True when a dynamic solid blocks horizontal movement for a body spanning
+  // [feetY, headY] whose leading edge is at x. The step-up grace mirrors the
+  // ground-wall check, so feet at (or a hop onto) the lid never block; a
+  // small margin under the bottom keeps walking beneath the boxes free. The
+  // faces are inset 0.1 so a kid pressed against a ? block still counts as
+  // touching it for the bonk-from-below check (|dx| < 1.05).
+  sideBlockedAt(x, feetY, headY) {
+    for (const s of this.dynamicSolids) {
+      if (x >= s.x0 + 0.1 && x <= s.x1 - 0.1 && feetY + 0.25 < s.y && headY > s.y0 + 0.05) {
+        return true;
+      }
+    }
+    return false;
   }
 }

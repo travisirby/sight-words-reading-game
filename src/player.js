@@ -342,16 +342,18 @@ export class Player {
     return !this.grounded;
   }
 
-  // level: { groundTopAt(x), floorAt(x, feetY) }
+  // level: { groundTopAt(x), floorAt(x, feetY), sideBlockedAt(x, feetY, headY) }
   // cb: { onLand(fallDist) } — fired on every landing with fall height.
   update(dt, speed, level, cb) {
     // ---- horizontal walk (either direction during choice mode); walls
-    // (ground rises) block until jumped ----
+    // (ground rises) and the sides of solid boxes block until jumped ----
     if (speed !== 0) {
       const dir = speed > 0 ? 1 : -1;
       const nx = this.x + speed * dt;
-      const wallTop = level.groundTopAt(nx + dir * (KID_W / 2));
-      if (wallTop <= this.y + 0.25) this.x = nx;
+      const edge = nx + dir * (KID_W / 2);
+      const wallTop = level.groundTopAt(edge);
+      const boxed = level.sideBlockedAt && level.sideBlockedAt(edge, this.y, this.y + KID_H);
+      if (wallTop <= this.y + 0.25 && !boxed) this.x = nx;
       // else: blocked — run in place until a jump clears it
     }
 

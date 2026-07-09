@@ -152,7 +152,6 @@ export function disposeGroup(group) {
 // re-says the word. Blocks stay bonkable throughout (a wrong bonk bounces
 // the kid back to before the first block, so he has to walk the row again).
 const MISS_LOCK = 1.5;
-const SPIN_DUR = 0.7; // full-turn shuffle spin; words swap while facing away
 const MAX_TRIES = 3; // wrong bonks before the event fails and the run moves on
 
 export class BlocksEvent {
@@ -166,7 +165,6 @@ export class BlocksEvent {
     this.level = level;
     this.explodeT = -1; // countdown from correct answer to the box burst
     this.lockT = 0; // listen-beat countdown; drives the wobble animation
-    this.swapPending = false; // reshuffle words at the spin's halfway point
 
     this.group = new THREE.Group();
     scene.add(this.group);
@@ -180,10 +178,32 @@ export class BlocksEvent {
       sign.position.z = 0.78;
       bg.add(cube, sign);
       this.group.add(bg);
-      this.blocks.push({ g: bg, cube, sign, word: '', dead: false, bounceT: 0, shakeT: 0, spinT: 0, baseY: 0 });
+      this.blocks.push({ g: bg, cube, sign, word: '', dead: false, bounceT: 0, shakeT: 0, baseY: 0 });
     }
+    // One dynamic solid per block so the kid can stand on them and their
+    // sides stop him, instead of clipping through. Synced every frame.
+    this.solids = this.blocks.map(() => ({ x0: 0, x1: 0, y0: Infinity, y: -Infinity }));
+    level.dynamicSolids.push(...this.solids);
     this.pool = [word, ...distractors];
     this.place(x + 6);
+  }
+
+  // Cube is 1.4 wide/tall centered on the group origin: physical extents
+  // ±0.7; y is the landable top, y0 the bonkable bottom.
+  syncSolids() {
+    for (let i = 0; i < this.blocks.length; i++) {
+      const b = this.blocks[i];
+      const s = this.solids[i];
+      if (!b.g.visible) {
+        s.y = -Infinity;
+        s.y0 = Infinity;
+        continue;
+      }
+      s.x0 = b.g.position.x - 0.7;
+      s.x1 = b.g.position.x + 0.7;
+      s.y = b.g.position.y + 0.7;
+      s.y0 = b.g.position.y - 0.7;
+    }
   }
 
   place(bx) {
@@ -197,7 +217,6 @@ export class BlocksEvent {
       b.dead = false;
       b.bounceT = 0;
       b.shakeT = 0;
-      b.spinT = 0;
       b.g.rotation.set(0, 0, 0);
       b.cube.material.color.setHex(0xffb300);
       setSign(b.sign, b.word, 'normal');
@@ -205,23 +224,7 @@ export class BlocksEvent {
     this.firstX = bx;
     this.lastX = bx + 10;
     this.lockT = 0;
-    this.swapPending = false;
-  }
-
-  // Move the words to new blocks (called mid-spin, while the signs face
-  // away). Always lands on a different arrangement, so bonking blocks in
-  // sequence without reading never converges on the target.
-  reshuffleWords() {
-    const current = this.blocks.map((b) => b.word);
-    let words = shuffle(this.pool);
-    for (let t = 0; t < 8 && words.every((w, i) => w === current[i]); t++) {
-      words = shuffle(this.pool);
-    }
-    for (let i = 0; i < 3; i++) {
-      const b = this.blocks[i];
-      b.word = words[i];
-      setSign(b.sign, b.word, 'normal');
-    }
+    this.syncSolids();
   }
 
   update(dt, player, api) {
@@ -237,18 +240,7 @@ export class BlocksEvent {
         b.shakeT -= dt;
         b.g.position.x += Math.sin(b.shakeT * 50) * 0.05;
       }
-      if (b.spinT > 0) {
-        // Shuffle spin: one full turn; words move at the halfway point
-        // (signs face away from the camera right then).
-        b.spinT -= dt;
-        const p = 1 - Math.max(0, b.spinT) / SPIN_DUR;
-        b.g.rotation.y = (1 - Math.pow(1 - p, 2)) * Math.PI * 2;
-        if (this.swapPending && p >= 0.5) {
-          this.swapPending = false;
-          this.reshuffleWords();
-        }
-        if (b.spinT <= 0) b.g.rotation.y = 0;
-      } else if (this.lockT > 0) {
+      if (this.lockT > 0) {
         // Listen-beat wobble: a gentle no-no waggle while inert.
         b.g.rotation.z = Math.sin(this.lockT * 14) * 0.09 * Math.min(1, this.lockT);
       } else if (b.g.rotation.z !== 0) {
@@ -260,6 +252,7 @@ export class BlocksEvent {
       this.explodeT -= dt;
       if (this.explodeT <= 0) this.explode(api);
     }
+    this.syncSolids();
     if (this.done) return;
 
     // Bonk from below — active even during the post-miss spin/listen beat.
@@ -295,7 +288,6 @@ export class BlocksEvent {
   resolveCorrect(b, api) {
     this.done = true;
     this.lockT = 0;
-    this.swapPending = false; // never overwrite the ✓ with a late reshuffle
     b.bounceT = 0.3;
     setSign(b.sign, '', 'check');
     sfxCorrect();
@@ -324,8 +316,9 @@ export class BlocksEvent {
   }
 
   // A miss never eliminates a block (that would let a kid brute-force by
-  // bonking all three): instead the kid takes a stumble, the words visibly
-  // shuffle to new blocks, and a short listen beat replays the target word.
+  // bonking all three): instead the kid takes a stumble, gets pushed back
+  // to before the row, and a short listen beat replays the target word.
+  // The words stay on their blocks so he can re-read and self-correct.
   // The third miss fails the event: the answer is revealed and the run
   // moves on with a red dot.
   resolveWrong(b, api) {
@@ -343,8 +336,6 @@ export class BlocksEvent {
     // again and pick a block on purpose, not just re-jump in place.
     api.bounceBack(this.firstX - 4);
     this.lockT = MISS_LOCK;
-    this.swapPending = true;
-    for (const k of this.blocks) k.spinT = SPIN_DUR;
   }
 
   // Out of tries: reveal the answer (target word in green, the rest gray),
@@ -353,7 +344,6 @@ export class BlocksEvent {
   resolveFail(api) {
     this.done = true;
     this.lockT = 0;
-    this.swapPending = false;
     for (const k of this.blocks) {
       if (k.word === this.word) {
         k.bounceT = 0.3;
@@ -385,6 +375,11 @@ export class BlocksEvent {
   }
 
   dispose() {
+    const ds = this.level.dynamicSolids;
+    for (const s of this.solids) {
+      const i = ds.indexOf(s);
+      if (i >= 0) ds.splice(i, 1);
+    }
     disposeGroup(this.group);
   }
 }
@@ -444,7 +439,7 @@ export class DoorsEvent {
       sign.position.set(-2.3, tier + 1.15, 1.3);
       setSign(sign, words[i], 'normal');
       this.group.add(sign);
-      return { hinge, sign, word: words[i], tier, dead: false, shakeT: 0, openT: -1 };
+      return { hinge, sign, word: words[i], tier, shakeT: 0, openT: -1 };
     });
   }
 
@@ -488,10 +483,10 @@ export class DoorsEvent {
       else api.praise();
       api.onCorrect(firstTry, this.attempts);
     } else {
+      // A wrong door stays readable (no gray-out): the kid has to consider
+      // and re-read every word on the next pass, not just the leftovers.
       this.attempts++;
-      d.dead = true;
       d.shakeT = 0.4;
-      setSign(d.sign, d.word, 'gray');
       sfxWrong();
       if (api.onWrong) api.onWrong();
       this.cooldown = 1.4;
@@ -508,7 +503,7 @@ export class DoorsEvent {
   debugResolve(correct, api) {
     if (this.opened !== -1) return;
     const i = this.doors.findIndex((d) =>
-      !d.dead && (correct ? d.word === this.word : d.word !== this.word));
+      correct ? d.word === this.word : d.word !== this.word);
     if (i >= 0) this.resolveTier(i, api);
   }
 

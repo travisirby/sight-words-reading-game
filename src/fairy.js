@@ -8,9 +8,10 @@
 import * as THREE from 'three';
 import { voxelGeo } from './voxelgeo.js';
 import { configureRenderer } from './rendercfg.js';
+import { hydrateIcons } from './icons.js';
 
 // Perch per screen, in % of the viewport. 'game' is the during-run perch
-// (under the 🔊 repeat button, since she's the one saying the words).
+// (under the hear-word button, since she's the one saying the words).
 const PERCHES = {
   title: { x: 82, y: 16 },
   map: { x: 88, y: 18 },
@@ -205,11 +206,13 @@ export function mount() {
   el.id = 'fairy';
   el.innerHTML = `
     <div class="fairy-bob">
-      <span class="fairy-spark s1" style="--dx: -34px; --dy: -30px;">✨</span>
-      <span class="fairy-spark s2" style="--dx: 30px; --dy: -38px;">✨</span>
-      <span class="fairy-spark s3" style="--dx: -6px; --dy: 34px;">⭐</span>
+      <span class="fairy-spark s1" style="--dx: -34px; --dy: -30px;" data-icon="sparkle" data-icon-size="16"></span>
+      <span class="fairy-spark s2" style="--dx: 30px; --dy: -38px;" data-icon="sparkle" data-icon-size="14"></span>
+      <span class="fairy-spark s3" style="--dx: -6px; --dy: 34px;" data-icon="star" data-icon-size="16"></span>
     </div>`;
   document.body.appendChild(el);
+  // Sparks use the same voxel icon set as the rest of the UI chrome.
+  hydrateIcons(el);
 
   // Her own tiny transparent renderer, so she floats over DOM screens
   // and 3D scenes alike.

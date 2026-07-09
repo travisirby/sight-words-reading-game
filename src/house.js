@@ -15,6 +15,7 @@ import { Effects } from './effects.js';
 import { makeKidMesh, applyLook, currentLook } from './player.js';
 import * as store from './store.js';
 import { getItem } from './housedata.js';
+import { iconEl } from './icons.js';
 import { speak, sfxFireworks, sfxCorrect } from './audio.js';
 
 const boxGeo = voxelGeo;
@@ -1248,11 +1249,13 @@ export class House {
     const jumpBtn = document.createElement('button');
     jumpBtn.id = 'house-jump';
     jumpBtn.className = 'btn btn-round';
-    jumpBtn.textContent = '⤴️';
+    jumpBtn.setAttribute('aria-label', 'Jump');
+    jumpBtn.appendChild(iconEl('up', 56)); // same glyph as the in-level jump button
     Object.assign(jumpBtn.style, {
       position: 'absolute', right: '28px', bottom: '32px', width: '96px', height: '96px',
-      fontSize: '44px', zIndex: '25', touchAction: 'none', display: 'none',
+      background: '#8fd35f', zIndex: '25', touchAction: 'none', display: 'none',
     });
+    jumpBtn.style.setProperty('--side', '#569e36');
     parent.append(stick, jumpBtn);
     this.controls = { stick, knob, jumpBtn, visible: false };
 
