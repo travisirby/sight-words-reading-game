@@ -51,6 +51,14 @@ function path(d, fill, stroke = C.ink) {
   return `<path d="${d}" fill="${fill}" stroke="${stroke}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>`;
 }
 
+// Stroke-drawn glyph with an ink outline: fat ink stroke underneath, the
+// colored stroke on top. Reads chunky at any size.
+function inkStroke(d, width = 5, color = C.white) {
+  const cap = 'stroke-linecap="round" stroke-linejoin="round" fill="none"';
+  return `<path d="${d}" stroke="${C.ink}" stroke-width="${width + 4}" ${cap}/>` +
+    `<path d="${d}" stroke="${color}" stroke-width="${width}" ${cap}/>`;
+}
+
 // ---------- chrome / currency ----------
 
 const ICONS = {
@@ -89,76 +97,64 @@ const ICONS = {
     s
   ),
 
-  play: (s) => svg(
-    block(4, 4, 24, 24, C.green, 4) +
-    poly('12,9 12,23 24,16', C.white),
-    s
-  ),
+  // Glyph icons (play/pause/arrows/close/check/skip…) fill the whole
+  // viewBox with no background plate: they always sit inside a chunky
+  // .btn box, so drawing a second box made the glyph itself tiny.
+
+  play: (s) => svg(poly('9,4 28,16 9,28', C.white), s),
 
   pause: (s) => svg(
-    block(4, 4, 24, 24, C.sky, 4) +
-    block(10, 9, 4, 14, C.white, 1) +
-    block(18, 9, 4, 14, C.white, 1),
+    block(7, 5, 7, 22, C.white, 2) +
+    block(18, 5, 7, 22, C.white, 2),
     s
   ),
 
-  resume: (s) => svg(
-    block(4, 4, 24, 24, C.green, 4) +
-    poly('12,9 12,23 24,16', C.white),
-    s
-  ),
+  resume: (s) => svg(poly('9,4 28,16 9,28', C.white), s),
 
   replay: (s) => svg(
-    block(4, 4, 24, 24, C.green, 4) +
-    path('M22 12a7 7 0 1 0 1 5', 'none') +
-    `<path d="M22 12a7 7 0 1 0 1 5" fill="none" stroke="${C.white}" stroke-width="2.5" stroke-linecap="round"/>` +
-    poly('22,7 26,12 20,13', C.white),
+    inkStroke('M24.5 11.5A9.5 9.5 0 1 0 26 19', 4) +
+    poly('23.5,3 29.5,11 19.5,12.5', C.white),
     s
   ),
 
   settings: (s) => svg(
-    circle(16, 16, 6, C.cream) +
-    // gear teeth as blocks around the hub
-    block(14, 3, 4, 6, C.gold, 1) +
-    block(14, 23, 4, 6, C.gold, 1) +
-    block(3, 14, 6, 4, C.gold, 1) +
-    block(23, 14, 6, 4, C.gold, 1) +
-    block(5.5, 5.5, 5, 5, C.gold, 1) +
-    block(21.5, 5.5, 5, 5, C.gold, 1) +
-    block(5.5, 21.5, 5, 5, C.gold, 1) +
-    block(21.5, 21.5, 5, 5, C.gold, 1) +
-    circle(16, 16, 3, C.ink),
+    // teeth first, then the body circle over their inner ends so the
+    // strokes merge into one solid cog silhouette
+    block(13, 2, 6, 8, C.gold, 1) +
+    block(13, 22, 6, 8, C.gold, 1) +
+    block(2, 13, 8, 6, C.gold, 1) +
+    block(22, 13, 8, 6, C.gold, 1) +
+    block(4.5, 4.5, 7, 7, C.gold, 1) +
+    block(20.5, 4.5, 7, 7, C.gold, 1) +
+    block(4.5, 20.5, 7, 7, C.gold, 1) +
+    block(20.5, 20.5, 7, 7, C.gold, 1) +
+    `<circle cx="16" cy="16" r="9.5" fill="${C.gold}"/>` +
+    circle(16, 16, 4.5, C.cream),
     s
   ),
 
   close: (s) => svg(
-    block(4, 4, 24, 24, C.red, 4) +
-    `<line x1="10" y1="10" x2="22" y2="22" stroke="${C.white}" stroke-width="3.5" stroke-linecap="round"/>` +
-    `<line x1="22" y1="10" x2="10" y2="22" stroke="${C.white}" stroke-width="3.5" stroke-linecap="round"/>`,
+    inkStroke('M8 8L24 24M24 8L8 24', 5),
     s
   ),
 
   back: (s) => svg(
-    block(4, 4, 24, 24, C.sky, 4) +
-    poly('20,8 10,16 20,24', C.white),
+    poly('28,11.5 16,11.5 16,5 4,16 16,27 16,20.5 28,20.5', C.white),
     s
   ),
 
   forward: (s) => svg(
-    block(4, 4, 24, 24, C.sky, 4) +
-    poly('12,8 22,16 12,24', C.white),
+    poly('4,11.5 16,11.5 16,5 28,16 16,27 16,20.5 4,20.5', C.white),
     s
   ),
 
   up: (s) => svg(
-    block(4, 4, 24, 24, C.green, 4) +
-    poly('8,20 16,10 24,20', C.white),
+    poly('11.5,28 11.5,16 5,16 16,4 27,16 20.5,16 20.5,28', C.white),
     s
   ),
 
   down: (s) => svg(
-    block(4, 4, 24, 24, C.sky, 4) +
-    poly('8,12 16,22 24,12', C.white),
+    poly('11.5,4 11.5,16 5,16 16,28 27,16 20.5,16 20.5,4', C.white),
     s
   ),
 
@@ -255,27 +251,25 @@ const ICONS = {
   ),
 
   check: (s) => svg(
-    block(4, 4, 24, 24, C.green, 4) +
-    `<polyline points="9,16 14,22 24,10" fill="none" stroke="${C.white}" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>`,
+    inkStroke('M5 17L13 25L27 8', 5.5),
     s
   ),
 
   skip: (s) => svg(
-    block(4, 4, 24, 24, C.sky, 4) +
-    poly('8,9 8,23 17,16', C.white) +
-    poly('16,9 16,23 25,16', C.white),
+    poly('4,6 16,16 4,26', C.white) +
+    poly('16,6 28,16 16,26', C.white),
     s
   ),
 
+  // Used bare on the cream new-player card, so it keeps a green fill.
   plus: (s) => svg(
-    block(4, 4, 24, 24, C.green, 4) +
-    block(14, 9, 4, 14, C.white, 1) +
-    block(9, 14, 14, 4, C.white, 1),
+    path('M12.5 4h7v8.5H28v7h-8.5V28h-7v-8.5H4v-7h8.5z', C.green),
     s
   ),
 
+  // White body so it reads on the red "Yes, delete" button and cream panels.
   trash: (s) => svg(
-    block(9, 10, 14, 16, C.sky, 2) +
+    block(9, 10, 14, 16, C.white, 2) +
     block(7, 8, 18, 4, C.ink, 1) +
     block(12, 5, 8, 4, C.ink, 1) +
     `<line x1="13" y1="14" x2="13" y2="22" stroke="${C.ink}" stroke-width="2" stroke-linecap="round"/>` +

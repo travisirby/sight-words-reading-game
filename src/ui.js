@@ -151,13 +151,13 @@ function setBtnLabel(id, text) {
 
 export function updateSettingsLabels() {
   const s = store.get();
-  setIcon($('btn-toggle-sound'), s.sound ? 'sound' : 'soundOff', 28);
+  setIcon($('btn-toggle-sound'), s.sound ? 'sound' : 'soundOff', 38);
   setBtnLabel('btn-toggle-sound', s.sound ? 'Sound: ON' : 'Sound: OFF');
-  setIcon($('btn-toggle-music'), 'music', 28);
+  setIcon($('btn-toggle-music'), 'music', 38);
   setBtnLabel('btn-toggle-music', s.music ? 'Music: ON' : 'Music: OFF');
-  setIcon($('btn-toggle-mic'), 'mic', 28);
+  setIcon($('btn-toggle-mic'), 'mic', 38);
   setBtnLabel('btn-toggle-mic', s.mic ? 'Mic Round: ON' : 'Mic Round: OFF');
-  setIcon($('btn-toggle-unlock'), s.devUnlocked ? 'unlock' : 'lock', 28);
+  setIcon($('btn-toggle-unlock'), s.devUnlocked ? 'unlock' : 'lock', 38);
   setBtnLabel('btn-toggle-unlock', s.devUnlocked ? 'All Levels: ON' : 'All Levels: OFF');
 }
 
@@ -169,7 +169,7 @@ export function showLevelBanner({ name, stars, completed, secret, boss }) {
   if (secret || boss) {
     nameEl.appendChild(iconEl(secret ? 'sparkle' : 'crown', 26));
     const t = document.createElement('span');
-    t.textContent = ` ${name} `;
+    t.textContent = name;
     nameEl.appendChild(t);
     nameEl.appendChild(iconEl(secret ? 'sparkle' : 'crown', 26));
   } else {
@@ -180,7 +180,7 @@ export function showLevelBanner({ name, stars, completed, secret, boss }) {
   for (let i = 0; i < 3; i++) {
     starsEl.appendChild(iconEl(i < stars ? 'star' : 'starEmpty', 26));
   }
-  setIcon($('btn-banner-play'), completed ? 'replay' : 'play', 40);
+  setIcon($('btn-banner-play'), completed ? 'replay' : 'play', 44);
   setBtnLabel('btn-banner-play', 'PLAY');
   $('level-banner').classList.remove('hidden');
 }
@@ -253,7 +253,7 @@ function buildPlayersList() {
       const del = document.createElement('button');
       del.className = 'player-delete';
       del.setAttribute('aria-label', 'Delete player');
-      del.innerHTML = iconHTML('close', 18);
+      del.innerHTML = iconHTML('close', 26);
       del.addEventListener('click', (e) => {
         e.stopPropagation(); // don't also select the card
         speak('Delete this player? All their progress will be lost.', { rate: 1.0 });

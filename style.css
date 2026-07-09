@@ -724,6 +724,9 @@ html, body {
   --side: #3f7fc4;
   animation: pop-in 0.25s cubic-bezier(0.34, 1.6, 0.5, 1);
   touch-action: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 .btn-move-left { left: calc(22px + env(safe-area-inset-left)); }
 .btn-move-right { left: calc(162px + env(safe-area-inset-left)); }
