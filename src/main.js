@@ -277,16 +277,38 @@ function closeCharacter() {
 
 // ---------- my house ----------
 
+// Jukebox choices: the cozy house tune and the map theme are always there;
+// each world's theme joins the list once the kid has reached that world.
+function houseMusicChoices() {
+  const choices = [
+    { track: 'house', name: 'My House', emoji: '🏠' },
+    { track: 'map', name: 'World Map', emoji: '🗺️' },
+  ];
+  WORLDS.forEach((w, wi) => {
+    if (store.isWorldUnlocked(wi)) {
+      choices.push({ track: WORLD_TRACKS[wi], name: w.name, emoji: w.emoji });
+    }
+  });
+  return choices;
+}
+
+// The saved pick, validated against what's currently unlocked (a stale or
+// no-longer-available pick quietly falls back to the cozy default).
+function houseTrack() {
+  const pick = store.get().houseMusic;
+  return houseMusicChoices().some((c) => c.track === pick) ? pick : 'house';
+}
+
 function showHouse(from) {
   houseReturn = from;
   if (mode === 'map') map.exit();
   mode = 'house';
-  music.play('house');
+  music.play(houseTrack());
   house.enter();
   store.clearHouseNews(); // he's here — retire the ❗ on the map house
   spokeHouseNudge = false; // ...and re-arm the voice nudge for future news
   ui.showHUD(false);
-  ui.showHouse();
+  ui.showHouse({ choices: houseMusicChoices(), current: houseTrack() });
   speakLine('home');
 }
 
@@ -653,6 +675,10 @@ ui.init({
   onHouseBack: () => leaveHouse(),
   onCeremonyDone: () => leaveHouse(), // house.exit() finalizes the ceremony
   onBuyItem: (item) => buyItem(item),
+  onPickMusic: (track) => {
+    store.setHouseMusic(track);
+    music.play(track);
+  },
   onMoveDown: (dir) => game.setMove('btn', dir, true),
   onMoveUp: (dir) => game.setMove('btn', dir, false),
   onJumpDown: () => game.running && !game.paused && game.player.jump(),

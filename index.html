@@ -172,7 +172,16 @@
   <div id="screen-house" class="screen map-screen hidden">
     <button id="btn-house-back" class="btn btn-round corner-top-left">⬅️</button>
     <div id="house-wallet">🪙 <span id="house-coins">0</span> &nbsp; 💎 <span id="house-gems">0</span></div>
+    <button id="btn-house-music" class="btn btn-round corner-top-right">🎵</button>
     <button id="btn-house-shop" class="btn btn-huge btn-shop">🛒 SHOP</button>
+    <!-- Jukebox: pick which theme plays at the house (unlocked worlds only) -->
+    <div id="music-panel" class="hidden">
+      <div id="music-header">
+        <span>🎵 Pick your music!</span>
+        <button id="btn-music-close" class="btn btn-round">✖️</button>
+      </div>
+      <div id="music-list"></div>
+    </div>
     <div id="shop-panel" class="hidden">
       <div id="shop-header">
         <span>🛒 Build your house!</span>
