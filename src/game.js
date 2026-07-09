@@ -143,6 +143,7 @@ export class Game {
     this.elapsed = 0;
     this.events = [];
     this.activeEv = null;
+    this.retiredEvs = []; // answered events kept visible until off-camera
     this.stars = null;
     this.choice = false; // time-freeze steering mode at a word choice
     this.moveHeld = {}; // { Lkey, Rkey, Lbtn, Rbtn } held flags
@@ -376,6 +377,8 @@ export class Game {
   clearEvents() {
     if (this.activeEv) this.activeEv.dispose();
     this.activeEv = null;
+    for (const ev of this.retiredEvs) ev.dispose();
+    this.retiredEvs = [];
     if (this.stars) this.stars.dispose();
     this.stars = null;
     if (this.bossFight) {
@@ -777,7 +780,10 @@ export class Game {
         }
         this.activeEv.update(dt, p, this.api);
         if (this.activeEv.done && p.x > this.activeEv.passedX()) {
-          this.activeEv.dispose();
+          // Hand off to the retired list instead of disposing here: the
+          // camera still sees several units behind the player, so tearing
+          // the meshes down now pops them off screen mid-view.
+          this.retiredEvs.push(this.activeEv);
           this.activeEv = null;
           this.eventIdx++;
         }
@@ -836,6 +842,21 @@ export class Game {
     } else if (this.phase === 'done') {
       this.doneTimer -= dt;
       if (this.doneTimer <= 0) this.finishRun();
+    }
+
+    // Retired events linger until the camera's left edge passes them, then
+    // dispose for real. Updates keep running so a door caught mid-swing
+    // (full boost can outrun the 0.45s open animation) still finishes.
+    if (this.retiredEvs.length) {
+      const cam = this.camera;
+      let leftEdge = cam.position.x -
+        Math.tan(THREE.MathUtils.degToRad(cam.fov / 2)) * cam.aspect * cam.position.z;
+      if (!Number.isFinite(leftEdge)) leftEdge = p.x - 20; // zero-size viewport
+      this.retiredEvs = this.retiredEvs.filter((ev) => {
+        ev.update(dt, p, this.api);
+        if (ev.passedX() < leftEdge - 2) { ev.dispose(); return false; }
+        return true;
+      });
     }
 
     // Auto re-speak the target if unanswered (max 2 times per quiet spell;
