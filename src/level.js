@@ -545,6 +545,9 @@ export class LevelScene {
   constructor(scene) {
     this.scene = scene;
     this.data = null;
+    // Moving landable surfaces (e.g. ? blocks) registered by word events;
+    // entries are { x0, x1, y } kept in sync by their owner every frame.
+    this.dynamicSolids = [];
 
     this.blocks = new THREE.InstancedMesh(chamferVoxelGeo, new THREE.MeshLambertMaterial(), MAX_BLOCKS);
     this.blocks.frustumCulled = false;
@@ -856,6 +859,7 @@ export class LevelScene {
 
   build(data) {
     this.data = data;
+    this.dynamicSolids.length = 0; // owners were disposed with the old level
     const p = PALETTES[data.theme];
     this.scene.background = new THREE.Color(p.skyTop);
     this.scene.fog = new THREE.Fog(p.fog, 30, 80);
@@ -1438,6 +1442,9 @@ export class LevelScene {
           best = p.y;
         }
       }
+    }
+    for (const s of this.dynamicSolids) {
+      if (x >= s.x0 && x <= s.x1 && s.y <= feetY + 0.3 && s.y > best) best = s.y;
     }
     if (best === -Infinity) best = this.groundTopAt(x);
     return best;

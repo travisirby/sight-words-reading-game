@@ -182,8 +182,28 @@ export class BlocksEvent {
       this.group.add(bg);
       this.blocks.push({ g: bg, cube, sign, word: '', dead: false, bounceT: 0, shakeT: 0, spinT: 0, baseY: 0 });
     }
+    // Landable tops: one dynamic solid per block so the kid can stand on
+    // them instead of clipping through. Synced to block positions each frame.
+    this.solids = this.blocks.map(() => ({ x0: 0, x1: 0, y: -Infinity }));
+    level.dynamicSolids.push(...this.solids);
     this.pool = [word, ...distractors];
     this.place(x + 6);
+  }
+
+  // Cube is 1.4 wide/tall centered on the group origin: top +0.7, plus a
+  // little ledge grace on each side (mirrors the platforms' fudge).
+  syncSolids() {
+    for (let i = 0; i < this.blocks.length; i++) {
+      const b = this.blocks[i];
+      const s = this.solids[i];
+      if (!b.g.visible) {
+        s.y = -Infinity;
+        continue;
+      }
+      s.x0 = b.g.position.x - 1.0;
+      s.x1 = b.g.position.x + 1.0;
+      s.y = b.g.position.y + 0.7;
+    }
   }
 
   place(bx) {
@@ -206,6 +226,7 @@ export class BlocksEvent {
     this.lastX = bx + 10;
     this.lockT = 0;
     this.swapPending = false;
+    this.syncSolids();
   }
 
   // Move the words to new blocks (called mid-spin, while the signs face
@@ -260,6 +281,7 @@ export class BlocksEvent {
       this.explodeT -= dt;
       if (this.explodeT <= 0) this.explode(api);
     }
+    this.syncSolids();
     if (this.done) return;
 
     // Bonk from below — active even during the post-miss spin/listen beat.
@@ -385,6 +407,11 @@ export class BlocksEvent {
   }
 
   dispose() {
+    const ds = this.level.dynamicSolids;
+    for (const s of this.solids) {
+      const i = ds.indexOf(s);
+      if (i >= 0) ds.splice(i, 1);
+    }
     disposeGroup(this.group);
   }
 }
