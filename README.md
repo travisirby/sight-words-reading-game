@@ -72,9 +72,10 @@ everything else still works.
 - **Read it aloud** — after each level, he reads 3 words into the mic for bonus gems.
 - **Progress** — stars per level, per-word mastery stats, coins/gems, keys and
   secret paths, all saved on-device (localStorage). Finishing a level unlocks
-  the next.
+  the next. Grown-ups can open **Settings → Progress** for hardest words,
+  mastered words, per-world counts, and a JSON export backup.
 
-Tip for grown-ups: tap the `v1.0` label on the title screen 5 times to unlock all
+Tip for grown-ups: tap the `v2.0` label on the title screen 5 times to unlock all
 levels.
 
 ## Tech

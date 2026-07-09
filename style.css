@@ -658,6 +658,138 @@ html, body {
   color: #2c3e75;
 }
 
+/* ---------- parent progress report ---------- */
+#screen-progress {
+  background: rgba(30, 30, 90, 0.88);
+  justify-content: flex-start;
+  padding-top: calc(12px + env(safe-area-inset-top));
+  padding-bottom: calc(12px + env(safe-area-inset-bottom));
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.progress-panel {
+  gap: 12px;
+  padding: 18px 22px 22px;
+  width: min(560px, 94vw);
+  max-height: none;
+  align-items: stretch;
+}
+.progress-panel h2 {
+  font-size: 28px;
+  text-align: center;
+}
+.progress-header { text-align: center; }
+.progress-sub {
+  font-size: 18px;
+  color: #5a6a9a;
+  margin-top: 2px;
+}
+.progress-summary {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.progress-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  background: #fff3c4;
+  border-radius: 8px;
+  box-shadow: 0 3px 0 rgba(20, 30, 60, 0.15);
+  padding: 8px 12px;
+  color: #2c3e75;
+}
+.progress-stat .ps-label { font-size: 13px; opacity: 0.85; }
+.progress-stat .ps-value { font-size: 22px; font-weight: bold; }
+.progress-worlds {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: center;
+}
+.progress-world-chip {
+  font-size: 13px;
+  color: #2c3e75;
+  background: #e8f4ff;
+  border: 2px solid #2c3e75;
+  border-radius: 999px;
+  padding: 4px 10px;
+  white-space: nowrap;
+}
+.progress-world-chip.empty { opacity: 0.55; }
+.progress-section h3 {
+  font-size: 18px;
+  color: #2c3e75;
+  margin-bottom: 6px;
+}
+.progress-word-list {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  max-height: 28vh;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding-right: 2px;
+}
+.progress-word-row {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 10px;
+  align-items: center;
+  font-size: 17px;
+  color: #2c3e75;
+  background: #fff;
+  border-radius: 6px;
+  padding: 6px 12px;
+  box-shadow: 0 2px 0 rgba(20, 30, 60, 0.12);
+}
+.progress-word-row .pw-word {
+  font-weight: bold;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.progress-word-row .pw-meta {
+  font-size: 14px;
+  color: #5a6a9a;
+  white-space: nowrap;
+}
+.progress-word-row .pw-acc {
+  font-weight: bold;
+  min-width: 3.2em;
+  text-align: right;
+}
+.progress-word-row.hard .pw-acc { color: #c0392b; }
+.progress-word-row.ok .pw-acc { color: #b8860b; }
+.progress-word-row.good .pw-acc { color: #2e7d32; }
+.progress-empty {
+  font-size: 16px;
+  color: #5a6a9a;
+  background: #fff;
+  border-radius: 6px;
+  padding: 12px 14px;
+  text-align: center;
+}
+.progress-hint {
+  font-size: 13px;
+  color: #5a6a9a;
+  text-align: center;
+  line-height: 1.35;
+}
+.progress-actions {
+  width: 100%;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+#progress-export-toast {
+  text-align: center;
+  font-size: 16px;
+  font-weight: bold;
+  color: #2e7d32;
+}
+@media (min-width: 700px) {
+  .progress-summary { grid-template-columns: 1fr 1fr 1fr; }
+}
+
 /* ---------- game complete (finale stats) ---------- */
 #screen-gamecomplete { background: rgba(30, 30, 90, 0.88); }
 .gc-panel {

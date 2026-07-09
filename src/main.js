@@ -570,6 +570,8 @@ ui.init({
   onCharacterDone: () => closeCharacter(),
   onSwitchPlayer: () => showPlayers(),
   onPlayersBack: () => showTitle(),
+  onProgress: () => ui.showProgress(),
+  onProgressClose: () => showTitle(),
   onToggleSound: () => {
     const on = !store.get().sound;
     store.setSound(on);
