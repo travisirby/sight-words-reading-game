@@ -11,6 +11,10 @@ import { renderLookThumbnails } from './thumbs.js';
 import {
   buildProgressReport, buildExportPayload, formatPlayTime,
 } from './progress.js';
+import {
+  hydrateIcons, iconHTML, iconEl, setIcon,
+  itemIconName, worldIconName, STYLE_ICONS, OUTFIT_ICONS,
+} from './icons.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -20,6 +24,7 @@ const SCREENS = [
 ];
 
 export function init(h) {
+  hydrateIcons();
   fairy.mount();
   bindSpeak($('btn-play'), 'Play!', () => h.onPlay());
   bindSpeak($('btn-char-back'), 'Back', () => h.onCharacterDone());
@@ -133,7 +138,7 @@ export function showScreen(name) {
     $(`screen-${s}`).classList.toggle('hidden', s !== name);
   }
   if (name !== 'map') hideLevelBanner();
-  // No screen means we're in a run — the fairy perches by the 🔊 button.
+  // No screen means we're in a run — the fairy perches by the 👂 button.
   fairy.flyTo(name || 'game');
 }
 
@@ -141,20 +146,45 @@ export function showHUD(on) {
   $('hud').classList.toggle('hidden', !on);
 }
 
+function setBtnLabel(id, text) {
+  const label = $(id).querySelector('.btn-label');
+  if (label) label.textContent = text;
+  else $(id).textContent = text;
+}
+
 export function updateSettingsLabels() {
   const s = store.get();
-  $('btn-toggle-sound').textContent = s.sound ? '🔊 Sound: ON' : '🔇 Sound: OFF';
-  $('btn-toggle-music').textContent = s.music ? '🎵 Music: ON' : '🎵 Music: OFF';
-  $('btn-toggle-mic').textContent = s.mic ? '🎤 Mic Round: ON' : '🎤 Mic Round: OFF';
-  $('btn-toggle-unlock').textContent = s.devUnlocked ? '🔓 All Levels: ON' : '🔒 All Levels: OFF';
+  setIcon($('btn-toggle-sound'), s.sound ? 'sound' : 'soundOff', 38);
+  setBtnLabel('btn-toggle-sound', s.sound ? 'Sound: ON' : 'Sound: OFF');
+  setIcon($('btn-toggle-music'), 'music', 38);
+  setBtnLabel('btn-toggle-music', s.music ? 'Music: ON' : 'Music: OFF');
+  setIcon($('btn-toggle-mic'), 'mic', 38);
+  setBtnLabel('btn-toggle-mic', s.mic ? 'Mic Round: ON' : 'Mic Round: OFF');
+  setIcon($('btn-toggle-unlock'), s.devUnlocked ? 'unlock' : 'lock', 38);
+  setBtnLabel('btn-toggle-unlock', s.devUnlocked ? 'All Levels: ON' : 'All Levels: OFF');
 }
 
 // ---------- level banner (overworld node tapped) ----------
 
 export function showLevelBanner({ name, stars, completed, secret, boss }) {
-  $('banner-name').textContent = secret ? `✨ ${name} ✨` : boss ? `👑 ${name} 👑` : name;
-  $('banner-stars').textContent = stars > 0 ? '⭐'.repeat(stars) : '· · ·';
-  $('btn-banner-play').textContent = completed ? '🔁 PLAY' : '▶️ PLAY';
+  const nameEl = $('banner-name');
+  nameEl.textContent = '';
+  if (secret || boss) {
+    nameEl.appendChild(iconEl(secret ? 'sparkle' : 'crown', 26));
+    const t = document.createElement('span');
+    t.textContent = name;
+    nameEl.appendChild(t);
+    nameEl.appendChild(iconEl(secret ? 'sparkle' : 'crown', 26));
+  } else {
+    nameEl.textContent = name;
+  }
+  const starsEl = $('banner-stars');
+  starsEl.replaceChildren();
+  for (let i = 0; i < 3; i++) {
+    starsEl.appendChild(iconEl(i < stars ? 'star' : 'starEmpty', 26));
+  }
+  setIcon($('btn-banner-play'), completed ? 'replay' : 'play', 44);
+  setBtnLabel('btn-banner-play', 'PLAY');
   $('level-banner').classList.remove('hidden');
 }
 
@@ -212,7 +242,10 @@ function buildPlayersList() {
     name.textContent = label; // textContent: names are typed by users
     const prog = document.createElement('span');
     prog.className = 'player-progress';
-    prog.textContent = `🗺️ World ${blobs[i].unlocked.world + 1}`;
+    prog.appendChild(iconEl('map', 18));
+    const progText = document.createElement('span');
+    progText.textContent = `World ${blobs[i].unlocked.world + 1}`;
+    prog.appendChild(progText);
     card.append(img, name, prog);
     card.addEventListener('click', () => {
       speak(label, { rate: 1.0 });
@@ -222,7 +255,8 @@ function buildPlayersList() {
     if (profiles.length > 1) {
       const del = document.createElement('button');
       del.className = 'player-delete';
-      del.textContent = '✕';
+      del.setAttribute('aria-label', 'Delete player');
+      del.innerHTML = iconHTML('close', 26);
       del.addEventListener('click', (e) => {
         e.stopPropagation(); // don't also select the card
         speak('Delete this player? All their progress will be lost.', { rate: 1.0 });
@@ -237,9 +271,16 @@ function buildPlayersList() {
   if (profiles.length < store.MAX_PROFILES) {
     const add = document.createElement('div');
     add.className = 'player-card new-player';
-    add.innerHTML = `<span class="player-plus">➕</span>
-      <span class="player-name">New Player</span>
-      <span class="player-progress">&nbsp;</span>`;
+    const plus = document.createElement('span');
+    plus.className = 'player-plus';
+    plus.appendChild(iconEl('plus', 64));
+    const addName = document.createElement('span');
+    addName.className = 'player-name';
+    addName.textContent = 'New Player';
+    const addProg = document.createElement('span');
+    addProg.className = 'player-progress';
+    addProg.innerHTML = '&nbsp;';
+    add.append(plus, addName, addProg);
     add.addEventListener('click', () => {
       speak('New player! What is your name?', { rate: 1.0 });
       $('new-player-name').value = '';
@@ -309,18 +350,19 @@ export function buildCharacterUI(onPick) {
     }));
   }
 
-  const addIconRow = (part, def, selectedIdx) =>
+  const addIconRow = (part, def, selectedIdx, iconNames) =>
     addRow(def.label, def.names.map((name, i) => {
       const b = document.createElement('button');
       b.className = 'swatch style-swatch' + (i === selectedIdx ? ' selected' : '');
-      b.textContent = def.icons[i];
       b.title = name;
+      b.setAttribute('aria-label', name);
+      b.appendChild(iconEl(iconNames[i] || 'sparkle', 36));
       b.addEventListener('click', () => pick(part, i, name));
       return b;
     }));
 
-  addIconRow('style', STYLES, char.style);
-  addIconRow('outfit', OUTFITS, char.outfit);
+  addIconRow('style', STYLES, char.style, STYLE_ICONS);
+  addIconRow('outfit', OUTFITS, char.outfit, OUTFIT_ICONS);
 }
 
 // ---------- HUD ----------
@@ -342,7 +384,14 @@ export function showMoveControls(mode) {
   el.classList.toggle('boost-only', mode === 'boost');
 }
 
-// Flash the 🔊 button whenever the word auto-repeats, so the kid learns
+// The repeat button only shows while a word challenge is live and already
+// announced (game.js syncRepeatButton drives this).
+export function showRepeatButton(on) {
+  $('btn-repeat-word').classList.toggle('hidden', !on);
+  if (!on) showRepeatTip(false); // tip points at the button — never orphan it
+}
+
+// Flash the repeat button whenever the word auto-repeats, so the kid learns
 // which button makes the word speak.
 let repeatPulseTimer = null;
 export function pulseRepeatButton() {
@@ -354,7 +403,7 @@ export function pulseRepeatButton() {
   repeatPulseTimer = setTimeout(() => b.classList.remove('flash'), 1700);
 }
 
-// One-time callout pointing at the 🔊 button (first word event ever).
+// One-time callout pointing at the repeat button (first word event ever).
 let repeatTipTimer = null;
 export function showRepeatTip(on) {
   $('repeat-tip').classList.toggle('hidden', !on);
@@ -417,21 +466,28 @@ function fillProgress(report) {
 
   const t = report.totals;
   const stats = [
-    ['⏱️ Time', formatPlayTime(t.playSeconds)],
-    ['🗺️ Levels', String(t.levelsCompleted)],
-    ['⭐ Stars', String(t.totalStars)],
-    ['🎯 First-try', `${t.accuracy}%`],
-    ['📖 Words read', String(t.wordsRead)],
-    ['⭐ Mastered', `${report.masteredCount} / ${report.seenCount || 0}`],
+    ['clock', 'Time', formatPlayTime(t.playSeconds)],
+    ['map', 'Levels', String(t.levelsCompleted)],
+    ['star', 'Stars', String(t.totalStars)],
+    ['target', 'First-try', `${t.accuracy}%`],
+    ['book', 'Words read', String(t.wordsRead)],
+    ['star', 'Mastered', `${report.masteredCount} / ${report.seenCount || 0}`],
   ];
   const sum = $('progress-summary');
   sum.innerHTML = '';
-  for (const [label, value] of stats) {
+  for (const [icon, label, value] of stats) {
     const el = document.createElement('div');
     el.className = 'progress-stat';
-    el.innerHTML = `<span class="ps-label"></span><span class="ps-value"></span>`;
-    el.querySelector('.ps-label').textContent = label;
-    el.querySelector('.ps-value').textContent = value;
+    const lab = document.createElement('span');
+    lab.className = 'ps-label';
+    lab.appendChild(iconEl(icon, 16));
+    const labText = document.createElement('span');
+    labText.textContent = label;
+    lab.appendChild(labText);
+    const val = document.createElement('span');
+    val.className = 'ps-value';
+    val.textContent = value;
+    el.append(lab, val);
     sum.appendChild(el);
   }
 
@@ -440,7 +496,10 @@ function fillProgress(report) {
   for (const w of report.byWorld) {
     const chip = document.createElement('span');
     chip.className = 'progress-world-chip' + (w.seen === 0 ? ' empty' : '');
-    chip.textContent = `${w.emoji} ${w.mastered}/${w.total}`;
+    chip.appendChild(iconEl(worldIconName(w.worldIdx), 18));
+    const txt = document.createElement('span');
+    txt.textContent = `${w.mastered}/${w.total}`;
+    chip.appendChild(txt);
     chip.title = `${w.name}: ${w.mastered} mastered, ${w.seen} practiced of ${w.total}`;
     worlds.appendChild(chip);
   }
@@ -609,7 +668,7 @@ function toggleMusicPanel(open) {
   }
 }
 
-// Rebuilt on every open/pick — the list is tiny and this keeps the 🎵
+// Rebuilt on every open/pick — the list is tiny and this keeps the note
 // marker on the playing track without bookkeeping.
 function refreshMusicList() {
   const list = $('music-list');
@@ -618,9 +677,16 @@ function refreshMusicList() {
     const playing = c.track === musicOpts.current;
     const btn = document.createElement('button');
     btn.className = 'music-item' + (playing ? ' playing' : '');
-    btn.innerHTML = `<span class="shop-emoji">${c.emoji}</span>
-      <span class="music-name">${c.name}</span>
-      <span class="music-note">${playing ? '🎵' : ''}</span>`;
+    const icon = document.createElement('span');
+    icon.className = 'shop-icon';
+    icon.appendChild(iconEl(c.icon || 'music', 40));
+    const name = document.createElement('span');
+    name.className = 'music-name';
+    name.textContent = c.name;
+    const note = document.createElement('span');
+    note.className = 'music-note';
+    if (playing) note.appendChild(iconEl('music', 26));
+    btn.append(icon, name, note);
     btn.addEventListener('click', () => {
       sfxClick();
       musicOpts.current = c.track;
@@ -642,7 +708,9 @@ function closeShopConfirm() {
 // shuffled each time so he reads the words instead of memorizing positions.
 function openShopConfirm(item) {
   pendingItem = item;
-  $('shop-confirm-emoji').textContent = item.emoji;
+  const emojiSlot = $('shop-confirm-emoji');
+  emojiSlot.className = 'shop-icon';
+  emojiSlot.innerHTML = iconHTML(itemIconName(item.id), 44);
   $('shop-confirm-name').textContent = item.name;
   const wordsEl = $('shop-confirm-words');
   wordsEl.innerHTML = '';
@@ -716,11 +784,33 @@ export function refreshShop() {
     const btn = document.createElement('button');
     btn.className = 'shop-item' +
       (owned ? ' owned' : earned || wallet < item.cost ? ' cant-afford' : '');
-    const coin = item.currency === 'gems' ? '💎' : '🪙';
-    const cost = owned ? '✅ Got it!' : earned ? '🏰 Castle prize!' : `${coin} ${item.cost}`;
-    btn.innerHTML = `<span class="shop-emoji">${item.emoji}</span>
-      <span class="shop-info"><span>${item.name}</span>
-      <span class="shop-cost">${cost}</span></span>`;
+    const icon = document.createElement('span');
+    icon.className = 'shop-icon';
+    icon.innerHTML = iconHTML(itemIconName(item.id), 44);
+    const info = document.createElement('span');
+    info.className = 'shop-info';
+    const name = document.createElement('span');
+    name.textContent = item.name;
+    const cost = document.createElement('span');
+    cost.className = 'shop-cost';
+    if (owned) {
+      cost.appendChild(iconEl('check', 18));
+      const t = document.createElement('span');
+      t.textContent = 'Got it!';
+      cost.appendChild(t);
+    } else if (earned) {
+      cost.appendChild(iconEl('castle', 18));
+      const t = document.createElement('span');
+      t.textContent = 'Castle prize!';
+      cost.appendChild(t);
+    } else {
+      cost.appendChild(iconEl(item.currency === 'gems' ? 'gem' : 'coin', 18));
+      const t = document.createElement('span');
+      t.textContent = String(item.cost);
+      cost.appendChild(t);
+    }
+    info.append(name, cost);
+    btn.append(icon, info);
     btn.addEventListener('click', () => {
       sfxClick();
       if (owned) {
@@ -739,9 +829,20 @@ export function refreshShop() {
   }
 }
 
-export function houseToast(text) {
+// text: plain string, or { icon, text } for a voxel icon + label.
+export function houseToast(msg) {
   const el = $('house-toast');
-  el.textContent = text;
+  el.textContent = '';
+  if (msg && typeof msg === 'object') {
+    el.classList.add('toast-with-icon');
+    if (msg.icon) el.appendChild(iconEl(msg.icon, 28));
+    const t = document.createElement('span');
+    t.textContent = msg.text || '';
+    el.appendChild(t);
+  } else {
+    el.classList.remove('toast-with-icon');
+    el.textContent = msg || '';
+  }
   el.classList.remove('hidden');
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => el.classList.add('hidden'), 1800);

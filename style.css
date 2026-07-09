@@ -91,15 +91,30 @@ html, body {
 }
 
 /* ---------- title ---------- */
+/* Title + PLAY ride in one centered column so the button sits composed
+   under the letter rows instead of ragged against the h1's right edge. */
+.title-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 26px;
+}
+#screen-title .title-stack { pointer-events: none; }
+.title-stack > * { pointer-events: auto; }
 /* Each letter is a tiny voxel block: flat colored tile, beveled top face,
    hard extruded side — the title is literally built from world blocks. */
 .game-title {
   font-size: clamp(22px, 3.6vw, 40px);
-  line-height: 1.5;
+  line-height: 1.62; /* room for the bob + extruded side between rows */
   text-align: center;
   letter-spacing: 0;
   color: #fff;
   text-shadow: 2px 2px 0 rgba(0,0,0,0.3);
+  animation: title-pop 0.55s cubic-bezier(0.34, 1.56, 0.64, 1) backwards;
+}
+@keyframes title-pop {
+  from { transform: scale(0.4); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
 }
 .game-title span {
   display: inline-block;
@@ -107,7 +122,7 @@ html, body {
   border: 3px solid #2c3e75;
   border-radius: 6px;
   padding: 0.04em 0.22em;
-  margin: 0 1px;
+  margin: 0 2px;
   box-shadow:
     inset 0 3px 0 rgba(255,255,255,0.4),
     inset 0 -3px 0 rgba(0,0,0,0.16),
@@ -122,15 +137,28 @@ html, body {
   50% { transform: translateY(-7px); }
 }
 /* PLAY breathes gently to draw the eye; :active kills the animation so the
-   press-down transform on .btn still lands. */
-#btn-play { animation: play-pulse 2s ease-in-out infinite; }
+   press-down transform on .btn still lands. Warm orange so it pops against
+   the green meadow (grass-green blended straight into it). The one-shot
+   fade staggers the chrome in behind the title pop. */
+#btn-play {
+  background: #ff9f43;
+  --side: #c9741e;
+  animation:
+    play-pulse 2s ease-in-out infinite,
+    chrome-in 0.5s ease-out 0.25s backwards;
+}
 #btn-play:active { animation: none; }
+#btn-settings { animation: chrome-in 0.5s ease-out 0.45s backwards; }
 @keyframes play-pulse {
   0%, 100% { transform: scale(1); }
   50% { transform: scale(1.04); }
 }
+@keyframes chrome-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
 @media (prefers-reduced-motion: reduce) {
-  .game-title span, #btn-play { animation: none; }
+  .game-title, .game-title span, #btn-play, #btn-settings { animation: none; }
 }
 
 #version-tag {
@@ -164,6 +192,73 @@ html, body {
     0 6px 0 var(--side);
   transition: transform 0.08s;
 }
+/* Custom voxel icons (see src/icons.js) sit beside labels on wide buttons. */
+.btn-with-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+}
+.btn .icon,
+.btn .icon-svg {
+  display: block;
+  flex-shrink: 0;
+  line-height: 0;
+}
+.btn-label { line-height: 1.1; }
+
+/* Standalone icon host used in HUD chips, headings, shop cards, etc. */
+.icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 0;
+  flex-shrink: 0;
+}
+.icon-svg {
+  display: block;
+  width: auto;
+  height: auto;
+  max-width: 100%;
+  max-height: 100%;
+}
+.heading-with-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.icon-star-row {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+.totals-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 22px;
+  font-size: 34px;
+  color: #2c3e75;
+  font-weight: bold;
+}
+.totals-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.hud-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.gc-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
 .btn:active {
   transform: translateY(5px);
   box-shadow:
@@ -187,6 +282,9 @@ html, body {
   border-radius: 10px;
   padding: 0;
   font-size: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 .corner-top-left {
   position: absolute;
@@ -216,8 +314,13 @@ html, body {
   color: #2c3e75;
   font-size: 40px;
 }
+/* Opens from the corner gear; centered like a proper modal rather than
+   inheriting whatever spot the flex column would have given it. */
 #settings-panel {
   position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
 }
 
 /* ---------- player select ---------- */
@@ -285,6 +388,9 @@ html, body {
   white-space: nowrap;
 }
 .player-progress {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   font-size: 20px;
   color: #2c3e75;
   opacity: 0.75;
@@ -304,6 +410,10 @@ html, body {
   font-weight: bold;
   cursor: pointer;
   box-shadow: 0 3px 0 #b94444;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
 }
 /* New-player card: same footprint, dashed & inviting. */
 .player-card.new-player {
@@ -311,7 +421,13 @@ html, body {
   border-style: dashed;
   background: rgba(253, 244, 215, 0.7);
 }
-.player-card.new-player .player-plus { font-size: 64px; line-height: 110px; }
+.player-card.new-player .player-plus {
+  width: 110px;
+  height: 110px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
 .players-panel {
   position: absolute;
   z-index: 30;
@@ -372,13 +488,16 @@ html, body {
   to { transform: translateX(-50%) translateY(0); }
 }
 #banner-name {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
   font-size: 34px;
   color: #2c3e75;
   text-align: center;
 }
 #banner-stars {
   font-size: 30px;
-  letter-spacing: 3px;
   color: #2c3e75;
 }
 
@@ -471,7 +590,14 @@ html, body {
   background: #fff;
   font-size: 26px;
   line-height: 1;
-  padding: 0;
+  padding: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.style-swatch .icon-svg {
+  width: 36px;
+  height: 36px;
 }
 .btn-char-done {
   font-size: 32px;
@@ -491,7 +617,8 @@ html, body {
   position: absolute;
   top: calc(14px + env(safe-area-inset-top));
   left: calc(16px + env(safe-area-inset-left));
-  font-size: 34px;
+  font-size: 44px;
+  font-weight: bold;
   color: #fff;
   background: rgba(44, 62, 117, 0.75);
   border-radius: 8px;
@@ -500,7 +627,8 @@ html, body {
 }
 #hud-key {
   position: absolute;
-  top: calc(90px + env(safe-area-inset-top));
+  /* Below the coin chip, which grew with its 68px coin. */
+  top: calc(116px + env(safe-area-inset-top));
   left: calc(16px + env(safe-area-inset-left));
   font-size: 34px;
   background: rgba(44, 62, 117, 0.75);
@@ -534,6 +662,18 @@ html, body {
   background: #74b9ff;
   --side: #3f7fc4;
   animation: repeat-glow 2.8s ease-in-out infinite;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+/* Repeat-arrows badge tucked on the ear: reads as "hear it again". */
+.btn-repeat .repeat-badge {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  font-size: 38px;
+  line-height: 1;
+  pointer-events: none;
 }
 @keyframes repeat-glow {
   0%, 100% {
@@ -559,7 +699,7 @@ html, body {
 }
 #repeat-tip {
   position: absolute;
-  /* Below the fairy, who perches between the 🔊 button and this tip. */
+  /* Below the fairy, who perches between the hear-word button and this tip. */
   top: calc(212px + env(safe-area-inset-top));
   right: calc(20px + env(safe-area-inset-right));
   font-size: 24px;
@@ -573,8 +713,12 @@ html, body {
   padding: 12px 18px;
   pointer-events: none;
   animation: toast-pop 0.35s cubic-bezier(0.34, 1.5, 0.5, 1);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
 }
-#repeat-tip::before { /* arrow up toward the 🔊 button */
+#repeat-tip::before { /* arrow up toward the hear-word button */
   content: '';
   position: absolute;
   top: -13px;
@@ -624,6 +768,9 @@ html, body {
   --side: #3f7fc4;
   animation: pop-in 0.25s cubic-bezier(0.34, 1.6, 0.5, 1);
   touch-action: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 .btn-move-left { left: calc(22px + env(safe-area-inset-left)); }
 .btn-move-right { left: calc(162px + env(safe-area-inset-left)); }
@@ -641,11 +788,16 @@ html, body {
 }
 
 /* ---------- level complete ---------- */
-#star-row { font-size: 66px; }
+#star-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
 #star-row .star {
-  display: inline-block;
-  opacity: 0.18;
-  filter: grayscale(1);
+  display: inline-flex;
+  opacity: 0.22;
+  filter: grayscale(1) brightness(1.1);
   transform: scale(0.6);
   transition: transform 0.4s cubic-bezier(0.34, 1.8, 0.5, 1), opacity 0.3s, filter 0.3s;
 }
@@ -709,6 +861,9 @@ html, body {
   justify-content: center;
 }
 .progress-world-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   font-size: 13px;
   color: #2c3e75;
   background: #e8f4ff;
@@ -717,11 +872,24 @@ html, body {
   padding: 4px 10px;
   white-space: nowrap;
 }
+.progress-world-chip .icon-svg {
+  width: 18px;
+  height: 18px;
+}
 .progress-world-chip.empty { opacity: 0.55; }
 .progress-section h3 {
   font-size: 18px;
   color: #2c3e75;
   margin-bottom: 6px;
+}
+.progress-stat .ps-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.progress-stat .ps-label .icon-svg {
+  width: 16px;
+  height: 16px;
 }
 .progress-word-list {
   display: flex;
@@ -873,6 +1041,9 @@ html, body {
   padding: 0;
   background: #ff6b6b;
   --side: #b94444;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 .btn-mic.listening {
   background: #4cd964;
@@ -963,7 +1134,9 @@ html, body {
   border-radius: 8px;
   padding: 8px 26px;
   box-shadow: 0 4px 0 rgba(20, 30, 60, 0.4);
+  gap: 18px;
 }
+#house-wallet .totals-item { color: #fff; }
 .btn-shop {
   position: absolute;
   bottom: calc(24px + env(safe-area-inset-bottom));
@@ -1023,9 +1196,31 @@ html, body {
   cursor: pointer;
   text-align: left;
 }
-.shop-item .shop-emoji { font-size: 40px; }
+.shop-item .shop-emoji,
+.shop-item .shop-icon {
+  width: 48px;
+  height: 48px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.shop-item .shop-icon .icon-svg {
+  width: 44px;
+  height: 44px;
+}
 .shop-item .shop-info { display: flex; flex-direction: column; gap: 2px; }
-.shop-item .shop-cost { font-size: 20px; font-weight: normal; }
+.shop-item .shop-cost {
+  font-size: 20px;
+  font-weight: normal;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.shop-item .shop-cost .icon-svg {
+  width: 18px;
+  height: 18px;
+}
 .shop-item.owned {
   background: #ddf3c8;
   border-color: #569e36;
@@ -1053,7 +1248,18 @@ html, body {
   font-weight: bold;
   color: #2c3e75;
 }
-#shop-confirm-emoji { font-size: 44px; }
+#shop-confirm-emoji,
+#shop-confirm-emoji.shop-icon {
+  width: 48px;
+  height: 48px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+#shop-confirm-emoji .icon-svg {
+  width: 44px;
+  height: 44px;
+}
 #shop-confirm-words { display: flex; gap: 14px; }
 .shop-word-btn {
   border: 4px solid #2c3e75;
@@ -1148,6 +1354,11 @@ html, body {
   pointer-events: none;
   animation: toast-pop 0.35s cubic-bezier(0.34, 1.5, 0.5, 1);
   z-index: 30;
+}
+#house-toast.toast-with-icon {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
 }
 @keyframes toast-pop {
   from { transform: translateX(-50%) scale(0.4); opacity: 0; }
