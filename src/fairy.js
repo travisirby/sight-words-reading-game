@@ -188,6 +188,17 @@ let lastX = 50;
 let speaking = false;
 let startLoop = null;
 let stopLoop = null;
+let curScreen = null;
+
+// Slide to a viewport-% spot; the CSS transition does the actual flying.
+// Facing flips only on a real move (small per-frame camera drift while she
+// hovers over a world-space target shouldn't make her twitch around).
+function moveTo(x, y) {
+  if (Math.abs(x - lastX) > 1.5) el.classList.toggle('face-left', x < lastX);
+  lastX = x;
+  el.style.left = `${x}%`;
+  el.style.top = `${y}%`;
+}
 
 export function mount() {
   if (el) return;
@@ -275,10 +286,24 @@ export function mount() {
     speaking = !!ev.detail.speaking;
     el.classList.toggle('speaking', speaking);
   });
+
+  // In-run hover targets from the game (viewport %, streamed every frame
+  // while a word challenge is live): she darts out over the answer choices;
+  // a null target sends her home to the run perch. Ignored off the game
+  // screen so a stale event can't drag her across a menu.
+  window.addEventListener('wr-fairy', (ev) => {
+    if (curScreen !== 'game') return;
+    const t = ev.detail;
+    el.classList.toggle('darting', !!t);
+    const p = t || PERCHES.game;
+    moveTo(p.x, p.y);
+  });
 }
 
 export function flyTo(screen) {
   if (!el) return;
+  curScreen = screen;
+  el.classList.remove('darting'); // a screen change cancels any hover target
   const p = PERCHES[screen];
   // Screens with no perch (e.g. the self-contained cutscene) hide her —
   // otherwise she'd be stranded at her last perch, over the scene. Her
@@ -289,9 +314,5 @@ export function flyTo(screen) {
     return;
   }
   startLoop();
-  // Face the direction she's flying (art faces slightly right).
-  if (p.x !== lastX) el.classList.toggle('face-left', p.x < lastX);
-  lastX = p.x;
-  el.style.left = `${p.x}%`;
-  el.style.top = `${p.y}%`;
+  moveTo(p.x, p.y);
 }
