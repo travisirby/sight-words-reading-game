@@ -148,7 +148,10 @@ export function updateSettingsLabels() {
 
 // ---------- level banner (overworld node tapped) ----------
 
-export function showLevelBanner({ name, stars, completed, secret, boss }) {
+export function showLevelBanner({ name, stars, completed, secret, boss, challenge = null }) {
+  const hard = $('banner-difficulty');
+  hard.textContent = challenge === null ? '' : `🔥 EXTRA HARD · LEVEL ${challenge + 1}`;
+  hard.classList.toggle('hidden', challenge === null);
   $('banner-name').textContent = secret ? `✨ ${name} ✨` : boss ? `👑 ${name} 👑` : name;
   $('banner-stars').textContent = stars > 0 ? '⭐'.repeat(stars) : '· · ·';
   $('btn-banner-play').textContent = completed ? '🔁 PLAY' : '▶️ PLAY';

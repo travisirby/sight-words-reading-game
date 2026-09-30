@@ -376,6 +376,16 @@ html, body {
   color: #2c3e75;
   text-align: center;
 }
+#banner-difficulty {
+  background: #d83a50;
+  color: #fff8cf;
+  border: 3px solid #7b1735;
+  border-radius: 999px;
+  padding: 5px 15px;
+  font-size: 18px;
+  letter-spacing: 1px;
+  text-shadow: 0 2px 0 #7b1735;
+}
 #banner-stars {
   font-size: 30px;
   letter-spacing: 3px;

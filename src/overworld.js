@@ -103,6 +103,7 @@ export class Overworld {
     this.buildCorridors();
     this.buildTerrain();
     this.buildWater(); // after terrain: shore tints/foam read this.groundH
+    this.challengeViews = [];
     this.buildProps();
     this.buildCritters();
     this.buildSigns();
@@ -885,6 +886,61 @@ export class Overworld {
         leafMat.userData.lockBaseColor = leafMat.color.clone();
         const entry = { region: 3, mats: [] };
         this.voxDecor.push(entry);
+
+        // These landmarks are optional hard levels. A chunky numbered badge
+        // makes that readable without relying on small DOM text, and the
+        // whole cabbage gets a generous invisible tap target.
+        const indicator = new THREE.Group();
+        const badgeMat = new THREE.MeshLambertMaterial({
+          color: 0xd83a50, emissive: 0x4d071d,
+        });
+        const numberMat = new THREE.MeshLambertMaterial({
+          color: 0xfff3a6, emissive: 0x5a4200,
+        });
+        const badge = new THREE.Mesh(boxGeo, badgeMat);
+        badge.scale.set(2.1, 1.65, 0.28);
+        indicator.add(badge);
+        const bar = (x, y, sx, sy) => {
+          const m = new THREE.Mesh(boxGeo, numberMat);
+          m.position.set(x, y, 0.22);
+          m.scale.set(sx, sy, 0.18);
+          indicator.add(m);
+        };
+        if (i === 0) {
+          bar(0, 0, 0.28, 1.05);
+          bar(-0.25, 0.72, 0.36, 0.24);
+          bar(0, -0.78, 0.85, 0.24);
+        } else {
+          bar(0, 0.78, 1.05, 0.24);
+          bar(0.65, 0.4, 0.28, 0.62);
+          bar(0, 0, 1.05, 0.24);
+          bar(-0.65, -0.4, 0.28, 0.62);
+          bar(0, -0.78, 1.05, 0.24);
+        }
+        indicator.position.set(0, 8.2, 0);
+        g.add(indicator);
+
+        const stars = new THREE.Group();
+        const starMat = new THREE.MeshLambertMaterial({
+          color: 0xffd54a, emissive: 0x664d00,
+        });
+        for (let si = 0; si < 3; si++) {
+          const star = new THREE.Mesh(boxGeo, starMat);
+          star.scale.setScalar(0.34);
+          star.position.set((si - 1) * 0.85, 6.65, 0.2);
+          star.rotation.z = Math.PI / 4;
+          stars.add(star);
+        }
+        g.add(stars);
+        const hit = new THREE.Mesh(
+          boxGeo, new THREE.MeshBasicMaterial({ visible: false })
+        );
+        hit.scale.set(6.5, 9.5, 6.5);
+        hit.position.y = 3.6;
+        g.add(hit);
+        this.challengeViews.push({
+          group: g, hit, indicator, stars, challenge: i, x: s.x, z: s.z,
+        });
         loadVoxModel(`${import.meta.env.BASE_URL}models/giant-cabbage.json`)
           .then((model) => {
             if (voxBuildId !== this.voxBuildId) return;
@@ -1170,6 +1226,17 @@ export class Overworld {
     return this.data.nodes.find(
       (nd) => nd.world === world && nd.level === (anchor === null ? 1 : anchor)
     ) || this.data.nodes.find((nd) => nd.world === world);
+  }
+
+  challengeAnchorNode(challenge) {
+    const view = this.challengeViews[challenge];
+    if (!view) return this.data.nodes.find((nd) => nd.world === 3);
+    return this.data.nodes
+      .filter((nd) => nd.world === 3)
+      .reduce((best, nd) => {
+        const d = (nd.x - view.x) ** 2 + (nd.z - view.z) ** 2;
+        return !best || d < best.d ? { ...nd, d } : best;
+      }, null);
   }
 
   ensureSecretTiles(world) {
@@ -1554,6 +1621,17 @@ export class Overworld {
           x: nd.x, z: nd.boss ? nd.z + 1.3 : nd.z, i,
         });
       }
+      // The two giant cabbages are optional extra-hard stops. Put them after
+      // the swamp castle in keyboard order without making them gate the main
+      // journey to Crystal Caves.
+      if (unlocked && nd.world === 3 && nd.isWorldFinal) {
+        this.challengeViews.forEach((cv) => {
+          this.navList.push({
+            world: 3, level: 0, secret: false, boss: false,
+            challenge: cv.challenge, x: cv.x, z: cv.z + 3.8, i: -1,
+          });
+        });
+      }
       // Insert the secret node after its world's last unlocked regular node.
       if (unlocked && nd.isWorldFinal && store.isSecretUnlocked(nd.world)) {
         const sn = this.data.secretNodes[nd.world];
@@ -1578,6 +1656,12 @@ export class Overworld {
           this.navList.splice(idx + 1, 0, { world: wi, level: -1, secret: true, x: sn.x, z: sn.z, i: -1 });
         }
       }
+    });
+    const challengesOpen = store.isWorldUnlocked(3);
+    this.challengeViews.forEach((v) => {
+      v.indicator.visible = challengesOpen;
+      const stars = store.getChallengeStars(v.challenge);
+      v.stars.children.forEach((s, si) => { s.visible = si < stars; });
     });
     this.tokenNav = Math.min(this.tokenNav, this.navList.length - 1);
     this.houseBadge.visible = store.hasHouseNews(HOUSE_ITEMS);
@@ -1606,14 +1690,21 @@ export class Overworld {
   }
 
   navInfo(e) {
+    const challenge = e.challenge ?? null;
+    const stars = challenge === null
+      ? (e.secret ? store.getSecretStars(e.world) : store.getStars(e.world, e.level))
+      : store.getChallengeStars(challenge);
     return {
       world: e.world,
       level: e.level,
       secret: e.secret,
       boss: !!e.boss,
-      name: nodeName(e.world, e.level, e.secret, e.boss),
-      stars: e.secret ? store.getSecretStars(e.world) : store.getStars(e.world, e.level),
-      completed: (e.secret ? store.getSecretStars(e.world) : store.getStars(e.world, e.level)) > 0,
+      challenge,
+      name: challenge === null
+        ? nodeName(e.world, e.level, e.secret, e.boss)
+        : `Giant Cabbage Challenge ${challenge + 1}`,
+      stars,
+      completed: stars > 0,
     };
   }
 
@@ -1622,9 +1713,11 @@ export class Overworld {
   }
 
   // Snap the token onto a node (e.g. after finishing that level).
-  setTokenTo(world, level, secret = false) {
+  setTokenTo(world, level, secret = false, challenge = null) {
     const idx = this.navList.findIndex((e) =>
-      e.world === world && (secret ? e.secret : e.level === level && !e.secret));
+      e.world === world && (challenge !== null
+        ? e.challenge === challenge
+        : secret ? e.secret : e.level === level && !e.secret && e.challenge === undefined));
     if (idx >= 0) this.tokenNav = idx;
     const e = this.navList[this.tokenNav];
     if (e) this.token.position.set(e.x, TOKEN_Y, e.z);
@@ -1718,7 +1811,9 @@ export class Overworld {
     }
     const hits = [];
     this.navList.forEach((e, idx) => {
-      const view = e.secret ? this.secretViews[e.world] : this.nodeViews[e.i];
+      const view = e.challenge !== undefined
+        ? this.challengeViews[e.challenge]
+        : e.secret ? this.secretViews[e.world] : this.nodeViews[e.i];
       const hit = this.raycaster.intersectObject(view.hit, false);
       if (hit.length) hits.push({ idx, dist: hit[0].distance });
     });
@@ -1744,13 +1839,16 @@ export class Overworld {
     };
     for (let i = this.tokenNav; ; i += dir) {
       const a = this.navList[i];
-      if (a.secret && i !== this.tokenNav && i !== navIdx) {
-        // The secret ledge is a dead-end branch, not a stop on the trail:
-        // walks passing "through" its navList slot skip it entirely.
-      } else if (a.secret) {
+      const sideStop = a.secret || a.challenge !== undefined;
+      if (sideStop && i !== this.tokenNav && i !== navIdx) {
+        // Secret ledges and giant cabbages are dead-end branches, not stops
+        // on the main trail: walks passing their nav slots skip them.
+      } else if (sideStop) {
         // Entering or leaving the ledge goes via the branch's anchor node,
-        // following the purple tile path instead of cutting cross-country.
-        const anchor = this.secretAnchorNode(a.world);
+        // rather than cutting diagonally across the whole region.
+        const anchor = a.secret
+          ? this.secretAnchorNode(a.world)
+          : this.challengeAnchorNode(a.challenge);
         if (i === this.tokenNav) {
           push(a.x, a.z);
           push(anchor.x, anchor.z);
@@ -2040,6 +2138,19 @@ export class Overworld {
         this.effects.sparkle(new THREE.Vector3(
           v.group.position.x + (Math.random() - 0.5), 1.2, v.group.position.z
         ));
+      }
+    });
+    this.challengeViews.forEach((v, i) => {
+      if (!v.indicator.visible) return;
+      v.indicator.position.y = 8.2 + Math.sin(t * 2.5 + i) * 0.18;
+      v.indicator.rotation.y = -v.group.rotation.y + Math.sin(t * 1.4 + i) * 0.12;
+      v.stars.children.forEach((star, si) => {
+        if (!star.visible) return;
+        star.rotation.y = t * 1.7 + si * 2.1;
+        star.position.y = 6.65 + Math.sin(t * 2.4 + si) * 0.09;
+      });
+      if (Math.random() < dt * 0.45) {
+        this.effects.sparkle(new THREE.Vector3(v.x, 6.2, v.z));
       }
     });
 

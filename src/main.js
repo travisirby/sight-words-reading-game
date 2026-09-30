@@ -33,7 +33,7 @@ music.setMusicEnabled(store.get().music);
 const LEVEL_COUNTS = WORLDS.map((w) => w.levels.length);
 store.clampFrontier(LEVEL_COUNTS);
 
-let current = { world: 0, level: 0, secret: false };
+let current = { world: 0, level: 0, secret: false, challenge: null };
 let selected = null; // node info from the map banner
 let lastRun = null; // { results, coins, gems, stars, keyFound }
 const BONUS_ROUND_ENABLED = false; // read-aloud bonus disabled pending rework
@@ -199,7 +199,7 @@ function onProfileSwitched() {
   ui.setCoins(s.coins);
   ui.updateSettingsLabels();
   ui.setPlayerName(store.activeProfileName());
-  current = { world: 0, level: 0, secret: false };
+  current = { world: 0, level: 0, secret: false, challenge: null };
   selected = null;
   lastRun = null;
 }
@@ -323,16 +323,16 @@ function buyItem(item) {
   speak(`You got the ${item.name}!`, { rate: 1.0, onend: () => speakLine('purchase') });
 }
 
-function startLevel(worldIdx, levelIdx, secret = false) {
-  const boss = !secret && levelIdx === LEVEL_COUNTS[worldIdx]; // castle slot
-  current = { world: worldIdx, level: levelIdx, secret, boss };
+function startLevel(worldIdx, levelIdx, secret = false, challenge = null) {
+  const boss = challenge === null && !secret && levelIdx === LEVEL_COUNTS[worldIdx];
+  current = { world: worldIdx, level: levelIdx, secret, boss, challenge };
   lastRun = null; // the summary's delayed 3-star line checks this to stand down
   map.exit();
   mode = 'game';
   music.play(boss ? 'boss' : secret ? 'secret' : 'level');
   music.setDimmed(false);
   sfxLevelStart();
-  game.startRun(worldIdx, levelIdx, { secret, boss });
+  game.startRun(worldIdx, levelIdx, { secret, boss, challenge });
   ui.showScreen(null);
   ui.showHUD(true);
 }
@@ -342,7 +342,7 @@ function playSelected() {
   const info = selected;
   selected = null;
   ui.hideLevelBanner();
-  startLevel(info.world, info.secret ? 0 : info.level, info.secret);
+  startLevel(info.world, info.secret ? 0 : info.level, info.secret, info.challenge);
 }
 
 function nextLevelOf(w, l) {
@@ -369,7 +369,9 @@ function onRunComplete(res) {
   lastRun.stars = stars;
 
   let firstBossWin = false;
-  if (current.secret) {
+  if (current.challenge !== null) {
+    store.setChallengeStars(current.challenge, stars);
+  } else if (current.secret) {
     store.setSecretStars(current.world, stars);
   } else {
     const firstTime = store.getStars(current.world, current.level) === 0;
@@ -438,7 +440,8 @@ function startFinale() {
 
 function showSummary() {
   music.play('victory');
-  const next = current.secret ? null : nextLevelOf(current.world, current.level);
+  const next = current.secret || current.challenge !== null
+    ? null : nextLevelOf(current.world, current.level);
   ui.showComplete({
     stars: lastRun.stars,
     coins: lastRun.coins,
@@ -462,7 +465,9 @@ let spokeHouseNudge = false; // one voice nudge per batch of house news
 
 function backToMap() {
   showMap(); // enter() refreshes navList first...
-  map.setTokenTo(current.world, current.level, current.secret); // ...then snap
+  map.setTokenTo(
+    current.world, current.level, current.secret, current.challenge
+  ); // ...then snap
   // Fresh loot he could spend (or a prize he skipped past)? Say so once —
   // the ❗ over the house building carries it from there.
   if (!spokeHouseNudge && store.hasHouseNews(HOUSE_ITEMS)) {

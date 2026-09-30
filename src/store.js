@@ -32,6 +32,8 @@ const defaults = () => ({
   secretUnlocked: {},
   // secretStars[world] = 0..3
   secretStars: {},
+  // challengeStars[index] = 0..3 for the giant-cabbage hard levels
+  challengeStars: {},
   // character look — indices into character.js palettes/styles
   character: { skin: 0, hair: 0, style: 0, shirt: 0, pants: 0, outfit: 0 },
   // bossBeaten[world] = true once that world's castle boss fell
@@ -397,6 +399,10 @@ export function totals() {
       starSum += v;
     }
   }
+  for (const v of Object.values(state.challengeStars)) {
+    if (v > 0) levelsCompleted++;
+    starSum += v;
+  }
   let correct = 0;
   let firstTry = 0;
   let seen = 0;
@@ -443,6 +449,17 @@ export function getSecretStars(worldIdx) {
 
 export function setSecretStars(worldIdx, stars) {
   state.secretStars[worldIdx] = Math.max(state.secretStars[worldIdx] || 0, stars);
+  save();
+}
+
+export function getChallengeStars(challengeIdx) {
+  return state.challengeStars[challengeIdx] || 0;
+}
+
+export function setChallengeStars(challengeIdx, stars) {
+  state.challengeStars[challengeIdx] = Math.max(
+    state.challengeStars[challengeIdx] || 0, stars
+  );
   save();
 }
 

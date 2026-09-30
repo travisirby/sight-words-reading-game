@@ -2,7 +2,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   DOLCH, WORLDS, chunkIntoLevels, shuffle, buildRunQueue, pickDistractors,
-  getSecretWords, getBossWords, isMasteredStats, getNextTierWords,
+  getSecretWords, getBossWords, getChallengeWords, isMasteredStats, getNextTierWords,
   buildDistractorPool, getRunTierList, getWorldWords,
 } from '../src/words.js';
 
@@ -299,5 +299,25 @@ describe('getSecretWords / getBossWords', () => {
       expect(secret).not.toContain(w);
       expect(boss).not.toContain(w);
     }
+  });
+});
+
+describe('getChallengeWords', () => {
+  it('builds two distinct ten-word extra-hard second-grade pools', () => {
+    const a = getChallengeWords(0, () => null);
+    const b = getChallengeWords(1, () => null);
+    expect(a).toHaveLength(10);
+    expect(b).toHaveLength(10);
+    expect(new Set(a).size).toBe(10);
+    expect(new Set(b).size).toBe(10);
+    for (const w of a.concat(b)) expect(DOLCH.second).toContain(w);
+    for (const w of a) expect(b).not.toContain(w);
+  });
+
+  it('puts repeatedly missed words at the front', () => {
+    const statsFor = (w) => w === 'always'
+      ? { seen: 5, correct: 5, firstTryCorrect: 0, missed: 5 }
+      : null;
+    expect(getChallengeWords(0, statsFor)[0]).toBe('always');
   });
 });

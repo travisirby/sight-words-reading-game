@@ -216,6 +216,27 @@ export function getBossWords(worldIdx, statsFor) {
   return getSecretWords(worldIdx, statsFor).slice(0, 5);
 }
 
+// The two giant-cabbage challenges remix alternating halves of the full
+// second-grade list. Each run prioritizes the words the reader misses most;
+// unseen ties favor longer words so these optional stages stay meaningfully
+// tougher than the short, sequential swamp levels.
+export function getChallengeWords(challengeIdx, statsFor) {
+  const candidates = DOLCH.second.filter((_, i) => i % 2 === challengeIdx % 2);
+  return candidates
+    .map((w) => {
+      const s = statsFor ? statsFor(w) : null;
+      return {
+        w,
+        ratio: s && s.seen > 0 ? s.firstTryCorrect / s.seen : 1,
+        missed: s ? s.missed : 0,
+      };
+    })
+    .sort((a, b) => a.ratio - b.ratio || b.missed - a.missed
+      || b.w.length - a.w.length || a.w.localeCompare(b.w))
+    .slice(0, 10)
+    .map((s) => s.w);
+}
+
 export const PRAISE = ['Great job!', 'You got it!', 'Awesome!', 'Super reading!'];
 
 // Extra celebration when a word challenge is nailed on the first try.

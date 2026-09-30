@@ -16,7 +16,7 @@ import {
 } from './audio.js';
 import { BOSS_WIN_LINES } from './lines.js';
 import {
-  WORLDS, DOLCH, getLevelWords, getSecretWords,
+  WORLDS, DOLCH, getLevelWords, getSecretWords, getChallengeWords,
   getBossWords, buildRunQueue, pickDistractors, shuffle,
   getNextTierWords, getRunTierList, buildDistractorPool,
 } from './words.js';
@@ -185,14 +185,17 @@ export class Game {
 
   // ---------- run lifecycle ----------
 
-  startRun(worldIdx, levelIdx, { secret = false, boss = false } = {}) {
+  startRun(worldIdx, levelIdx, { secret = false, boss = false, challenge = null } = {}) {
     this.worldIdx = worldIdx;
     this.levelIdx = levelIdx;
     this.secret = secret;
     this.isBoss = boss;
+    this.challenge = challenge;
     // Secret bonus runs are a short, fast treat: the world's 6 trickiest
     // words rather than the full 10-word review.
-    this.levelWords = boss
+    this.levelWords = challenge !== null
+      ? getChallengeWords(challenge, store.wordStats)
+      : boss
       ? getBossWords(worldIdx, store.wordStats)
       : secret
         ? getSecretWords(worldIdx, store.wordStats).slice(0, 6)
@@ -201,7 +204,7 @@ export class Game {
     // Regular levels promote mastered words' slots to next-tier material;
     // boss/secret runs are already curated review, so no promotion there.
     this.queue = buildRunQueue(this.levelWords, store.wordStats, {
-      promotionPool: boss || secret ? null : getNextTierWords(worldIdx),
+      promotionPool: boss || secret || challenge !== null ? null : getNextTierWords(worldIdx),
     });
     this.tierList = getRunTierList(worldIdx, this.queue);
     this.distractorPool = buildDistractorPool(this.levelWords, this.queue);
@@ -212,16 +215,18 @@ export class Game {
     this.keyFound = false;
 
     // Deterministic layout per level (stable across replays).
-    const seed = worldIdx * 97 + levelIdx * 13 + (secret ? 7 : 1);
+    const seed = worldIdx * 97 + levelIdx * 13 + (secret ? 7 : 1)
+      + (challenge !== null ? 401 + challenge * 101 : 0);
     // One golden key per world: even-parity levels hide one only until the
     // world's secret is open — after that, no more keys anywhere in it.
-    const hasKey = !secret && !boss && !store.isSecretUnlocked(worldIdx) &&
+    const hasKey = challenge === null && !secret && !boss && !store.isSecretUnlocked(worldIdx) &&
       (worldIdx + levelIdx) % 2 === 0;
     this.data = boss
       ? generateBossArena({ seed, wordCount: this.queue.length, theme: worldIdx })
       : generateLevel({
         seed, wordCount: this.queue.length,
-        theme: secret ? SECRET_THEME : worldIdx, secret, hasKey,
+        theme: secret ? SECRET_THEME : worldIdx,
+        secret, hard: challenge !== null, hasKey,
       });
     this.level.build(this.data);
 

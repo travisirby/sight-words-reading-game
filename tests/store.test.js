@@ -209,6 +209,16 @@ describe('lifetime stats / totals', () => {
     expect(t.totalStars).toBe(6);
   });
 
+  it('persists giant-cabbage challenge stars and counts them in totals', () => {
+    store.setChallengeStars(0, 2);
+    store.setChallengeStars(0, 1); // never lowers a best score
+    store.setChallengeStars(1, 3);
+    expect(store.getChallengeStars(0)).toBe(2);
+    expect(store.getChallengeStars(1)).toBe(3);
+    expect(store.totals().levelsCompleted).toBe(2);
+    expect(store.totals().totalStars).toBe(5);
+  });
+
   it('coinsEarned survives spending', () => {
     store.addCoins(100);
     store.grantHouseItem('rug'); // ownership without payment

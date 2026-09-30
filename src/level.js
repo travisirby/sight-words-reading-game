@@ -120,7 +120,9 @@ export function mulberry32(seed) {
 
 // Returns { groundY, platforms, coins, critters, events, key, starX, flagX,
 //           length, theme, secret }. Heights are the y of the walk surface.
-export function generateLevel({ seed, wordCount, theme, secret = false, hasKey = false }) {
+export function generateLevel({
+  seed, wordCount, theme, secret = false, hard = false, hasKey = false,
+}) {
   const rand = mulberry32(seed);
   const groundY = [];
   const platforms = []; // { x0, x1, y } one-way, land-from-above only
@@ -182,7 +184,8 @@ export function generateLevel({ seed, wordCount, theme, secret = false, hasKey =
       flat(stretch);
       done += stretch;
       if (done < fillerLen) {
-        const step = [1, 1, 2, -1, -2, 0][(rand() * 6) | 0];
+        const steps = hard ? [2, 2, -2, -2, 1, -1] : [1, 1, 2, -1, -2, 0];
+        const step = steps[(rand() * steps.length) | 0];
         g = Math.max(0, Math.min(4, g + step));
       }
       if (rand() < (secret ? 0.6 : 0.35)) coinRun(x() - stretch + 1, g + 0.8, Math.min(4, stretch - 1));
@@ -194,7 +197,7 @@ export function generateLevel({ seed, wordCount, theme, secret = false, hasKey =
     // each side) qualify: anchoring to a stepped column can leave the
     // platform +5 above the ground on its low side, out of single-jump
     // reach from that approach.
-    if (rand() < (secret ? 0.95 : 0.75) && fillerLen > 11) {
+    if (rand() < (secret ? 0.95 : hard ? 1 : 0.75) && fillerLen > 11) {
       const w = 3 + ((rand() * 2) | 0);
       const spots = [];
       for (let px = fillerStart + 3; px <= fillerStart + fillerLen - w - 3; px++) {
@@ -214,7 +217,9 @@ export function generateLevel({ seed, wordCount, theme, secret = false, hasKey =
 
     // Critter on the last flat stretch (never inside event zones). Secret
     // bonus levels are hazard-free — pure celebration, nothing to trip on.
-    if (!secret && critters.length < 6 && rand() < 0.55 && fillerLen > 10) {
+    const critterLimit = hard ? 10 : 6;
+    const critterChance = hard ? 0.9 : 0.55;
+    if (!secret && critters.length < critterLimit && rand() < critterChance && fillerLen > 10) {
       const cx = x() - 7;
       critters.push({ x0: cx, x1: cx + 4 });
     }
@@ -310,7 +315,7 @@ export function generateLevel({ seed, wordCount, theme, secret = false, hasKey =
 
   return {
     groundY, platforms, coins, critters: placedCritters, events, key,
-    starX, flagX, length: x(), theme, secret,
+    starX, flagX, length: x(), theme, secret, hard,
   };
 }
 

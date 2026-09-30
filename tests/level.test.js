@@ -56,4 +56,12 @@ describe('generateLevel', () => {
     });
     expect(lvl.events.every((e) => e.type === 'blocks' || e.type === 'doors')).toBe(true);
   });
+
+  it('marks hard levels and packs them with more hazards', () => {
+    const hard = generateLevel({ seed: 401, wordCount: 10, theme: 3, hard: true });
+    const regular = generateLevel({ seed: 401, wordCount: 10, theme: 3 });
+    expect(hard.hard).toBe(true);
+    expect(hard.critters.length).toBeGreaterThanOrEqual(regular.critters.length);
+    expect(hard.platforms.length).toBeGreaterThanOrEqual(regular.platforms.length);
+  });
 });
